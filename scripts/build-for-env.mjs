@@ -1,9 +1,5 @@
 import { spawnSync } from 'node:child_process';
-
-const defaultApiDomainNames = {
-  staging: 'api.staging.example.com',
-  production: 'api.example.com',
-};
+import { loadEnvFiles } from './load-env.mjs';
 
 const envName = process.argv[2];
 
@@ -12,19 +8,18 @@ if (!envName) {
   process.exit(1);
 }
 
-const apiDomainName = process.env.API_DOMAIN_NAME?.trim() || defaultApiDomainNames[envName];
-if (!apiDomainName) {
-  console.error(`Unknown deployment environment: ${envName}`);
-  process.exit(1);
-}
+loadEnvFiles(envName);
 
-const viteApiBaseUrl = `https://${apiDomainName}/api`;
+const apiDomainName = process.env.API_DOMAIN_NAME?.trim();
+const viteApiBaseUrl = apiDomainName ? `https://${apiDomainName}/api` : process.env.VITE_API_BASE_URL?.trim() || '/api';
 
 const npmExecPath = process.env.npm_execpath;
 if (!npmExecPath) {
   console.error('npm_execpath is not available in the current environment.');
   process.exit(1);
 }
+
+console.log(`Building ${envName} frontend with VITE_API_BASE_URL=${viteApiBaseUrl}`);
 
 const buildResult = spawnSync(process.execPath, [npmExecPath, 'run', 'build'], {
   stdio: 'inherit',

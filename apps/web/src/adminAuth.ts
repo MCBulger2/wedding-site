@@ -31,7 +31,12 @@ export function loadAdminSession(): AdminSession | undefined {
   }
 
   try {
-    const session = JSON.parse(raw) as AdminSession;
+    const session = JSON.parse(raw) as unknown;
+    if (!isAdminSession(session)) {
+      clearAdminSession();
+      return undefined;
+    }
+
     if (session.expiresAt > Date.now()) {
       return session;
     }
@@ -143,8 +148,36 @@ export function getAdminProfileName(session: AdminSession | undefined): string |
     return undefined;
   }
 
-  const payload = parseJwtPayload(session.idToken) as { email?: string; name?: string; 'cognito:username'?: string };
-  return payload.email ?? payload.name ?? payload['cognito:username'];
+  const payload = parseJwtPayload(session.idToken);
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+
+  return optionalString(payload.email) ?? optionalString(payload.name) ?? optionalString(payload['cognito:username']);
+}
+
+function isAdminSession(value: unknown): value is AdminSession {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.accessToken === 'string' &&
+    value.accessToken.length > 0 &&
+    typeof value.idToken === 'string' &&
+    value.idToken.length > 0 &&
+    typeof value.expiresAt === 'number' &&
+    Number.isFinite(value.expiresAt) &&
+    isRecord(parseJwtPayload(value.idToken))
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function cleanupCallbackParams(url: URL): void {
@@ -180,9 +213,13 @@ function parseJwtPayload(token: string): unknown {
     return undefined;
   }
 
-  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return JSON.parse(window.atob(padded));
+  try {
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return undefined;
+  }
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {

@@ -27,7 +27,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useState } from 'react';
+import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import {
   beginAdminLogin,
   beginAdminLogout,
@@ -888,6 +888,7 @@ function AdminPage() {
   const [qrModalInvite, setQrModalInvite] = useState<RevealedInvite | undefined>();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [qrCodeStatus, setQrCodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const qrCodeRequestId = useRef(0);
 
   const load = async (token = session?.accessToken) => {
     if (!token) {
@@ -1128,7 +1129,15 @@ function AdminPage() {
   };
 
   const openQrCodeModal = async (invite: RevealedInvite) => {
-    await openQrCodeModalForInvite(invite, setQrModalInvite, setQrCodeDataUrl, setQrCodeStatus);
+    const requestId = qrCodeRequestId.current + 1;
+    qrCodeRequestId.current = requestId;
+    await openQrCodeModalForInvite(
+      invite,
+      () => qrCodeRequestId.current === requestId,
+      setQrModalInvite,
+      setQrCodeDataUrl,
+      setQrCodeStatus,
+    );
   };
 
   const visibleHouseholds = households.filter((record) => {
@@ -1256,6 +1265,7 @@ function AdminPage() {
         <Modal
           title={`${qrModalInvite.displayName} invitation QR`}
           onClose={() => {
+            qrCodeRequestId.current += 1;
             setQrModalInvite(undefined);
             setQrCodeDataUrl(undefined);
             setQrCodeStatus('idle');
@@ -2005,6 +2015,7 @@ function summarizeMemberRsvp(attending: boolean): string {
 
 async function openQrCodeModalForInvite(
   invite: RevealedInvite,
+  isCurrentRequest: () => boolean,
   setInvite: (invite: RevealedInvite | undefined) => void,
   setQrCodeDataUrl: (value: string | undefined) => void,
   setQrCodeStatus: (value: 'idle' | 'loading' | 'ready' | 'error') => void,
@@ -2016,9 +2027,17 @@ async function openQrCodeModalForInvite(
   try {
     const { default: QRCode } = await import('qrcode');
     const dataUrl = await QRCode.toDataURL(buildGuestRsvpUrl(invite.inviteCode), { margin: 1, width: 256 });
+    if (!isCurrentRequest()) {
+      return;
+    }
+
     setQrCodeDataUrl(dataUrl);
     setQrCodeStatus('ready');
   } catch {
+    if (!isCurrentRequest()) {
+      return;
+    }
+
     setQrCodeStatus('error');
   }
 }

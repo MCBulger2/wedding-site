@@ -2,16 +2,22 @@
 
 This project now has code support for the remaining launch phases. The items below still require real AWS account, DNS, SES, and staging data verification before invitations are printed.
 
-## Production Context Values
+## Deployment Configuration
 
-The repository now carries environment defaults in `infra/config/deployment-config.ts`:
+Deployment settings are intentionally split between committed safe defaults and untracked or CI-provided environment values.
 
-- `staging`: frontend `staging.example.com`, API `api.staging.example.com`, auth `login.staging.example.com`
-- `production`: frontend `www.example.com`, API `api.example.com`, auth `login.example.com`
-- notifications: sender defaults to `staging-rsvp@example.com` in staging and `rsvp@example.com` in production; recipient defaults to `admin@example.com`
-- passkeys: enabled by default in both environments
+- `infra/config/deployment-config.ts` keeps deployable fallback values only: app region, localhost CORS origins, no custom domains, no notification recipients, and passkeys enabled.
+- Local deploys load `.env`, `.env.local`, `.env.<environment>`, and `.env.<environment>.local` before build and CDK synth.
+- GitHub Actions deploys use GitHub environment variables and secrets instead of committed `.env` files.
 
-These tracked defaults are placeholders only. Override them with the real account, domain, and notification settings before deploying.
+For local custom-domain deploys, copy the relevant template:
+
+```bash
+cp .env.staging.example .env.staging.local
+cp .env.production.example .env.production.local
+```
+
+The local files should contain the real domain, hosted zone, API domain, auth domain, CORS origins, SES sender, notification recipients, and passkey setting. They are ignored by Git and must stay out of source control.
 
 Use CDK context values only when you need to override those defaults:
 
