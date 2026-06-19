@@ -29,11 +29,26 @@ html {
 
 body {
   margin: 0;
+  min-height: 100svh;
   min-width: 320px;
 }
 
 a {
   color: inherit;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.app-shell > main {
+  flex: 1;
 }
 
 button,

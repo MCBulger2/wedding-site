@@ -104,7 +104,7 @@ export function App() {
   const route = useMemo(() => parseRoute(window.location.pathname), []);
 
   return (
-    <div>
+    <div className="app-shell">
       <Header />
       {route.name === 'home' && <HomePage />}
       {route.name === 'rsvp_entry' && <RsvpLookupPage />}
