@@ -74,7 +74,7 @@ export class WeddingSiteStack extends Stack {
         ADMIN_DASHBOARD_URL: frontendDomainName ? `https://${frontendDomainName}/admin` : '',
       },
       logGroup: apiHandlerLogGroup,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       timeout: Duration.seconds(10),
     });
 

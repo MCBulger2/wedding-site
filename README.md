@@ -1,5 +1,8 @@
 # Matt and Alison Wedding Website
 
+[![develop](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml/badge.svg?branch=develop)](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml)
+[![main](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml)
+
 This repository will contain the wedding announcement and RSVP website for Matt and Alison's 2027 wedding.
 
 The site is intended to be simple, secure, cost effective, and easy to maintain. It will provide a public homepage with wedding details and photos, plus a private RSVP flow where invited households can create, view, and edit their RSVP after receiving a mailed invite.
