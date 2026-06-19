@@ -1,4 +1,7 @@
 import 'source-map-support/register.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
 import { deploymentConfigs } from '../config/deployment-config.js';
 import { CertificateStack } from '../lib/certificate-stack.js';
@@ -7,7 +10,13 @@ import { WeddingSiteStack } from '../lib/wedding-site-stack.js';
 const app = new cdk.App();
 
 const envName = readString(app.node.tryGetContext('envName')) ?? process.env.ENV_NAME ?? 'staging';
-const deploymentConfig = deploymentConfigs[envName] ?? deploymentConfigs.staging;
+loadEnvFiles(envName);
+
+const deploymentConfig = deploymentConfigs[envName];
+if (!deploymentConfig) {
+  throw new Error(`Unknown deployment environment: ${envName}`);
+}
+
 const appRegion =
   readString(app.node.tryGetContext('appRegion')) ??
   process.env.APP_REGION ??
@@ -117,4 +126,80 @@ function parseBoolean(value: unknown): boolean | undefined {
   }
 
   return undefined;
+}
+
+function loadEnvFiles(envName: string): void {
+  const protectedKeys = new Set(Object.keys(process.env));
+  const loadedEnv: Record<string, string> = {};
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+  for (const fileName of ['.env', '.env.local', `.env.${envName}`, `.env.${envName}.local`]) {
+    const filePath = path.join(repoRoot, fileName);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    Object.assign(loadedEnv, parseEnvFile(fs.readFileSync(filePath, 'utf8'), fileName));
+  }
+
+  for (const [key, value] of Object.entries(loadedEnv)) {
+    if (!protectedKeys.has(key)) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function parseEnvFile(contents: string, fileName: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  const lines = contents.split(/\r?\n/);
+
+  lines.forEach((line, index) => {
+    const parsed = parseEnvLine(line);
+    if (!parsed) {
+      return;
+    }
+
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(parsed.key)) {
+      throw new Error(`${fileName}:${index + 1} has an invalid environment variable name: ${parsed.key}`);
+    }
+
+    values[parsed.key] = parsed.value;
+  });
+
+  return values;
+}
+
+function parseEnvLine(line: string): { key: string; value: string } | undefined {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#')) {
+    return undefined;
+  }
+
+  const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trimStart() : trimmed;
+  const separatorIndex = normalized.indexOf('=');
+  if (separatorIndex === -1) {
+    return undefined;
+  }
+
+  return {
+    key: normalized.slice(0, separatorIndex).trim(),
+    value: parseEnvValue(normalized.slice(separatorIndex + 1).trim()),
+  };
+}
+
+function parseEnvValue(rawValue: string): string {
+  if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
+    return rawValue.slice(1, -1).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+
+  if (rawValue.startsWith("'") && rawValue.endsWith("'")) {
+    return rawValue.slice(1, -1);
+  }
+
+  return stripInlineComment(rawValue).trim();
+}
+
+function stripInlineComment(value: string): string {
+  const commentIndex = value.search(/\s#/);
+  return commentIndex === -1 ? value : value.slice(0, commentIndex);
 }

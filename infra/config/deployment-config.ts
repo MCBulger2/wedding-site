@@ -13,24 +13,14 @@ export interface DeploymentConfig {
 export const deploymentConfigs: Record<string, DeploymentConfig> = {
   staging: {
     appRegion: 'us-west-1',
-    hostedZoneDomain: 'staging.example.com',
-    frontendDomainName: 'staging.example.com',
-    apiDomainName: 'api.staging.example.com',
-    authDomainName: 'login.staging.example.com',
-    allowedOrigins: ['https://staging.example.com'],
-    notificationSenderEmail: 'staging-rsvp@example.com',
-    notificationRecipientEmails: ['admin@example.com'],
+    allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    notificationRecipientEmails: [],
     enablePasskeys: true,
   },
   production: {
     appRegion: 'us-west-1',
-    hostedZoneDomain: 'example.com',
-    frontendDomainName: 'www.example.com',
-    apiDomainName: 'api.example.com',
-    authDomainName: 'login.example.com',
-    allowedOrigins: ['https://www.example.com'],
-    notificationSenderEmail: 'rsvp@example.com',
-    notificationRecipientEmails: ['admin@example.com'],
+    allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    notificationRecipientEmails: [],
     enablePasskeys: true,
   },
 };

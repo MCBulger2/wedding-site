@@ -51,7 +51,7 @@ Start the local web app with:
 npm run dev
 ```
 
-The frontend uses `/api` as its default API base path for local development. Staging and production deployment builds inject the configured API custom domain automatically, so live bundles call the environment-specific API URL directly. For local API experiments, you can still set `VITE_API_BASE_URL` to a deployed API Gateway URL or a local Lambda adapter.
+The frontend uses `/api` as its default API base path for local development. Staging and production deployment builds load environment-specific config before building the Vite bundle. If `API_DOMAIN_NAME` is configured, the bundle uses `https://API_DOMAIN_NAME/api`; otherwise it keeps `/api` and relies on the CloudFront `/api/*` proxy. For local API experiments, you can still set `VITE_API_BASE_URL` to a deployed API Gateway URL or a local Lambda adapter.
 
 Admin authentication uses the Cognito Hosted UI. The stack now configures `/admin` as an OAuth callback URL for:
 
@@ -79,14 +79,22 @@ npm run deploy:infra:staging
 npm run deploy:infra:production
 ```
 
-The default staging and production settings live in [infra/config/deployment-config.ts](infra/config/deployment-config.ts):
+Deployment config can come from three places, in this order:
 
-- `staging`: `staging.example.com`, `api.staging.example.com`, `login.staging.example.com`
-- `production`: `www.example.com`, `api.example.com`, `login.example.com`
-- notifications: sender defaults to `staging-rsvp@example.com` in staging and `rsvp@example.com` in production; recipient defaults to `admin@example.com`
-- passkeys: enabled in both environments
+- CDK context values passed with `-c`.
+- Shell or GitHub Actions environment variables.
+- Local env files loaded from `.env`, `.env.local`, `.env.<environment>`, and `.env.<environment>.local`.
 
-These tracked defaults are placeholders. Set your real domains and notification targets through CDK context or environment variables before deploying.
+The committed fallback settings in [infra/config/deployment-config.ts](infra/config/deployment-config.ts) are intentionally safe: no placeholder custom domains, no placeholder notification recipients, and passkeys enabled. That means a local deploy can fall back to the generated CloudFront and API Gateway domains instead of failing on example Route 53 lookups.
+
+For local staging or production deploys with custom domains and notifications, copy the matching template and fill in local values:
+
+```bash
+cp .env.staging.example .env.staging.local
+cp .env.production.example .env.production.local
+```
+
+Local `.env*` files are ignored by Git. Do not commit real domains, notification recipients, secrets, guest data, or invite codes.
 
 You can still override any value with CDK context or environment variables. For example:
 
