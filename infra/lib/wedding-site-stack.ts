@@ -100,7 +100,7 @@ export class WeddingSiteStack extends Stack {
           }
         : undefined,
       passkeyRelyingPartyId: props.enablePasskeys
-        ? props.authDomainName ?? `${buildCognitoDomainPrefix(this.stackName, props.envName, this.account)}.auth.${this.region}.amazoncognito.com`
+        ? props.authDomainName
         : undefined,
       passkeyUserVerification: props.enablePasskeys ? cognito.PasskeyUserVerification.REQUIRED : undefined,
       signInAliases: {
