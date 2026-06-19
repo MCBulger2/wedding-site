@@ -2,15 +2,6 @@ name: Deploy
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: Deployment environment
-        required: true
-        default: staging
-        type: choice
-        options:
-          - staging
-          - production
   push:
     branches:
       - develop
@@ -21,11 +12,12 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-${{ github.event.inputs.environment || github.ref_name }}
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -42,14 +34,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --project=chromium
 
-  deploy-staging:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+  deploy:
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: staging
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     env:
       APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
@@ -72,36 +62,4 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - run: npm run deploy:infra:staging
-
-  deploy-production:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
-    env:
-      APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-      API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
-      AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
-      FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
-      HOSTED_ZONE_DOMAIN: ${{ vars.HOSTED_ZONE_DOMAIN }}
-      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-      NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
-      NOTIFICATION_RECIPIENT_EMAILS: ${{ vars.NOTIFICATION_RECIPIENT_EMAILS }}
-      ENABLE_PASSKEYS: ${{ vars.ENABLE_PASSKEYS }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - run: npm run deploy:infra:production
+      - run: npm run ${{ github.ref == 'refs/heads/main' && 'deploy:infra:production' || 'deploy:infra:staging' }}
