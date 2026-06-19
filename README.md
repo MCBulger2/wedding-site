@@ -66,7 +66,13 @@ To use admin login after deployment:
 2. Visit `/admin` on the site.
 3. Sign in through the Cognito Hosted UI and complete MFA.
 
-Deploy infrastructure from the repository root after AWS credentials are configured and the target account is CDK-bootstrapped:
+Deploy infrastructure from the repository root after AWS credentials are configured and the target account is CDK-bootstrapped in both the app region and `us-east-1` for CloudFront certificates:
+
+```bash
+npm run bootstrap:infra -- aws://ACCOUNT_ID/us-west-1 aws://ACCOUNT_ID/us-east-1
+```
+
+You only need to bootstrap an account/region once. The deploy workflow also checks this prerequisite before running `cdk deploy`.
 
 ```bash
 npm run deploy:infra:staging
