@@ -222,6 +222,9 @@ export class WeddingService {
 
   async archiveHousehold(householdId: string): Promise<Household> {
     const household = await this.requireHousehold(householdId);
+    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+      throw new PublicError('Household is already archived', 409);
+    }
     const now = new Date().toISOString();
     const updated: Household = {
       ...household,

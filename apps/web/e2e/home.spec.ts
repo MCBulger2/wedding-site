@@ -393,6 +393,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByRole('heading', { name: 'The Updated Household' })).toHaveCount(0);
   await page.getByLabel('Show archived households').check();
   await expect(page.getByText('archived').first()).toBeVisible();
+  await expect(updatedCard.getByRole('button', { name: 'Archive' })).toBeDisabled();
 
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.getByLabel('Household display name').fill('The Harper Household');
