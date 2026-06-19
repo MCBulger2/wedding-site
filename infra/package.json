@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bootstrap": "cdk bootstrap",
     "build": "tsc -p tsconfig.json",
     "deploy": "cdk deploy",
     "destroy": "cdk destroy",

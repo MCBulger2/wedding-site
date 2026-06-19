@@ -12,6 +12,8 @@
     "build": "npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/web && npm run build -w infra",
     "build:deploy:production": "node scripts/build-for-env.mjs production",
     "build:deploy:staging": "node scripts/build-for-env.mjs staging",
+    "bootstrap:infra": "npm run bootstrap -w infra --",
+    "check:cdk-bootstrap": "node scripts/check-cdk-bootstrap.mjs",
     "deploy:infra": "npm run build && npm run deploy -w infra --",
     "deploy:infra:production": "npm run build:deploy:production && npm run deploy -w infra -- WeddingSite-production -c envName=production",
     "deploy:infra:staging": "npm run build:deploy:staging && npm run deploy -w infra -- WeddingSite-staging -c envName=staging",
