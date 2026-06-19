@@ -412,6 +412,37 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByRole('dialog', { name: 'The Harper Household invitation QR' })).toBeVisible();
 });
 
+test('admin route clears malformed stored sessions instead of crashing', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      'adminAuth.session',
+      JSON.stringify({
+        accessToken: 'fake-access-token',
+        idToken: 'not-a-jwt',
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      }),
+    );
+  });
+
+  await page.goto('/admin');
+
+  await expect(page.getByRole('heading', { name: 'Secure admin access' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('adminAuth.session'))).toBeNull();
+  expect(pageErrors).toEqual([]);
+});
+
 function createJwt(payload: Record<string, unknown>): string {
   const header = toBase64Url({ alg: 'none', typ: 'JWT' });
   const body = toBase64Url(payload);
