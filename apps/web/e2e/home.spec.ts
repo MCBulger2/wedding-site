@@ -62,6 +62,15 @@ test('homepage details render on mobile', async ({ page }) => {
   );
 });
 
+test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1400 });
+  await page.goto('/rsvp');
+
+  const footerBounds = await page.getByRole('contentinfo').boundingBox();
+  expect(footerBounds).not.toBeNull();
+  expect(footerBounds!.y + footerBounds!.height).toBeGreaterThanOrEqual(1399);
+});
+
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
   await page.route('**/api/admin/auth/config', async (route) => {
     await route.fulfill({
