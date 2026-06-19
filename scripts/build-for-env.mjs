@@ -26,7 +26,7 @@ if (!npmExecPath) {
   process.exit(1);
 }
 
-const buildResult = spawnSync(process.execPath, [npmExecPath, 'run', 'build', '--workspaces', '--if-present'], {
+const buildResult = spawnSync(process.execPath, [npmExecPath, 'run', 'build'], {
   stdio: 'inherit',
   env: {
     ...process.env,
