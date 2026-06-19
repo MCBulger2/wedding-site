@@ -1,5 +1,5 @@
 name: Deploy
-run-name: ${{ github.event_name == 'workflow_run' && format('Deploy {0} from CI #{1} ({2})', github.event.workflow_run.head_branch == 'main' && 'production' || 'staging', github.event.workflow_run.run_number, github.event.workflow_run.head_branch) || format('Deploy {0} manually ({1})', github.ref_name == 'main' && 'production' || 'staging', github.ref_name) }}
+run-name: "${{ github.event_name == 'workflow_run' && format('Deploy {0} from CI #{1} ({2})', github.event.workflow_run.head_branch == 'main' && 'production' || 'staging', github.event.workflow_run.run_number, github.event.workflow_run.head_branch) || format('Deploy {0} manually ({1})', github.ref_name == 'main' && 'production' || 'staging', github.ref_name) }}"
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   deploy_from_ci:
-    name: Deploy ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }} from CI #${{ github.event.workflow_run.run_number }}
+    name: "${{ format('Deploy {0} from CI #{1}', github.event.workflow_run.head_branch == 'main' && 'production' || 'staging', github.event.workflow_run.run_number) }}"
     if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -55,7 +55,7 @@ jobs:
       - run: npm run ${{ github.event.workflow_run.head_branch == 'main' && 'deploy:infra:production' || 'deploy:infra:staging' }} -- --require-approval never
 
   deploy_manual:
-    name: Deploy ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }} manually from ${{ github.ref_name }}
+    name: "${{ format('Deploy {0} manually from {1}', github.ref == 'refs/heads/main' && 'production' || 'staging', github.ref_name) }}"
     if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 30
