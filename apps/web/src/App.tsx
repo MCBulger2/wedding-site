@@ -872,6 +872,7 @@ function AdminPage() {
   const [authConfig, setAuthConfig] = useState<AdminAuthConfig | undefined>();
   const [session, setSession] = useState<AdminSession | undefined>();
   const [authStatus, setAuthStatus] = useState<'loading' | 'signed_out' | 'signing_in' | 'ready' | 'error'>('loading');
+  const [householdLoadStatus, setHouseholdLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [households, setHouseholds] = useState<AdminHouseholdRecord[]>([]);
   const [message, setMessage] = useState('Loading admin authentication...');
   const [search, setSearch] = useState('');
@@ -891,14 +892,17 @@ function AdminPage() {
   const load = async (token = session?.accessToken) => {
     if (!token) {
       setAuthStatus('signed_out');
+      setHouseholdLoadStatus('idle');
       setMessage('Sign in to view and manage RSVP data.');
       return;
     }
 
+    setHouseholdLoadStatus('loading');
     try {
       const response = await fetchHouseholds(token);
       setHouseholds(response.households);
       setAuthStatus('ready');
+      setHouseholdLoadStatus('ready');
       setMessage(`${response.households.length} households loaded.`);
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : 'Unable to load households';
@@ -906,10 +910,12 @@ function AdminPage() {
         clearAdminSession();
         setSession(undefined);
         setAuthStatus('signed_out');
+        setHouseholdLoadStatus('idle');
         setMessage('Your admin session expired. Please sign in again.');
         return;
       }
 
+      setHouseholdLoadStatus('error');
       setMessage(nextMessage);
     }
   };
@@ -1146,6 +1152,8 @@ function AdminPage() {
   );
 
   const profileName = getAdminProfileName(session);
+  const isHouseholdsLoading = householdLoadStatus === 'loading' && households.length === 0;
+  const isHouseholdsRefreshing = householdLoadStatus === 'loading' && households.length > 0;
 
   if (authStatus === 'loading' || authStatus === 'signing_in') {
     return (
@@ -1236,7 +1244,11 @@ function AdminPage() {
         >
           <div className="qr-modal-content">
             <p className="form-message">Guests can scan this code or use the RSVP link below.</p>
-            {qrCodeStatus === 'loading' && <p className="form-message">Generating QR code...</p>}
+            {qrCodeStatus === 'loading' && (
+              <div className="inline-loading-shell qr-loading-shell" aria-live="polite">
+                <LoadingPulse label="Generating QR code" message="Preparing a scannable invitation link." compact />
+              </div>
+            )}
             {qrCodeStatus === 'error' && <p className="warning-message">Unable to generate the QR code right now.</p>}
             {qrCodeDataUrl && <img className="qr-code-image" src={qrCodeDataUrl} alt={`QR code for ${qrModalInvite.displayName}`} />}
             <a href={buildGuestRsvpUrl(qrModalInvite.inviteCode)} target="_blank" rel="noreferrer">
@@ -1271,22 +1283,33 @@ function AdminPage() {
             </div>
           </div>
           <div className="stats-grid">
-            <article>
-              <strong>{totals.households}</strong>
-              <span>Households</span>
-            </article>
-            <article>
-              <strong>{totals.invitedGuests}</strong>
-              <span>Invited spots</span>
-            </article>
-            <article>
-              <strong>{totals.attendingGuests}</strong>
-              <span>Attending</span>
-            </article>
-            <article>
-              <strong>{totals.pendingGuests}</strong>
-              <span>Pending</span>
-            </article>
+            {isHouseholdsLoading ? (
+              <>
+                <SkeletonStat />
+                <SkeletonStat />
+                <SkeletonStat />
+                <SkeletonStat />
+              </>
+            ) : (
+              <>
+                <article>
+                  <strong>{totals.households}</strong>
+                  <span>Households</span>
+                </article>
+                <article>
+                  <strong>{totals.invitedGuests}</strong>
+                  <span>Invited spots</span>
+                </article>
+                <article>
+                  <strong>{totals.attendingGuests}</strong>
+                  <span>Attending</span>
+                </article>
+                <article>
+                  <strong>{totals.pendingGuests}</strong>
+                  <span>Pending</span>
+                </article>
+              </>
+            )}
           </div>
           <div className="filter-grid">
             <label>
@@ -1319,7 +1342,13 @@ function AdminPage() {
           </div>
 
           <div className="results-list" aria-label="Households">
-            {visibleHouseholds.length === 0 && <p className="form-message">No households match the current filters.</p>}
+            {isHouseholdsRefreshing && (
+              <div className="inline-loading-shell dashboard-refresh" aria-live="polite">
+                <LoadingPulse label="Refreshing dashboard" message="Updating household and RSVP data." compact />
+              </div>
+            )}
+            {isHouseholdsLoading && <AdminDashboardSkeleton />}
+            {!isHouseholdsLoading && visibleHouseholds.length === 0 && <p className="form-message">No households match the current filters.</p>}
             {visibleHouseholds.map((record) => (
               <article className="household-card" key={record.household.householdId}>
                 <div className="section-heading">
@@ -2170,7 +2199,51 @@ function LoadingScreen({ eyebrow, title, message }: { eyebrow: string; title: st
     <section className="lookup-card loading-card">
       <p className="eyebrow">{eyebrow}</p>
       <LoadingPulse label={title} message={message} />
+      <div className="skeleton-stack" aria-hidden="true">
+        <span className="skeleton-line wide" />
+        <span className="skeleton-line" />
+        <span className="skeleton-line short" />
+      </div>
     </section>
+  );
+}
+
+function SkeletonStat() {
+  return (
+    <article className="skeleton-stat" aria-hidden="true">
+      <span className="skeleton-line number" />
+      <span className="skeleton-line short" />
+    </article>
+  );
+}
+
+function AdminDashboardSkeleton() {
+  return (
+    <div className="admin-skeleton" aria-hidden="true">
+      {[0, 1, 2].map((item) => (
+        <article className="household-card skeleton-household-card" key={item}>
+          <div className="section-heading">
+            <div className="skeleton-stack">
+              <span className="skeleton-line title" />
+              <span className="skeleton-line wide" />
+            </div>
+            <div className="toolbar-actions skeleton-actions">
+              <span className="skeleton-button" />
+              <span className="skeleton-button" />
+            </div>
+          </div>
+          <div className="stats-inline">
+            <span className="skeleton-line short" />
+            <span className="skeleton-line short" />
+            <span className="skeleton-line short" />
+          </div>
+          <div className="member-list">
+            <span className="skeleton-row" />
+            <span className="skeleton-row" />
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -2185,10 +2258,8 @@ function LoadingPulse({
 }) {
   return (
     <div className={`loading-pulse ${compact ? 'compact' : ''}`}>
-      <div className="loading-orbit" aria-hidden="true">
-        <span />
-        <span />
-        <span />
+      <div className="loading-mark" aria-hidden="true">
+        <Heart />
       </div>
       <div>
         <h1>{label}</h1>
