@@ -62,6 +62,23 @@ test('homepage details render on mobile', async ({ page }) => {
   );
 });
 
+test('admin route shows a minimal sign-in entry point', async ({ page }) => {
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+
+  await page.goto('/admin');
+
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+  await expect(page.getByText('Manage RSVPs, households, and invitations.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+});
+
 test('guest can look up an invite code and submit an RSVP', async ({ page }) => {
   let savedBody: any;
   let savedRsvp: any;

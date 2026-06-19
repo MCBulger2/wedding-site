@@ -38,6 +38,102 @@ export interface WeddingSiteStackProps extends StackProps {
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, '..', '..');
+const adminHostedUiCss = String.raw`
+.background-customizable {
+  background: linear-gradient(135deg, #e6f0ec 0%, #f9faf8 42%, #ffffff 100%) !important;
+  color: #242a2f;
+  font-family: Aptos, "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+.banner-customizable {
+  padding: 2rem 1.25rem 0.75rem;
+  text-align: center;
+}
+
+.banner-customizable::before {
+  color: #193d35;
+  content: "Matt & Alison";
+  display: block;
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.banner-customizable::after {
+  color: #a4543a;
+  content: "Admin";
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 0.45rem;
+  text-transform: uppercase;
+}
+
+.logo-customizable {
+  display: none;
+}
+
+.panel-customizable {
+  background: rgba(255, 255, 252, 0.96) !important;
+  border: 1px solid rgba(36, 42, 47, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 18px 38px rgba(30, 42, 48, 0.1);
+  padding: 2rem;
+}
+
+.label-customizable,
+.textDescription-customizable {
+  color: #3d464c;
+}
+
+.inputField-customizable {
+  background: #ffffff;
+  border: 1px solid rgba(36, 42, 47, 0.18);
+  border-radius: 8px;
+  box-shadow: none;
+  color: #242a2f;
+  min-height: 46px;
+}
+
+.inputField-customizable:focus {
+  border-color: rgba(49, 95, 83, 0.55);
+  box-shadow: 0 0 0 4px rgba(49, 95, 83, 0.12);
+}
+
+.submitButton-customizable {
+  background: #315f53;
+  border: 0;
+  border-radius: 8px;
+  color: #fffffb;
+  font-weight: 800;
+  min-height: 46px;
+}
+
+.submitButton-customizable:hover,
+.submitButton-customizable:focus {
+  background: #193d35;
+}
+
+.redirect-customizable,
+.legalText-customizable {
+  color: #667077;
+}
+
+.redirect-customizable a,
+.legalText-customizable a {
+  color: #315f53;
+  font-weight: 700;
+}
+
+.errorMessage-customizable {
+  background: rgba(139, 59, 45, 0.12);
+  border: 1px solid rgba(139, 59, 45, 0.2);
+  border-radius: 8px;
+  color: #9b3d35;
+  padding: 0.75rem;
+}
+`;
 
 export class WeddingSiteStack extends Stack {
   constructor(scope: Construct, id: string, props: WeddingSiteStackProps) {
@@ -250,11 +346,13 @@ export class WeddingSiteStack extends Stack {
               domainName: props.authDomainName,
               certificate: authCertificate,
             },
+            managedLoginVersion: cognito.ManagedLoginVersion.CLASSIC_HOSTED_UI,
           })
         : userPool.addDomain('AdminHostedUiDomain', {
             cognitoDomain: {
               domainPrefix: buildCognitoDomainPrefix(this.stackName, props.envName, this.account),
             },
+            managedLoginVersion: cognito.ManagedLoginVersion.CLASSIC_HOSTED_UI,
           });
     if (authParentValidationRecord) {
       userPoolDomain.node.addDependency(authParentValidationRecord);
@@ -277,6 +375,13 @@ export class WeddingSiteStack extends Stack {
       preventUserExistenceErrors: true,
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
+
+    const hostedUiCustomization = new cognito.CfnUserPoolUICustomizationAttachment(this, 'AdminHostedUiBranding', {
+      clientId: userPoolClient.userPoolClientId,
+      css: adminHostedUiCss,
+      userPoolId: userPool.userPoolId,
+    });
+    hostedUiCustomization.node.addDependency(userPoolDomain);
 
     apiHandler.addEnvironment('ADMIN_COGNITO_CLIENT_ID', userPoolClient.userPoolClientId);
     apiHandler.addEnvironment('ADMIN_COGNITO_DOMAIN', userPoolDomain.baseUrl());

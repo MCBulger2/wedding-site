@@ -393,6 +393,92 @@ button {
   gap: 1.5rem;
 }
 
+.admin-login-shell {
+  align-items: stretch;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: min(620px, calc(100svh - 240px));
+}
+
+.admin-login-intro,
+.admin-login-card {
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+.admin-login-intro {
+  align-content: center;
+  background:
+    linear-gradient(135deg, rgba(25, 61, 53, 0.92), rgba(49, 95, 83, 0.76)),
+    url('/hero-wedding.png') center / cover;
+  color: #fffffb;
+  display: grid;
+  padding: clamp(2rem, 5vw, 4rem);
+}
+
+.admin-login-intro .eyebrow,
+.admin-login-intro .page-lede {
+  color: rgba(255, 255, 251, 0.86);
+}
+
+.admin-login-intro h1 {
+  font-size: clamp(2.8rem, 7vw, 5.8rem);
+  max-width: 780px;
+}
+
+.admin-login-card {
+  align-content: center;
+  background: var(--surface);
+  display: grid;
+  gap: 1.2rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.admin-login-card-header {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-login-icon {
+  align-items: center;
+  background: rgba(49, 95, 83, 0.1);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  display: grid;
+  height: 48px;
+  justify-items: center;
+  width: 48px;
+}
+
+.admin-login-icon svg {
+  height: 1.3rem;
+  width: 1.3rem;
+}
+
+.admin-login-card h2 {
+  margin-bottom: 0.45rem;
+}
+
+.admin-login-card .form-message {
+  margin: 0;
+}
+
+.admin-login-button {
+  min-height: 52px;
+  width: 100%;
+}
+
+.admin-login-note {
+  color: var(--copy-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .admin-grid {
   display: grid;
   gap: 1.5rem;
@@ -1031,9 +1117,14 @@ textarea:focus {
 
 @media (max-width: 980px) {
   .admin-grid,
+  .admin-login-shell,
   .faq-grid,
   .section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-login-shell {
+    min-height: auto;
   }
 }
 
@@ -1097,6 +1188,14 @@ textarea:focus {
     padding: 1.25rem;
   }
 
+  .admin-login-intro {
+    min-height: 360px;
+  }
+
+  .admin-login-card {
+    order: -1;
+  }
+
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1141,6 +1240,11 @@ textarea:focus {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-login-intro,
+  .admin-login-card {
+    padding: 1.35rem;
   }
 }
 
