@@ -1,3 +1,0 @@
-- [x] Hide the Admin page from the toolbar - instead, put a tiny link in the footer of the page.
-- [x] Improve the UX of submitting an RSVP. Validation errors should be highlighted on each field. After submitting, you should be taken to a success page
-- [x] Add proper CI/CD such that committing to particular branches will deploy the code to AWS
