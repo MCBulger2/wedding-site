@@ -1,8 +1,6 @@
 name: CI
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('CI manual ({0})', github.ref_name) || github.event_name == 'pull_request' && format('CI PR #{0} ({1})', github.event.pull_request.number, github.head_ref) || format('CI push ({0})', github.ref_name) }}
 
 on:
-  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -11,7 +9,6 @@ on:
 
 jobs:
   verify:
-    name: Verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
