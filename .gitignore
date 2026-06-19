@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+cdk.out/
+cdk.out*/
+infra/cdk.context.json
+*.tsbuildinfo
+apps/web/.vite/

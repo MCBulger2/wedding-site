@@ -1,0 +1,267 @@
+import { z } from 'zod';
+
+export const InviteCodeSchema = z
+  .string()
+  .trim()
+  .min(12)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/, 'Invite code contains unsupported characters');
+
+export const MealChoiceSchema = z.enum(['buffet', 'chicken', 'fish', 'vegetarian', 'child', 'none']);
+export type MealChoice = z.infer<typeof MealChoiceSchema>;
+
+export const InviteLifecycleStatusSchema = z.enum([
+  'not_generated',
+  'generated',
+  'exported',
+  'sent',
+  'archived',
+]);
+export type InviteLifecycleStatus = z.infer<typeof InviteLifecycleStatusSchema>;
+
+export const MailingAddressSchema = z.object({
+  line1: z.string().trim().max(160).optional().default(''),
+  line2: z.string().trim().max(160).optional().default(''),
+  city: z.string().trim().max(100).optional().default(''),
+  state: z.string().trim().max(80).optional().default(''),
+  postalCode: z.string().trim().max(32).optional().default(''),
+  country: z.string().trim().max(80).optional().default(''),
+});
+export type MailingAddress = z.infer<typeof MailingAddressSchema>;
+
+export const HouseholdMemberSchema = z.object({
+  id: z.string().min(1),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  canBringPlusOne: z.boolean().default(false),
+  weddingPartyRole: z.string().trim().max(80).optional(),
+  rehearsalDinnerInvited: z.boolean().optional(),
+  archivedAt: z.string().datetime().optional(),
+});
+export type HouseholdMember = z.infer<typeof HouseholdMemberSchema>;
+
+export const HouseholdSchema = z.object({
+  householdId: z.string().min(1),
+  displayName: z.string().trim().min(1).max(160),
+  email: z.string().email().optional(),
+  mailingAddress: MailingAddressSchema.optional(),
+  members: z.array(HouseholdMemberSchema).min(1),
+  maxPlusOnes: z.number().int().min(0).max(10).default(0),
+  rsvpStatus: z.enum(['not_started', 'attending', 'declined', 'partial']).default('not_started'),
+  inviteLifecycleStatus: InviteLifecycleStatusSchema.default('not_generated'),
+  inviteCodeHash: z.string().optional(),
+  inviteCodeGeneratedAt: z.string().datetime().optional(),
+  inviteExportedAt: z.string().datetime().optional(),
+  inviteSentAt: z.string().datetime().optional(),
+  inviteCodeLastRotatedAt: z.string().datetime().optional(),
+  archivedAt: z.string().datetime().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Household = z.infer<typeof HouseholdSchema>;
+
+export const MemberRsvpSchema = z.object({
+  memberId: z.string().min(1),
+  attending: z.boolean(),
+  mealChoice: MealChoiceSchema,
+  dietaryNotes: z.string().trim().max(500).optional().default(''),
+});
+export type MemberRsvp = z.infer<typeof MemberRsvpSchema>;
+
+export const PlusOneRsvpSchema = z.object({
+  sponsorMemberId: z.string().min(1),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  mealChoice: MealChoiceSchema,
+  dietaryNotes: z.string().trim().max(500).optional().default(''),
+});
+export type PlusOneRsvp = z.infer<typeof PlusOneRsvpSchema>;
+
+const RsvpUpdateBaseSchema = z.object({
+  members: z.array(MemberRsvpSchema).min(1),
+  plusOnes: z.array(PlusOneRsvpSchema).default([]),
+  notes: z.string().trim().max(1000).optional().default(''),
+  accessibilityNotes: z.string().trim().max(1000).optional().default(''),
+});
+
+function validateMealChoices(rsvp: z.infer<typeof RsvpUpdateBaseSchema>, ctx: z.RefinementCtx) {
+  for (const [index, member] of rsvp.members.entries()) {
+    if (member.attending && member.mealChoice === 'none') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Attending guests must have an active meal status',
+        path: ['members', index, 'mealChoice'],
+      });
+    }
+    if (!member.attending && member.mealChoice !== 'none') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Declined guests should use the none meal choice',
+        path: ['members', index, 'mealChoice'],
+      });
+    }
+  }
+
+  for (const [index, plusOne] of rsvp.plusOnes.entries()) {
+    if (plusOne.mealChoice === 'none') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Plus-ones must have an active meal status',
+        path: ['plusOnes', index, 'mealChoice'],
+      });
+    }
+  }
+}
+
+export const RsvpUpdateSchema = RsvpUpdateBaseSchema.superRefine(validateMealChoices);
+export type RsvpUpdate = z.infer<typeof RsvpUpdateSchema>;
+
+export const StoredRsvpSchema = RsvpUpdateBaseSchema.extend({
+  submittedAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).superRefine(validateMealChoices);
+export type StoredRsvp = z.infer<typeof StoredRsvpSchema>;
+
+export const HouseholdImportRowSchema = z.object({
+  householdId: z.string().trim().min(1).max(80),
+  displayName: z.string().trim().min(1).max(160),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  addressLine1: z.string().trim().max(160).optional().default(''),
+  addressLine2: z.string().trim().max(160).optional().default(''),
+  city: z.string().trim().max(100).optional().default(''),
+  state: z.string().trim().max(80).optional().default(''),
+  postalCode: z.string().trim().max(32).optional().default(''),
+  country: z.string().trim().max(80).optional().default(''),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  canBringPlusOne: z.coerce.boolean().default(false),
+  weddingPartyRole: z.string().trim().max(80).optional().default(''),
+  rehearsalDinnerInvited: z.coerce.boolean().default(false),
+  maxPlusOnes: z.coerce.number().int().min(0).max(10).default(0),
+});
+export type HouseholdImportRow = z.infer<typeof HouseholdImportRowSchema>;
+
+export const HouseholdImportSchema = z.object({
+  rows: z.array(HouseholdImportRowSchema).min(1),
+});
+export type HouseholdImport = z.infer<typeof HouseholdImportSchema>;
+
+export const HotelBlockSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  address: z.string().trim().min(1).max(240),
+  bookingUrl: z.string().url().optional(),
+  phoneNumber: z.string().trim().max(40).optional(),
+  groupCode: z.string().trim().max(80).optional(),
+  cutoffDate: z.string().trim().max(80).optional(),
+  nightlyRateNotes: z.string().trim().max(240).optional(),
+  transportationNotes: z.string().trim().max(240).optional(),
+  publiclyShareable: z.boolean().default(true),
+});
+export type HotelBlock = z.infer<typeof HotelBlockSchema>;
+
+export const CalendarEventSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  timezone: z.string().trim().min(1).max(80),
+  location: z.string().trim().min(1).max(240),
+  description: z.string().trim().max(500),
+});
+export type CalendarEvent = z.infer<typeof CalendarEventSchema>;
+
+export const CreateHouseholdMemberSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  canBringPlusOne: z.boolean().default(false),
+  weddingPartyRole: z.string().trim().max(80).optional().default(''),
+  rehearsalDinnerInvited: z.boolean().default(false),
+});
+export type CreateHouseholdMember = z.infer<typeof CreateHouseholdMemberSchema>;
+
+export const CreateHouseholdInputSchema = z.object({
+  displayName: z.string().trim().min(1).max(160),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  mailingAddress: MailingAddressSchema.optional(),
+  members: z.array(CreateHouseholdMemberSchema).min(1).max(12),
+  maxPlusOnes: z.number().int().min(0).max(10).default(0),
+});
+export type CreateHouseholdInput = z.infer<typeof CreateHouseholdInputSchema>;
+
+export const UpdateHouseholdInputSchema = z.object({
+  displayName: z.string().trim().min(1).max(160),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  mailingAddress: MailingAddressSchema.optional(),
+  maxPlusOnes: z.number().int().min(0).max(10),
+});
+export type UpdateHouseholdInput = z.infer<typeof UpdateHouseholdInputSchema>;
+
+export const UpdateHouseholdMemberInputSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  canBringPlusOne: z.boolean(),
+  weddingPartyRole: z.string().trim().max(80).optional().default(''),
+  rehearsalDinnerInvited: z.boolean().default(false),
+});
+export type UpdateHouseholdMemberInput = z.infer<typeof UpdateHouseholdMemberInputSchema>;
+
+export const InviteLifecycleUpdateSchema = z.object({
+  status: InviteLifecycleStatusSchema,
+});
+export type InviteLifecycleUpdate = z.infer<typeof InviteLifecycleUpdateSchema>;
+
+export const AdminAttendanceSchema = z.object({
+  invitedGuests: z.number().int().min(0),
+  attendingGuests: z.number().int().min(0),
+  declinedGuests: z.number().int().min(0),
+  pendingGuests: z.number().int().min(0),
+  plusOneGuests: z.number().int().min(0),
+});
+export type AdminAttendance = z.infer<typeof AdminAttendanceSchema>;
+
+export const AdminHouseholdRecordSchema = z.object({
+  household: HouseholdSchema,
+  rsvp: StoredRsvpSchema.optional(),
+  attendance: AdminAttendanceSchema,
+});
+export type AdminHouseholdRecord = z.infer<typeof AdminHouseholdRecordSchema>;
+
+export const GenericInviteError = 'We could not find that RSVP. Please check your invitation link.';
+
+export function formatValidationIssues(error: z.ZodError): string[] {
+  return error.issues.map((issue) => `${issue.path.join('.') || 'value'}: ${issue.message}`);
+}
+
+export function generateIcs(event: CalendarEvent): string {
+  const parsed = CalendarEventSchema.parse(event);
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Matt Alison Wedding//Wedding Website//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${escapeIcsText(parsed.title)}-${formatIcsDate(parsed.start)}@matt-alison-wedding`,
+    `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
+    `DTSTART;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.start)}`,
+    `DTEND;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.end)}`,
+    `SUMMARY:${escapeIcsText(parsed.title)}`,
+    `LOCATION:${escapeIcsText(parsed.location)}`,
+    `DESCRIPTION:${escapeIcsText(parsed.description)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+function formatIcsDate(value: string): string {
+  return value.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function formatIcsLocalDate(value: string): string {
+  return formatIcsDate(value).replace(/Z$/, '');
+}
+
+function escapeIcsText(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\r?\n/g, '\\n');
+}

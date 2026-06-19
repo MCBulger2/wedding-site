@@ -1,0 +1,40 @@
+{
+  "name": "matt-alison-wedding",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:deploy:production": "node scripts/build-for-env.mjs production",
+    "build:deploy:staging": "node scripts/build-for-env.mjs staging",
+    "deploy:infra": "npm run build && npm run deploy -w infra --",
+    "deploy:infra:production": "npm run build:deploy:production && npm run deploy -w infra -- WeddingSite-production -c envName=production",
+    "deploy:infra:staging": "npm run build:deploy:staging && npm run deploy -w infra -- WeddingSite-staging -c envName=staging",
+    "destroy:infra": "npm run destroy -w infra --",
+    "destroy:infra:production": "npm run destroy -w infra -- WeddingSite-production -c envName=production",
+    "destroy:infra:staging": "npm run destroy -w infra -- WeddingSite-staging -c envName=staging",
+    "dev": "npm run dev -w apps/web",
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "synth": "npm run synth -w infra",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -b packages/shared apps/api apps/web infra"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vitest": "^4.1.9"
+  }
+}

@@ -1,0 +1,144 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CalendarEventSchema,
+  CreateHouseholdInputSchema,
+  HotelBlockSchema,
+  RsvpUpdateSchema,
+  UpdateHouseholdInputSchema,
+  generateIcs,
+} from './index.js';
+
+describe('RsvpUpdateSchema', () => {
+  it('requires attending guests to have an active meal status', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: true, mealChoice: 'none' }],
+      plusOnes: [],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('allows declined guests with no meal', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: false, mealChoice: 'none' }],
+      plusOnes: [],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects plus-ones without a meal choice', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
+      plusOnes: [
+        {
+          sponsorMemberId: 'm1',
+          firstName: 'Guest',
+          lastName: 'Person',
+          mealChoice: 'none',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts buffet-style attending responses', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
+      plusOnes: [
+        {
+          sponsorMemberId: 'm1',
+          firstName: 'Guest',
+          lastName: 'Person',
+          mealChoice: 'buffet',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('CreateHouseholdInputSchema', () => {
+  it('accepts a valid household payload', () => {
+    const result = CreateHouseholdInputSchema.safeParse({
+      displayName: 'Jordan and Casey',
+      email: 'jordan@example.com',
+      mailingAddress: {
+        line1: '123 Main St',
+        city: 'Phoenix',
+        state: 'AZ',
+        postalCode: '85001',
+        country: 'USA',
+      },
+      maxPlusOnes: 1,
+      members: [
+        {
+          firstName: 'Jordan',
+          lastName: 'Example',
+          canBringPlusOne: true,
+          weddingPartyRole: 'Best person',
+          rehearsalDinnerInvited: true,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('UpdateHouseholdInputSchema', () => {
+  it('validates editable household and mailing fields', () => {
+    const result = UpdateHouseholdInputSchema.safeParse({
+      displayName: 'The Updated Household',
+      email: '',
+      maxPlusOnes: 2,
+      mailingAddress: {
+        line1: '456 Oak Ave',
+        line2: '',
+        city: 'Scottsdale',
+        state: 'AZ',
+        postalCode: '85251',
+        country: 'USA',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('structured public planning data', () => {
+  it('validates hotel block data', () => {
+    const result = HotelBlockSchema.safeParse({
+      name: 'Example Hotel',
+      address: '123 Resort Way, Scottsdale, AZ',
+      bookingUrl: 'https://hotel.example.com/wedding',
+      phoneNumber: '555-0100',
+      groupCode: 'MATTALISON',
+      cutoffDate: 'January 15, 2027',
+      nightlyRateNotes: 'Wedding block rate available while rooms last.',
+      transportationNotes: 'Shuttle details will be posted closer to the wedding.',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('generates a deterministic ICS event body', () => {
+    const event = CalendarEventSchema.parse({
+      title: 'Matt and Alison Wedding',
+      start: '2027-03-20T22:00:00.000Z',
+      end: '2027-03-21T04:00:00.000Z',
+      timezone: 'America/Phoenix',
+      location: 'Desert Garden Venue, Scottsdale, AZ',
+      description: 'Ceremony and reception for Matt and Alison.',
+    });
+
+    const ics = generateIcs(event);
+
+    expect(ics).toContain('BEGIN:VCALENDAR');
+    expect(ics).toContain('SUMMARY:Matt and Alison Wedding');
+    expect(ics).toContain('DTSTART;TZID=America/Phoenix:20270320T220000');
+    expect(ics).toContain('LOCATION:Desert Garden Venue\\, Scottsdale\\, AZ');
+  });
+});

@@ -1,0 +1,23 @@
+{
+  "name": "@matt-alison-wedding/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "synth": "cdk synth",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.173.2",
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.173.2",
+    "esbuild": "^0.28.1",
+    "ts-node": "^10.9.2"
+  }
+}
