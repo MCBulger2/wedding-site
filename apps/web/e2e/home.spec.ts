@@ -67,8 +67,10 @@ test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', as
   await page.goto('/rsvp');
 
   const footerBounds = await page.getByRole('contentinfo').boundingBox();
+  const viewport = page.viewportSize();
   expect(footerBounds).not.toBeNull();
-  expect(footerBounds!.y + footerBounds!.height).toBeGreaterThanOrEqual(1399);
+  expect(viewport).not.toBeNull();
+  expect(footerBounds!.y + footerBounds!.height).toBeGreaterThanOrEqual(viewport!.height - 1);
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
