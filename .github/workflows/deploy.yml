@@ -63,4 +63,4 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - run: npm run check:cdk-bootstrap
-      - run: npm run ${{ github.ref == 'refs/heads/main' && 'deploy:infra:production' || 'deploy:infra:staging' }}
+      - run: npm run ${{ github.ref == 'refs/heads/main' && 'deploy:infra:production' || 'deploy:infra:staging' }} -- --require-approval never
