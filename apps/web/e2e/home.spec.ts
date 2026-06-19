@@ -454,7 +454,7 @@ test('admin route clears malformed stored sessions instead of crashing', async (
 
   await page.goto('/admin');
 
-  await expect(page.getByRole('heading', { name: 'Secure admin access' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem('adminAuth.session'))).toBeNull();
   expect(pageErrors).toEqual([]);
