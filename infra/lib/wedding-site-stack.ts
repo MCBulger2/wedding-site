@@ -40,73 +40,115 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, '..', '..');
 const adminHostedUiCss = String.raw`
 .background-customizable {
-  background: linear-gradient(135deg, #e6f0ec 0%, #f9faf8 42%, #ffffff 100%) !important;
-  color: #242a2f;
-  font-family: Aptos, "Trebuchet MS", "Segoe UI", sans-serif;
+  background-color: #f9faf8;
 }
 
 .banner-customizable {
-  color: #193d35;
-  font-family: "Palatino Linotype", Georgia, serif;
-  font-size: 2rem;
-  line-height: 1;
-  padding: 2rem 1.25rem 0.75rem;
-  text-align: center;
+  padding: 25px 0px 18px 0px;
+  background-color: #e6f0ec;
 }
 
 .logo-customizable {
-  max-height: 96px;
-  max-width: 240px;
-}
-
-.panel-customizable {
-  background: rgba(255, 255, 252, 0.96) !important;
-  border: 1px solid rgba(36, 42, 47, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 18px 38px rgba(30, 42, 48, 0.1);
-  padding: 2rem;
+  max-width: 60%;
+  max-height: 30%;
+  background-color: #ffffff;
 }
 
 .label-customizable {
   color: #3d464c;
+  font-weight: 600;
 }
 
 .textDescription-customizable {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  display: block;
+  font-size: 15px;
   color: #3d464c;
 }
 
 .inputField-customizable {
-  background: #ffffff;
-  border: 1px solid rgba(36, 42, 47, 0.18);
-  border-radius: 8px;
-  box-shadow: none;
+  width: 100%;
+  height: 42px;
   color: #242a2f;
-  min-height: 46px;
+  background-color: #ffffff;
+  border: 1px solid rgba(36, 42, 47, 0.18);
+}
+
+.inputField-customizable:focus {
+  border-color: #315f53;
+  outline: 0;
+}
+
+.idpDescription-customizable {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  display: block;
+  font-size: 15px;
+  color: #242a2f;
 }
 
 .submitButton-customizable {
-  background: #315f53;
-  border: 0;
-  border-radius: 8px;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 20px -15px 10px -13px;
+  height: 42px;
+  width: 108%;
   color: #fffffb;
-  font-weight: 800;
-  min-height: 46px;
+  background-color: #315f53;
+}
+
+.submitButton-customizable:hover {
+  color: #fffffb;
+  background-color: #244940;
+}
+
+.idpButton-customizable {
+  height: 42px;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 15px;
+  color: #fffffb;
+  background-color: #315f53;
+  border-color: #315f53;
+}
+
+.idpButton-customizable:hover {
+  color: #fffffb;
+  background-color: #244940;
+}
+
+.socialButton-customizable {
+  height: 42px;
+  text-align: left;
+  width: 100%;
+  margin-bottom: 15px;
 }
 
 .redirect-customizable {
-  color: #667077;
+  text-align: center;
 }
 
 .legalText-customizable {
   color: #667077;
+  font-size: 11px;
 }
 
 .errorMessage-customizable {
-  background: rgba(139, 59, 45, 0.12);
-  border: 1px solid rgba(139, 59, 45, 0.2);
-  border-radius: 8px;
+  padding: 5px;
+  font-size: 14px;
+  width: 100%;
+  background: #f5f5f5;
+  border: 2px solid #9b3d35;
   color: #9b3d35;
-  padding: 0.75rem;
+}
+
+.passwordCheck-notValid-customizable {
+  color: #9b3d35;
+}
+
+.passwordCheck-valid-customizable {
+  color: #315f53;
 }
 `;
 
