@@ -46,32 +46,17 @@ const adminHostedUiCss = String.raw`
 }
 
 .banner-customizable {
+  color: #193d35;
+  font-family: "Palatino Linotype", Georgia, serif;
+  font-size: 2rem;
+  line-height: 1;
   padding: 2rem 1.25rem 0.75rem;
   text-align: center;
 }
 
-.banner-customizable::before {
-  color: #193d35;
-  content: "Matt & Alison";
-  display: block;
-  font-family: "Palatino Linotype", Georgia, serif;
-  font-size: 2rem;
-  line-height: 1;
-}
-
-.banner-customizable::after {
-  color: #a4543a;
-  content: "Admin";
-  display: block;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  margin-top: 0.45rem;
-  text-transform: uppercase;
-}
-
 .logo-customizable {
-  display: none;
+  max-height: 96px;
+  max-width: 240px;
 }
 
 .panel-customizable {
@@ -82,7 +67,10 @@ const adminHostedUiCss = String.raw`
   padding: 2rem;
 }
 
-.label-customizable,
+.label-customizable {
+  color: #3d464c;
+}
+
 .textDescription-customizable {
   color: #3d464c;
 }
@@ -96,11 +84,6 @@ const adminHostedUiCss = String.raw`
   min-height: 46px;
 }
 
-.inputField-customizable:focus {
-  border-color: rgba(49, 95, 83, 0.55);
-  box-shadow: 0 0 0 4px rgba(49, 95, 83, 0.12);
-}
-
 .submitButton-customizable {
   background: #315f53;
   border: 0;
@@ -110,20 +93,12 @@ const adminHostedUiCss = String.raw`
   min-height: 46px;
 }
 
-.submitButton-customizable:hover,
-.submitButton-customizable:focus {
-  background: #193d35;
-}
-
-.redirect-customizable,
-.legalText-customizable {
+.redirect-customizable {
   color: #667077;
 }
 
-.redirect-customizable a,
-.legalText-customizable a {
-  color: #315f53;
-  font-weight: 700;
+.legalText-customizable {
+  color: #667077;
 }
 
 .errorMessage-customizable {
