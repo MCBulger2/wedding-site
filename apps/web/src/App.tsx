@@ -1099,6 +1099,9 @@ function AdminPage() {
       if (!session) {
         throw new Error('Sign in before archiving households.');
       }
+      if (isHouseholdArchived(record.household)) {
+        throw new Error(`${record.household.displayName} is already archived.`);
+      }
       const risky = record.household.inviteCodeHash || record.rsvp;
       if (risky && !window.confirm('This household has invite or RSVP history. Archiving keeps history but removes guest RSVP access. Continue?')) {
         return;
@@ -1129,7 +1132,7 @@ function AdminPage() {
   };
 
   const visibleHouseholds = households.filter((record) => {
-    const matchesArchived = showArchived || !record.household.archivedAt;
+    const matchesArchived = showArchived || !isHouseholdArchived(record.household);
     const matchesStatus = statusFilter === 'all' || record.household.rsvpStatus === statusFilter;
     const matchesSearch =
       search.trim().length === 0 ||
@@ -1429,7 +1432,11 @@ function AdminPage() {
                     type="button"
                     className="secondary-button button-inline"
                     onClick={() => void markInviteStatus(record, 'exported')}
-                    disabled={record.household.inviteLifecycleStatus === 'exported' || record.household.inviteLifecycleStatus === 'sent'}
+                    disabled={
+                      isHouseholdArchived(record.household) ||
+                      record.household.inviteLifecycleStatus === 'exported' ||
+                      record.household.inviteLifecycleStatus === 'sent'
+                    }
                   >
                     <Download aria-hidden="true" />
                     Mark exported
@@ -1438,12 +1445,17 @@ function AdminPage() {
                     type="button"
                     className="secondary-button button-inline"
                     onClick={() => void markInviteStatus(record, 'sent')}
-                    disabled={record.household.inviteLifecycleStatus !== 'exported'}
+                    disabled={isHouseholdArchived(record.household) || record.household.inviteLifecycleStatus !== 'exported'}
                   >
                     <Send aria-hidden="true" />
                     Mark sent
                   </button>
-                  <button type="button" className="secondary-button button-inline danger-button" onClick={() => void handleArchiveHousehold(record)}>
+                  <button
+                    type="button"
+                    className="secondary-button button-inline danger-button"
+                    onClick={() => void handleArchiveHousehold(record)}
+                    disabled={isHouseholdArchived(record.household)}
+                  >
                     <Archive aria-hidden="true" />
                     Archive
                   </button>
@@ -1951,6 +1963,10 @@ function inviteStatusLabel(household: Household): string {
     return 'generated';
   }
   return household.inviteLifecycleStatus.replace('_', ' ');
+}
+
+function isHouseholdArchived(household: Household): boolean {
+  return household.inviteLifecycleStatus === 'archived' || Boolean(household.archivedAt);
 }
 
 function inviteWarning(household: Household): string {

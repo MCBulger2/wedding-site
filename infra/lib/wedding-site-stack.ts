@@ -27,6 +27,8 @@ export interface WeddingSiteStackProps extends StackProps {
   frontendDomainName?: string;
   apiDomainName?: string;
   authDomainName?: string;
+  frontendCertificate?: acm.ICertificate;
+  authCertificate?: acm.ICertificate;
   hostedZoneDomain?: string;
   allowedOrigins: string[];
   notificationSenderEmail?: string;
@@ -179,14 +181,13 @@ export class WeddingSiteStack extends Stack {
           })
         : undefined;
 
-    const certificate =
-      frontendDomainName && hostedZone
-        ? new acm.DnsValidatedCertificate(this, 'CloudFrontCertificate', {
-            domainName: frontendDomainName,
-            hostedZone,
-            region: 'us-east-1',
-          })
-        : undefined;
+    const certificate = frontendDomainName
+      ? (props.frontendCertificate ??
+        new acm.Certificate(this, 'CloudFrontCertificate', {
+          domainName: frontendDomainName,
+          validation: hostedZone ? acm.CertificateValidation.fromDns(hostedZone) : undefined,
+        }))
+      : undefined;
 
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
@@ -227,14 +228,13 @@ export class WeddingSiteStack extends Stack {
     });
 
     const adminRedirectUris = buildAdminRedirectUris(frontendDomainName, distribution.distributionDomainName);
-    const authCertificate =
-      props.authDomainName && hostedZone
-        ? new acm.DnsValidatedCertificate(this, 'AdminAuthCertificate', {
-            domainName: props.authDomainName,
-            hostedZone,
-            region: 'us-east-1',
-          })
-        : undefined;
+    const authCertificate = props.authDomainName
+      ? (props.authCertificate ??
+        new acm.Certificate(this, 'AdminAuthCertificate', {
+          domainName: props.authDomainName,
+          validation: hostedZone ? acm.CertificateValidation.fromDns(hostedZone) : undefined,
+        }))
+      : undefined;
     const authParentValidationRecord =
       props.authDomainName && hostedZone
         ? createCognitoParentDomainValidationRecord(this, hostedZone, props.authDomainName, [
@@ -374,7 +374,7 @@ export class WeddingSiteStack extends Stack {
       new route53.ARecord(this, 'AdminAuthAliasRecord', {
         zone: hostedZone,
         recordName: props.authDomainName,
-        target: route53.RecordTarget.fromAlias(new route53Targets.UserPoolDomainTarget(userPoolDomain)),
+        target: route53.RecordTarget.fromAlias(cognitoUserPoolDomainAliasTarget(userPoolDomain)),
       });
     }
 
@@ -455,4 +455,13 @@ function getParentDomainName(domainName: string): string | undefined {
 
 function normalizeDomainName(domainName: string): string {
   return domainName.trim().replace(/\.+$/, '').toLowerCase();
+}
+
+function cognitoUserPoolDomainAliasTarget(domain: cognito.UserPoolDomain): route53.IAliasRecordTarget {
+  return {
+    bind: () => ({
+      dnsName: domain.cloudFrontEndpoint,
+      hostedZoneId: route53Targets.CloudFrontTarget.CLOUDFRONT_ZONE_ID,
+    }),
+  };
 }

@@ -1,6 +1,7 @@
 import 'source-map-support/register.js';
 import * as cdk from 'aws-cdk-lib';
 import { deploymentConfigs } from '../config/deployment-config.js';
+import { CertificateStack } from '../lib/certificate-stack.js';
 import { WeddingSiteStack } from '../lib/wedding-site-stack.js';
 
 const app = new cdk.App();
@@ -50,13 +51,27 @@ const enablePasskeys =
   parseBoolean(process.env.ENABLE_PASSKEYS) ??
   deploymentConfig.enablePasskeys;
 
+const certificateStack =
+  hostedZoneDomain && (frontendDomainName || authDomainName)
+    ? new CertificateStack(app, `WeddingSiteCertificates-${envName}`, {
+        env: { account, region: 'us-east-1' },
+        crossRegionReferences: true,
+        hostedZoneDomain,
+        frontendDomainName,
+        authDomainName,
+      })
+    : undefined;
+
 new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   env: { account, region: appRegion },
+  crossRegionReferences: true,
   envName,
   domainName,
   frontendDomainName,
   apiDomainName,
   authDomainName,
+  frontendCertificate: certificateStack?.frontendCertificate,
+  authCertificate: certificateStack?.authCertificate,
   hostedZoneDomain,
   allowedOrigins,
   notificationSenderEmail,

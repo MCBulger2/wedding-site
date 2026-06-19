@@ -85,7 +85,7 @@ These tracked defaults are placeholders. Set your real domains and notification 
 You can still override any value with CDK context or environment variables. For example:
 
 ```bash
-npm run deploy:infra -- WeddingSite-staging -c envName=staging -c frontendDomainName=example.com -c hostedZoneDomain=example.com
+npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging -c envName=staging -c frontendDomainName=example.com -c hostedZoneDomain=example.com
 ```
 
 Destroy infrastructure with the matching commands when you intentionally want to tear an environment down:

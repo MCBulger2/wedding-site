@@ -267,6 +267,10 @@ describe('WeddingService', () => {
     expect((await repository.getHousehold('h1'))?.members[0].archivedAt).toBeTruthy();
 
     await service.archiveHousehold('h1');
+    await expect(service.archiveHousehold('h1')).rejects.toMatchObject({
+      message: 'Household is already archived',
+      statusCode: 409,
+    });
     await expect(service.getRsvp(inviteCode)).rejects.toMatchObject({
       message: 'We could not find that RSVP. Please check your invitation link.',
     });
