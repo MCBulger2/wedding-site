@@ -941,7 +941,7 @@ function AdminPage() {
 
         if (!storedSession) {
           setAuthStatus('signed_out');
-          setMessage('Sign in with the Cognito admin portal to manage RSVPs.');
+          setMessage('Sign in to manage RSVPs.');
           return;
         }
 
@@ -1170,7 +1170,7 @@ function AdminPage() {
   if (authStatus === 'loading' || authStatus === 'signing_in') {
     return (
       <main className="admin-page">
-        <LoadingScreen eyebrow="Admin" title="Preparing secure sign-in" message={message} />
+        <LoadingScreen eyebrow="Admin" title="Preparing sign-in" message={message} />
       </main>
     );
   }
@@ -1178,19 +1178,35 @@ function AdminPage() {
   if (authStatus === 'error' || authStatus === 'signed_out' || !authConfig || !session) {
     return (
       <main className="admin-page">
-        <section className="lookup-card">
-          <p className="eyebrow">Admin</p>
-          <h1>Secure admin access</h1>
-          <p className="page-lede">
-            Sign in with the Cognito Hosted UI to manage households, generate invite codes, and review RSVP results.
-          </p>
-          <p className="form-message">{message}</p>
-          {authConfig ? (
-            <button type="button" className="button-inline" onClick={() => void beginAdminLogin(authConfig)}>
-              <ShieldCheck aria-hidden="true" />
-              Sign in
-            </button>
-          ) : null}
+        <section className="admin-login-shell" aria-labelledby="admin-login-title">
+          <div className="admin-login-intro">
+            <p className="eyebrow">Admin dashboard</p>
+            <h1 id="admin-login-title">Admin sign in</h1>
+            <p className="page-lede">Manage RSVPs, households, and invitations.</p>
+          </div>
+          <section className="admin-login-card" aria-label="Admin sign in">
+            <div className="admin-login-card-header">
+              <span className="admin-login-icon">
+                <KeyRound aria-hidden="true" />
+              </span>
+              <div>
+                <h2>Welcome back</h2>
+                <p className="form-message">{message}</p>
+              </div>
+            </div>
+            {authConfig ? (
+              <button type="button" className="icon-button admin-login-button" onClick={() => void beginAdminLogin(authConfig)}>
+                <KeyRound aria-hidden="true" />
+                Sign in
+              </button>
+            ) : (
+              <button type="button" className="secondary-button admin-login-button" disabled>
+                <KeyRound aria-hidden="true" />
+                Sign-in unavailable
+              </button>
+            )}
+            <p className="admin-login-note">You will return here after signing in.</p>
+          </section>
         </section>
       </main>
     );
