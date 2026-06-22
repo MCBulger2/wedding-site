@@ -58,6 +58,25 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
       .getByRole('link', { name: 'Registry' }),
   ).toHaveAttribute('href', '/registry');
   await expect(
+    page.getByRole('heading', { name: 'A few favorite moments' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Candlelit garden reception table at sunset',
+    }),
+  ).toBeVisible();
+  await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '0');
+  const carousel = page.getByLabel('Matt and Alison photos');
+  await carousel.hover();
+  await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
+  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Temporary test photo of a desert garden ceremony aisle',
+    }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('heading', { name: 'Wedding day' }),
   ).toBeVisible();
   await expect(
@@ -98,6 +117,11 @@ test('homepage details render on mobile', async ({ page }) => {
 
   await expect(
     page.getByLabel('Wedding highlights').getByText('March 20, 2027'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Candlelit garden reception table at sunset',
+    }),
   ).toBeVisible();
   await expect(
     page.getByText('Ceremony at 3:00 PM; reception at 5:00 PM'),

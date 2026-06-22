@@ -241,6 +241,121 @@ button {
   margin-top: 1.6rem;
 }
 
+.photo-section {
+  align-items: center;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  padding: 5rem 5vw;
+}
+
+.photo-section-copy {
+  max-width: 520px;
+}
+
+.photo-carousel {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.photo-frame {
+  aspect-ratio: 16 / 10;
+  background: rgba(36, 42, 47, 0.08);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  position: relative;
+}
+
+.photo-track {
+  display: flex;
+  height: 100%;
+  touch-action: pan-y pinch-zoom;
+  width: 100%;
+  will-change: transform;
+}
+
+.photo-slide {
+  flex: 0 0 100%;
+  height: 100%;
+  margin: 0;
+  min-width: 0;
+}
+
+.photo-slide img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.photo-controls {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: space-between;
+  opacity: 0;
+  padding: 1rem;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 160ms ease;
+}
+
+.photo-frame:hover .photo-controls,
+.photo-frame:focus-within .photo-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.photo-nav-button {
+  background: rgba(255, 255, 252, 0.86);
+  border: 1px solid rgba(36, 42, 47, 0.14);
+  box-shadow: 0 10px 24px rgba(24, 32, 27, 0.16);
+  color: var(--accent-strong);
+  min-height: 44px;
+  padding: 0;
+  pointer-events: auto;
+  width: 44px;
+}
+
+.photo-caption-row {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.photo-caption-row p {
+  color: var(--copy-muted);
+  display: grid;
+  gap: 0.2rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.photo-caption-row strong {
+  color: var(--accent-strong);
+}
+
+.photo-dots {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.photo-dot {
+  background: rgba(36, 42, 47, 0.24);
+  min-height: 12px;
+  padding: 0;
+  width: 12px;
+}
+
+.photo-dot[aria-current="true"] {
+  background: var(--accent);
+  width: 32px;
+}
+
 .section-grid,
 .faq-section,
 .registry-section,
@@ -729,7 +844,8 @@ textarea:focus {
 
   button:not(:disabled):hover,
   .icon-button:hover,
-  .secondary-button:hover {
+  .secondary-button:hover,
+  .photo-nav-button:hover {
     box-shadow: 0 10px 20px rgba(30, 42, 48, 0.12);
     transform: translateY(-1px);
   }
@@ -1284,6 +1400,7 @@ textarea:focus {
   .admin-grid,
   .admin-login-shell,
   .faq-grid,
+  .photo-section,
   .registry-card,
   .registry-callout,
   .section-grid {
@@ -1294,6 +1411,10 @@ textarea:focus {
   .registry-callout {
     align-items: flex-start;
     display: grid;
+  }
+
+  .photo-section-copy {
+    max-width: 680px;
   }
 
   .admin-login-shell {
@@ -1377,6 +1498,7 @@ textarea:focus {
 
 @media (max-width: 560px) {
   .section-grid,
+  .photo-section,
   .faq-section,
   .registry-section,
   .narrow-page,
@@ -1415,6 +1537,27 @@ textarea:focus {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .photo-section {
+    gap: 1.5rem;
+  }
+
+  .photo-frame {
+    aspect-ratio: 4 / 5;
+  }
+
+  .photo-controls {
+    padding: 0.75rem;
+  }
+
+  .photo-caption-row {
+    align-items: flex-start;
+    display: grid;
+  }
+
+  .photo-dots {
+    justify-self: start;
   }
 
   .admin-login-intro,

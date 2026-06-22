@@ -16,6 +16,14 @@ interface RegistryContent {
   links: RegistryLink[];
 }
 
+interface GalleryPhoto {
+  src: string;
+  alt: string;
+  caption: string;
+  detail?: string;
+  objectPosition?: string;
+}
+
 const weddingEvent: CalendarEvent = {
   title: 'Matt and Alison Wedding',
   start: '2027-03-20T22:00:00.000Z',
@@ -81,10 +89,26 @@ export const siteContent = {
   photos: [
     {
       src: '/hero-wedding.png',
-      alt: 'Matt and Alison together outdoors',
+      alt: 'Candlelit garden reception table at sunset',
       caption: 'Scottsdale, Arizona',
+      detail: 'A desert-garden preview while engagement and wedding-weekend photos are gathered.',
+      objectPosition: 'center',
     },
-  ],
+    {
+      src: '/test-ceremony-aisle.png',
+      alt: 'Temporary test photo of a desert garden ceremony aisle',
+      caption: 'Ceremony preview',
+      detail: 'Temporary test image for carousel layout and controls.',
+      objectPosition: 'center',
+    },
+    {
+      src: '/test-cocktail-hour.png',
+      alt: 'Temporary test photo of outdoor wedding cocktail hour details',
+      caption: 'Cocktail hour preview',
+      detail: 'Temporary test image for carousel layout and controls.',
+      objectPosition: 'center',
+    },
+  ] satisfies GalleryPhoto[],
   faqs: [
     {
       question: 'When should I RSVP?',
