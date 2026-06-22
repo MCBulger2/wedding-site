@@ -13,6 +13,7 @@ import {
   Download,
   Edit3,
   ExternalLink,
+  Gift,
   Heart,
   Hotel,
   Image,
@@ -68,6 +69,7 @@ import { siteContent } from './siteContent.js';
 
 type Route =
   | { name: 'home' }
+  | { name: 'registry' }
   | { name: 'rsvp_entry' }
   | { name: 'rsvp'; inviteCode: string }
   | { name: 'rsvp_success'; inviteCode: string }
@@ -111,6 +113,7 @@ export function App() {
     <div className="app-shell">
       <Header />
       {route.name === 'home' && <HomePage />}
+      {route.name === 'registry' && <RegistryPage />}
       {route.name === 'rsvp_entry' && <RsvpLookupPage />}
       {route.name === 'rsvp' && <RsvpPage inviteCode={route.inviteCode} />}
       {route.name === 'rsvp_success' && (
@@ -135,6 +138,7 @@ function Header() {
       </a>
       <nav aria-label="Primary navigation">
         <a href="/#details">Details</a>
+        <a href="/registry">Registry</a>
         <a href="/rsvp">RSVP</a>
       </nav>
     </header>
@@ -315,6 +319,20 @@ function HomePage() {
         </div>
       </section>
 
+      <section id="registry" className="registry-section">
+        <div className="registry-callout">
+          <div>
+            <p className="eyebrow">Registry</p>
+            <h2>{siteContent.registry.title}</h2>
+            <p className="page-lede">{siteContent.registry.intro}</p>
+          </div>
+          <a className="icon-button button-inline" href="/registry">
+            <Gift aria-hidden="true" />
+            View registry
+          </a>
+        </div>
+      </section>
+
       <section id="faq" className="faq-section">
         <p className="eyebrow">FAQ</p>
         <h2>Guest notes</h2>
@@ -327,6 +345,55 @@ function HomePage() {
           ))}
         </div>
       </section>
+    </main>
+  );
+}
+
+function RegistryPage() {
+  const { registry } = siteContent;
+  const hasRegistryLinks = registry.links.length > 0;
+
+  return (
+    <main className="narrow-page registry-page">
+      <section className="registry-hero-card">
+        <div className="registry-icon" aria-hidden="true">
+          <Gift />
+        </div>
+        <p className="eyebrow">Registry</p>
+        <h1>{registry.title}</h1>
+        <p className="page-lede">{registry.intro}</p>
+        <p className="form-message">{registry.note}</p>
+      </section>
+
+      {hasRegistryLinks ? (
+        <section className="registry-list" aria-label="Registry links">
+          {registry.links.map((link) => (
+            <article className="registry-card" key={link.name}>
+              <div>
+                <h2>{link.name}</h2>
+                <p>{link.description}</p>
+              </div>
+              <a
+                className="icon-button button-inline"
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink aria-hidden="true" />
+                {link.linkLabel}
+              </a>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <section className="registry-empty-card">
+          <h2>{registry.comingSoonTitle}</h2>
+          <p>{registry.comingSoonMessage}</p>
+          <a className="secondary-button button-inline" href="/">
+            Back to wedding details
+          </a>
+        </section>
+      )}
     </main>
   );
 }
@@ -2252,6 +2319,9 @@ function AdminPage() {
 }
 
 function parseRoute(pathname: string): Route {
+  if (pathname === '/registry') {
+    return { name: 'registry' };
+  }
   if (pathname === '/rsvp') {
     return { name: 'rsvp_entry' };
   }
