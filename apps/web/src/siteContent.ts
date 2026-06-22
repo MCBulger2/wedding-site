@@ -1,5 +1,21 @@
 import type { CalendarEvent, HotelBlock } from '@matt-alison-wedding/shared';
 
+interface RegistryLink {
+  name: string;
+  description: string;
+  url: string;
+  linkLabel: string;
+}
+
+interface RegistryContent {
+  title: string;
+  intro: string;
+  note: string;
+  comingSoonTitle: string;
+  comingSoonMessage: string;
+  links: RegistryLink[];
+}
+
 interface GalleryPhoto {
   src: string;
   alt: string;
@@ -31,6 +47,18 @@ const hotels: HotelBlock[] = [
   },
 ];
 
+const registry: RegistryContent = {
+  title: 'Wedding registry',
+  intro:
+    'Your presence is the best gift. For guests who have asked, registry details will be shared here once they are finalized.',
+  note:
+    'We are keeping everything simple and will link directly to our selected registries from this page.',
+  comingSoonTitle: 'Registry details coming soon',
+  comingSoonMessage:
+    'Check back closer to the celebration for registry links and any gift notes from Matt and Alison.',
+  links: [],
+};
+
 export const siteContent = {
   coupleNames: 'Matt & Alison',
   dateLabel: 'March 20, 2027',
@@ -56,6 +84,7 @@ export const siteContent = {
     'Guests will receive RSVP links by mailed invitation.',
   ],
   hotels,
+  registry,
   weddingEvent,
   photos: [
     {

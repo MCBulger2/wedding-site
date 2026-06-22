@@ -53,6 +53,11 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('link', { name: 'Find your RSVP' }),
   ).toBeVisible();
   await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Registry' }),
+  ).toHaveAttribute('href', '/registry');
+  await expect(
     page.getByRole('heading', { name: 'A few favorite moments' }),
   ).toBeVisible();
   await expect(
@@ -88,6 +93,12 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Sonoran Courtyard Hotel' }),
   ).toBeVisible();
   await expect(
+    page.getByRole('heading', { name: 'Wedding registry' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'View registry' }),
+  ).toHaveAttribute('href', '/registry');
+  await expect(
     page.getByRole('heading', { name: 'Guest notes' }),
   ).toBeVisible();
   await expect(
@@ -121,6 +132,44 @@ test('homepage details render on mobile', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toHaveAttribute('href', /^data:text\/calendar/);
+});
+
+test('registry page renders coming soon state', async ({ page }) => {
+  await page.goto('/registry');
+
+  await expect(
+    page.getByRole('heading', { name: 'Wedding registry' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Your presence is the best gift.'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Registry details coming soon' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Check back closer to the celebration'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Back to wedding details' }),
+  ).toHaveAttribute('href', '/');
+  await expect(page.getByLabel('Registry links')).toHaveCount(0);
+});
+
+test('registry page renders on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/registry');
+
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Registry' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Wedding registry' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Registry details coming soon' }),
+  ).toBeVisible();
 });
 
 test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', async ({

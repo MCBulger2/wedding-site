@@ -358,6 +358,7 @@ button {
 
 .section-grid,
 .faq-section,
+.registry-section,
 .narrow-page,
 .admin-page {
   padding: 5rem 5vw;
@@ -371,6 +372,24 @@ button {
 
 .travel-section {
   background: #ffffff;
+}
+
+.registry-section {
+  background: #f9faf8;
+}
+
+.registry-callout {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1120px;
+  padding: 2rem;
 }
 
 .timeline {
@@ -468,6 +487,73 @@ button {
 
 .hotel-card dd {
   color: var(--copy-muted);
+  margin: 0;
+}
+
+.registry-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.registry-page h1 {
+  font-size: clamp(2.8rem, 7vw, 5.8rem);
+}
+
+.registry-hero-card,
+.registry-card,
+.registry-empty-card {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+.registry-hero-card,
+.registry-empty-card {
+  display: grid;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.registry-icon {
+  align-items: center;
+  background: rgba(49, 95, 83, 0.1);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  display: grid;
+  height: 52px;
+  justify-items: center;
+  width: 52px;
+}
+
+.registry-icon svg {
+  height: 1.35rem;
+  width: 1.35rem;
+}
+
+.registry-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.registry-card {
+  align-items: center;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  padding: 1.5rem;
+}
+
+.registry-card h2,
+.registry-empty-card h2 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  margin-bottom: 0.75rem;
+}
+
+.registry-card p,
+.registry-empty-card p {
+  color: var(--copy-muted);
+  line-height: 1.6;
   margin: 0;
 }
 
@@ -766,6 +852,7 @@ textarea:focus {
 
   .household-card:hover,
   .hotel-card:hover,
+  .registry-card:hover,
   .faq-grid article:hover {
     border-color: rgba(49, 95, 83, 0.22);
     box-shadow: 0 18px 34px rgba(30, 42, 48, 0.1);
@@ -1314,8 +1401,16 @@ textarea:focus {
   .admin-login-shell,
   .faq-grid,
   .photo-section,
+  .registry-card,
+  .registry-callout,
   .section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .registry-card,
+  .registry-callout {
+    align-items: flex-start;
+    display: grid;
   }
 
   .photo-section-copy {
@@ -1405,6 +1500,7 @@ textarea:focus {
   .section-grid,
   .photo-section,
   .faq-section,
+  .registry-section,
   .narrow-page,
   .admin-page {
     padding-left: 1.25rem;
