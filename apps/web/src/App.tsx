@@ -9,6 +9,8 @@ import {
 import {
   Archive,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Download,
   Edit3,
@@ -27,7 +29,8 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
+import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   beginAdminLogin,
   beginAdminLogout,
@@ -179,6 +182,8 @@ function HomePage() {
         </div>
       </section>
 
+      <PhotoCarousel photos={siteContent.photos} />
+
       <section id="details" className="section-grid">
         <div>
           <p className="eyebrow">Itinerary</p>
@@ -299,6 +304,124 @@ function HomePage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const hasMultiplePhotos = photos.length > 1;
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: 'start',
+    loop: hasMultiplePhotos,
+  });
+  const activePhoto = photos[activeIndex];
+  const syncActivePhoto = useCallback(() => {
+    if (!emblaApi) {
+      return;
+    }
+
+    setActiveIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) {
+      return undefined;
+    }
+
+    syncActivePhoto();
+    emblaApi.on('select', syncActivePhoto);
+    emblaApi.on('reInit', syncActivePhoto);
+
+    return () => {
+      emblaApi.off('select', syncActivePhoto);
+      emblaApi.off('reInit', syncActivePhoto);
+    };
+  }, [emblaApi, syncActivePhoto]);
+
+  if (!activePhoto) {
+    return null;
+  }
+
+  const showPhoto = (index: number) => {
+    const nextIndex = (index + photos.length) % photos.length;
+    setActiveIndex(nextIndex);
+    emblaApi?.scrollTo(nextIndex);
+  };
+  const advancePhoto = (offset: number) => {
+    if (!emblaApi) {
+      showPhoto(activeIndex + offset);
+      return;
+    }
+
+    if (offset > 0) {
+      emblaApi.scrollNext();
+    } else {
+      emblaApi.scrollPrev();
+    }
+  };
+
+  return (
+    <section className="photo-section" aria-labelledby="photo-carousel-heading">
+      <div className="photo-section-copy">
+        <p className="eyebrow">Photos</p>
+        <h2 id="photo-carousel-heading">A few favorite moments</h2>
+        <p className="page-lede">
+          A growing gallery for engagement and wedding-weekend photos, with more memories to add as the celebration gets
+          closer.
+        </p>
+      </div>
+      <div className="photo-carousel" aria-roledescription="carousel" aria-label="Matt and Alison photos">
+        <div ref={emblaRef} className="photo-frame">
+          <div className="photo-track">
+            {photos.map((photo, index) => (
+              <figure
+                className="photo-slide"
+                aria-hidden={index === activeIndex ? 'false' : 'true'}
+                key={`${photo.src}-${photo.caption}`}
+              >
+                <img
+                  src={photo.src}
+                  alt={photo.alt}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  style={{ objectPosition: photo.objectPosition }}
+                />
+              </figure>
+            ))}
+          </div>
+          {hasMultiplePhotos && (
+            <div className="photo-controls" aria-label="Photo controls">
+              <button type="button" className="photo-nav-button" aria-label="Show previous photo" onClick={() => advancePhoto(-1)}>
+                <ChevronLeft aria-hidden="true" />
+              </button>
+              <button type="button" className="photo-nav-button" aria-label="Show next photo" onClick={() => advancePhoto(1)}>
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="photo-caption-row">
+          <p aria-live="polite">
+            <strong>{activePhoto.caption}</strong>
+            {activePhoto.detail && <span>{activePhoto.detail}</span>}
+          </p>
+          {hasMultiplePhotos && (
+            <div className="photo-dots" aria-label="Choose a photo">
+              {photos.map((photo, index) => (
+                <button
+                  type="button"
+                  aria-label={`Show photo ${index + 1}: ${photo.caption}`}
+                  aria-current={index === activeIndex ? 'true' : 'false'}
+                  className="photo-dot"
+                  key={`${photo.caption}-dot`}
+                  onClick={() => showPhoto(index)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
