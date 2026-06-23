@@ -23,6 +23,7 @@ import {
   KeyRound,
   Mail,
   MapPin,
+  MoreHorizontal,
   MessageSquare,
   Phone,
   Plus,
@@ -37,6 +38,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 import {
   type Dispatch,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type SetStateAction,
   useCallback,
@@ -113,6 +115,202 @@ interface RevealedInvite {
   displayName: string;
   inviteCode: string;
   inviteCodeHash: string;
+}
+
+interface HouseholdCardActionsProps {
+  household: Household;
+  revealedInvite?: RevealedInvite;
+  isInviteExpanded: boolean;
+  initialMenuOpen?: boolean;
+  canNotify: boolean;
+  onNotify: () => void;
+  onEdit: () => void;
+  onRotateInviteCode: () => void;
+  onToggleInvite: () => void;
+  onOpenQrCode: () => void;
+}
+
+export function HouseholdCardActions({
+  household,
+  revealedInvite,
+  isInviteExpanded,
+  initialMenuOpen = false,
+  canNotify,
+  onNotify,
+  onEdit,
+  onRotateInviteCode,
+  onToggleInvite,
+  onOpenQrCode,
+}: HouseholdCardActionsProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(initialMenuOpen);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const focusMenuItem = (offset: number) => {
+    const menuItems = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      '.household-action-menu-item',
+    );
+
+    if (!menuItems?.length) {
+      return;
+    }
+
+    const currentIndex = Array.from(menuItems).findIndex(
+      (item) => item === document.activeElement,
+    );
+
+    if (currentIndex < 0) {
+      menuItems[offset > 0 ? 0 : menuItems.length - 1]?.focus();
+      return;
+    }
+
+    const nextIndex =
+      (currentIndex + offset + menuItems.length) % menuItems.length;
+    menuItems[nextIndex]?.focus();
+  };
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        focusMenuItem(1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusMenuItem(-1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        menuRef.current?.querySelectorAll<HTMLButtonElement>(
+          '.household-action-menu-item',
+        )[0]?.focus();
+        break;
+      case 'End':
+        event.preventDefault();
+        const menuItems = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+          '.household-action-menu-item',
+        );
+        menuItems?.[menuItems.length - 1]?.focus();
+        break;
+      case 'Escape':
+        event.preventDefault();
+        setIsMenuOpen(false);
+        break;
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    setIsMenuOpen(initialMenuOpen);
+  }, [initialMenuOpen]);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [isMenuOpen]);
+
+  return (
+    <div className="household-action-menu-shell" ref={menuRef}>
+      <button
+        type="button"
+        className="secondary-button button-inline"
+        aria-haspopup="menu"
+        aria-expanded={isMenuOpen}
+        aria-controls={`household-actions-${household.householdId}`}
+        onClick={() => setIsMenuOpen((current) => !current)}
+      >
+        <MoreHorizontal aria-hidden="true" />
+        Actions
+      </button>
+      {isMenuOpen && (
+        <div
+          className="household-action-menu"
+          id={`household-actions-${household.householdId}`}
+          role="menu"
+          onKeyDown={handleMenuKeyDown}
+        >
+          <button
+            type="button"
+            className="household-action-menu-item"
+            role="menuitem"
+            disabled={!canNotify}
+            onClick={() => {
+              setIsMenuOpen(false);
+              onNotify();
+            }}
+          >
+            <MessageSquare aria-hidden="true" />
+            Notify
+          </button>
+          <button
+            type="button"
+            className="household-action-menu-item"
+            role="menuitem"
+            onClick={() => {
+              setIsMenuOpen(false);
+              onEdit();
+            }}
+          >
+            <Edit3 aria-hidden="true" />
+            Edit
+          </button>
+          <button
+            type="button"
+            className="household-action-menu-item"
+            role="menuitem"
+            onClick={() => {
+              setIsMenuOpen(false);
+              onRotateInviteCode();
+            }}
+          >
+            <KeyRound aria-hidden="true" />
+            {household.inviteCodeLastRotatedAt ? 'Rotate code' : 'Generate code'}
+          </button>
+          {revealedInvite && (
+            <>
+              <button
+                type="button"
+                className="household-action-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onToggleInvite();
+                }}
+              >
+                <KeyRound aria-hidden="true" />
+                {isInviteExpanded ? 'Hide invitation' : 'Show invitation'}
+              </button>
+              <button
+                type="button"
+                className="household-action-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onOpenQrCode();
+                }}
+              >
+                <Image aria-hidden="true" />
+                Invitation QR
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface HouseholdNotificationFormState {
@@ -1981,11 +2179,13 @@ function AdminPage() {
               />
             )}
             <a
+              className="secondary-button button-inline"
               href={buildGuestRsvpUrl(qrModalInvite.inviteCode)}
               target="_blank"
               rel="noreferrer"
             >
-              {buildGuestRsvpPath(qrModalInvite.inviteCode)}
+              <ExternalLink aria-hidden="true" />
+              Open RSVP
             </a>
           </div>
         </Modal>
@@ -2147,85 +2347,34 @@ function AdminPage() {
                           </span>
                         )}
                       </div>
-                      <div className="invite-actions-row">
-                        {revealedInvite ? (
-                          <>
-                            <a
-                              className="secondary-button button-inline"
-                              href={buildGuestRsvpUrl(
-                                revealedInvite.inviteCode,
-                              )}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <ExternalLink aria-hidden="true" />
-                              Open RSVP
-                            </a>
-                            <button
-                              type="button"
-                              className="secondary-button button-inline"
-                              onClick={() =>
-                                setExpandedInviteHouseholdId((current) =>
-                                  current === record.household.householdId
-                                    ? undefined
-                                    : record.household.householdId,
-                                )
-                              }
-                            >
-                              <KeyRound aria-hidden="true" />
-                              {isInviteExpanded
-                                ? 'Hide invitation'
-                                : 'Show invitation'}
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button button-inline"
-                              onClick={() =>
-                                void openQrCodeModal(revealedInvite)
-                              }
-                            >
-                              <Image aria-hidden="true" />
-                              Invitation QR
-                            </button>
-                          </>
-                        ) : (
-                          <p className="form-message compact-message">
-                            Generate or export this invitation to keep its code,
-                            link, and QR available in this browser.
-                          </p>
-                        )}
-                      </div>
                     </div>
                     <div className="toolbar-actions">
-                      <button
-                        type="button"
-                        className="secondary-button button-inline"
-                        onClick={() => openNotificationModal(record.household)}
-                        disabled={
-                          !record.household.email && !record.household.phone
+                      <HouseholdCardActions
+                        household={record.household}
+                        revealedInvite={revealedInvite}
+                        isInviteExpanded={isInviteExpanded}
+                        canNotify={
+                          Boolean(record.household.email) ||
+                          Boolean(record.household.phone)
                         }
-                      >
-                        <MessageSquare aria-hidden="true" />
-                        Notify
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button button-inline"
-                        onClick={() => beginEditHousehold(record.household)}
-                      >
-                        <Edit3 aria-hidden="true" />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-button button-inline"
-                        onClick={() => handleRotateInviteCode(record)}
-                      >
-                        <KeyRound aria-hidden="true" />
-                        {record.household.inviteCodeLastRotatedAt
-                          ? 'Rotate code'
-                          : 'Generate code'}
-                      </button>
+                        onNotify={() => openNotificationModal(record.household)}
+                        onEdit={() => beginEditHousehold(record.household)}
+                        onRotateInviteCode={() =>
+                          void handleRotateInviteCode(record)
+                        }
+                        onToggleInvite={() =>
+                          setExpandedInviteHouseholdId((current) =>
+                            current === record.household.householdId
+                              ? undefined
+                              : record.household.householdId,
+                          )
+                        }
+                        onOpenQrCode={() => {
+                          if (revealedInvite) {
+                            void openQrCodeModal(revealedInvite);
+                          }
+                        }}
+                      />
                     </div>
                   </div>
 

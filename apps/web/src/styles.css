@@ -809,6 +809,41 @@ button:not(.secondary-button),
   width: fit-content;
 }
 
+.household-action-menu-shell {
+  position: relative;
+}
+
+.household-action-menu {
+  background: var(--surface-strong);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  display: grid;
+  gap: 0.25rem;
+  min-width: 220px;
+  padding: 0.5rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 5;
+}
+
+.household-action-menu-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0.6rem 0.7rem;
+  text-align: left;
+  width: 100%;
+}
+
 .danger-button {
   background: rgba(139, 59, 45, 0.1);
   color: var(--danger);
@@ -856,6 +891,10 @@ textarea:focus {
   .faq-grid article:hover {
     border-color: rgba(49, 95, 83, 0.22);
     box-shadow: 0 18px 34px rgba(30, 42, 48, 0.1);
+  }
+
+  .household-action-menu-item:hover {
+    background: rgba(49, 95, 83, 0.06);
   }
 }
 

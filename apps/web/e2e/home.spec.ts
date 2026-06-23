@@ -671,7 +671,8 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Example Household' });
-  await exampleCard.getByRole('button', { name: 'Notify' }).click();
+  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
@@ -688,7 +689,8 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject: 'Travel update',
   });
 
-  await exampleCard.getByRole('button', { name: 'Notify' }).click();
+  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
   await page.getByLabel('Delivery channel').selectOption('sms');
   await expect(page.getByLabel('Notification subject')).toHaveCount(0);
   await page
@@ -714,16 +716,19 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('exported').first()).toBeVisible();
 
+  await exampleCard.getByRole('button', { name: 'Actions' }).click();
   await expect(
-    exampleCard.getByRole('button', { name: 'Show invitation' }),
+    exampleCard.getByRole('menuitem', { name: 'Show invitation' }),
   ).toBeVisible();
-  await exampleCard.getByRole('button', { name: 'Show invitation' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'Show invitation' }).click();
   await expect(
     exampleCard.getByRole('link', { name: 'http://127.0.0.1:5173/rsvp/code' }),
   ).toBeVisible();
-  await exampleCard.getByRole('button', { name: 'Hide invitation' }).click();
+  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'Hide invitation' }).click();
 
-  await exampleCard.getByRole('button', { name: 'Edit' }).click();
+  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'Edit' }).click();
   await page
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
@@ -776,14 +781,16 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
-  await expect(
-    newCard.getByRole('button', { name: 'Hide invitation' }),
-  ).toBeVisible();
   await expect(newCard.locator('.invite-code-block strong').first()).toHaveText(
     'fresh-invite-code-456',
   );
-  await expect(newCard.getByRole('link', { name: 'Open RSVP' })).toBeVisible();
-  await newCard.getByRole('button', { name: 'Invitation QR' }).click();
+  await expect(
+    newCard.getByRole('link', {
+      name: 'http://127.0.0.1:5173/rsvp/fresh-invite-code-456',
+    }),
+  ).toBeVisible();
+  await newCard.getByRole('button', { name: 'Actions' }).click();
+  await newCard.getByRole('menuitem', { name: 'Invitation QR' }).click();
   await expect(
     page.getByRole('dialog', { name: 'The Harper Household invitation QR' }),
   ).toBeVisible();
@@ -796,10 +803,13 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
+  await reloadedCard.getByRole('button', { name: 'Actions' }).click();
   await expect(
-    reloadedCard.getByRole('button', { name: 'Show invitation' }),
+    reloadedCard.getByRole('menuitem', { name: 'Show invitation' }),
   ).toBeVisible();
-  await reloadedCard.getByRole('button', { name: 'Show invitation' }).click();
+  await reloadedCard
+    .getByRole('menuitem', { name: 'Show invitation' })
+    .click();
   await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
     'fresh-invite-code-456',
   );
