@@ -10,6 +10,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNode from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -185,8 +186,6 @@ export class WeddingSiteStack extends Stack {
       environment: {
         TABLE_NAME: table.tableName,
         INVITE_CODE_PEPPER_SECRET_ARN: inviteCodePepper.secretArn,
-        FRONTEND_BASE_URL: frontendDomainName ? `https://${frontendDomainName}` : '',
-        ADMIN_DASHBOARD_URL: frontendDomainName ? `https://${frontendDomainName}/admin` : '',
       },
       logGroup: apiHandlerLogGroup,
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -340,6 +339,12 @@ export class WeddingSiteStack extends Stack {
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
     });
 
+    const deployedFrontendBaseUrl = frontendDomainName
+      ? `https://${frontendDomainName}`
+      : `https://${distribution.distributionDomainName}`;
+    apiHandler.addEnvironment('FRONTEND_BASE_URL', deployedFrontendBaseUrl);
+    apiHandler.addEnvironment('ADMIN_DASHBOARD_URL', `${deployedFrontendBaseUrl}/admin`);
+
     const adminRedirectUris = buildAdminRedirectUris(frontendDomainName, distribution.distributionDomainName);
     const authCertificate = props.authDomainName
       ? (props.authCertificate ??
@@ -403,6 +408,7 @@ export class WeddingSiteStack extends Stack {
     apiHandler.addEnvironment('ADMIN_COGNITO_CLIENT_ID', userPoolClient.userPoolClientId);
     apiHandler.addEnvironment('ADMIN_COGNITO_DOMAIN', userPoolDomain.baseUrl());
     if (props.notificationSenderEmail && props.notificationRecipientEmails.length > 0) {
+      apiHandler.addEnvironment('NOTIFICATION_SENDER_EMAIL', props.notificationSenderEmail);
       apiHandler.addEnvironment('RSVP_NOTIFICATION_SENDER_EMAIL', props.notificationSenderEmail);
       apiHandler.addEnvironment('RSVP_NOTIFICATION_RECIPIENT_EMAILS', props.notificationRecipientEmails.join(','));
 
@@ -419,6 +425,13 @@ export class WeddingSiteStack extends Stack {
             );
       sesIdentity.grantSendEmail(apiHandler);
     }
+
+    apiHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['sns:Publish'],
+        resources: ['*'],
+      }),
+    );
 
     const adminAuthorizer = new authorizers.HttpUserPoolAuthorizer('AdminAuthorizer', userPool, {
       userPoolClients: [userPoolClient],
@@ -438,6 +451,7 @@ export class WeddingSiteStack extends Stack {
       { path: '/api/admin/households/{id}', method: apigwv2.HttpMethod.DELETE },
       { path: '/api/admin/households/{id}/invite-code', method: apigwv2.HttpMethod.POST },
       { path: '/api/admin/households/{id}/invite-lifecycle', method: apigwv2.HttpMethod.PUT },
+      { path: '/api/admin/households/{id}/notifications', method: apigwv2.HttpMethod.POST },
       { path: '/api/admin/households/{id}/members/{memberId}', method: apigwv2.HttpMethod.PUT },
       { path: '/api/admin/households/{id}/members/{memberId}', method: apigwv2.HttpMethod.DELETE },
       { path: '/api/admin/rsvps/export', method: apigwv2.HttpMethod.GET },

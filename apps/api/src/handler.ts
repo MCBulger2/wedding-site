@@ -1,7 +1,10 @@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import type { APIGatewayProxyHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { DynamoWeddingRepository } from './repository.js';
-import { createNotifierFromEnvironment } from './notifications.js';
+import {
+  createHouseholdMessengerFromEnvironment,
+  createNotifierFromEnvironment,
+} from './notifications.js';
 import { PublicError, WeddingService } from './service.js';
 
 const secrets = new SecretsManagerClient({});
@@ -95,6 +98,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       );
     }
 
+    const householdNotificationMatch = path.match(/^\/admin\/households\/([^/]+)\/notifications$/);
+    if (method === 'POST' && householdNotificationMatch) {
+      return json(
+        await service.sendHouseholdNotification(
+          decodeURIComponent(householdNotificationMatch[1]),
+          body,
+        ),
+      );
+    }
+
     if (method === 'GET' && path === '/admin/rsvps/export') {
       return {
         statusCode: 200,
@@ -107,7 +120,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     if (method === 'GET' && path === '/admin/invitations/export') {
-      const baseUrl = process.env.FRONTEND_BASE_URL ?? headerValue(event.headers, 'origin') ?? 'https://example.com';
+      const baseUrl =
+        firstPopulatedValue(
+          process.env.FRONTEND_BASE_URL,
+          headerValue(event.headers, 'origin'),
+        ) ?? 'https://example.com';
       return {
         statusCode: 200,
         headers: {
@@ -159,7 +176,12 @@ async function createService(): Promise<WeddingService> {
   }
 
   const pepper = await getInviteCodePepper();
-  return new WeddingService(new DynamoWeddingRepository(tableName), pepper, createNotifierFromEnvironment());
+  return new WeddingService(
+    new DynamoWeddingRepository(tableName),
+    pepper,
+    createNotifierFromEnvironment(),
+    createHouseholdMessengerFromEnvironment(),
+  );
 }
 
 async function getInviteCodePepper(): Promise<string> {
@@ -193,4 +215,8 @@ function normalizePath(rawPath: string): string {
 function headerValue(headers: Record<string, string | undefined>, name: string): string | undefined {
   const matchingKey = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
   return matchingKey ? headers[matchingKey] : undefined;
+}
+
+function firstPopulatedValue(...values: Array<string | undefined>): string | undefined {
+  return values.map((value) => value?.trim()).find(Boolean);
 }

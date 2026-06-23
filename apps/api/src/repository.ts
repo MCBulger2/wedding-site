@@ -216,6 +216,7 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
     householdId: item.householdId,
     displayName: item.displayName,
     email: item.email,
+    phone: item.phone,
     mailingAddress: item.mailingAddress,
     members: item.members,
     maxPlusOnes: item.maxPlusOnes,

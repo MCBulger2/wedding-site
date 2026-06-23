@@ -4,6 +4,8 @@ import type {
   Household,
   InviteLifecycleStatus,
   RsvpUpdate,
+  SendHouseholdNotificationInput,
+  SendHouseholdNotificationResponse,
   StoredRsvp,
   UpdateHouseholdInput,
   UpdateHouseholdMemberInput,
@@ -28,6 +30,8 @@ export interface RotateInviteCodeResponse {
   inviteCode: string;
   inviteCodeHash: string;
 }
+
+export type NotifyHouseholdResponse = SendHouseholdNotificationResponse;
 
 export interface AdminAuthConfigResponse {
   clientId: string;
@@ -153,6 +157,21 @@ export async function rotateInviteCode(
     headers: authHeaders(adminToken),
     body: JSON.stringify({ confirmRotation }),
   });
+}
+
+export async function sendHouseholdNotification(
+  adminToken: string,
+  householdId: string,
+  payload: SendHouseholdNotificationInput,
+): Promise<NotifyHouseholdResponse> {
+  return request<NotifyHouseholdResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}/notifications`,
+    {
+      method: 'POST',
+      headers: authHeaders(adminToken),
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function downloadRsvpsCsv(adminToken: string): Promise<Blob> {
