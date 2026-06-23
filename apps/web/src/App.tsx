@@ -422,6 +422,8 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
     align: 'start',
     loop: hasMultiplePhotos,
   });
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const lastWheelTimeRef = useRef(0);
   const activePhoto = photos[activeIndex];
   const syncActivePhoto = useCallback(() => {
     if (!emblaApi) {
@@ -445,6 +447,29 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       emblaApi.off('reInit', syncActivePhoto);
     };
   }, [emblaApi, syncActivePhoto]);
+
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el || !emblaApi) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+
+      const now = Date.now();
+      if (now - lastWheelTimeRef.current < 300) return;
+      lastWheelTimeRef.current = now;
+
+      if (e.deltaX > 0) {
+        emblaApi.scrollNext();
+      } else {
+        emblaApi.scrollPrev();
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [emblaApi]);
 
   if (!activePhoto) {
     return null;
@@ -478,7 +503,7 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
           closer.
         </p>
       </div>
-      <div className="photo-carousel" aria-roledescription="carousel" aria-label="Matt and Alison photos">
+      <div ref={carouselRef} className="photo-carousel" aria-roledescription="carousel" aria-label="Matt and Alison photos">
         <div ref={emblaRef} className="photo-frame">
           <div className="photo-track">
             {photos.map((photo, index) => (
