@@ -4,7 +4,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['apps/api/src/**/*.test.ts', 'packages/shared/src/**/*.test.ts'],
+    include: [
+      'apps/api/src/**/*.test.ts',
+      'apps/web/src/**/*.test.{ts,tsx}',
+      'packages/shared/src/**/*.test.ts',
+    ],
   },
   resolve: {
     alias: {
