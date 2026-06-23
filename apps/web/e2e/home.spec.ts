@@ -134,6 +134,30 @@ test('homepage details render on mobile', async ({ page }) => {
   ).toHaveAttribute('href', /^data:text\/calendar/);
 });
 
+test('photo carousel advances on horizontal wheel event', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(
+    page.getByRole('img', { name: 'Candlelit garden reception table at sunset' }),
+  ).toBeVisible();
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  await carousel.scrollIntoViewIfNeeded();
+  const box = await carousel.boundingBox();
+  if (!box) throw new Error('Carousel bounding box not found');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  // Horizontal scroll to the right should advance to the next photo
+  await page.mouse.wheel(300, 0);
+
+  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Temporary test photo of a desert garden ceremony aisle',
+    }),
+  ).toBeVisible();
+});
+
 test('registry page renders coming soon state', async ({ page }) => {
   await page.goto('/registry');
 
