@@ -6,9 +6,12 @@ import {
   HouseholdImportRowSchema,
   InviteLifecycleUpdateSchema,
   RsvpUpdateSchema,
+  SendHouseholdNotificationInputSchema,
+  type SendHouseholdNotificationResponse,
   UpdateHouseholdInputSchema,
   UpdateHouseholdMemberInputSchema,
   type Household,
+  type HouseholdImportRow,
   type RsvpUpdate,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
@@ -16,8 +19,8 @@ import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
 import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
 import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
-import type { RsvpNotifier } from './notifications.js';
-import type { WeddingRepository } from './repository.js';
+import type { HouseholdMessenger, RsvpNotifier } from './notifications.js';
+import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
 
 export class PublicError extends Error {
   constructor(
@@ -34,6 +37,7 @@ export class WeddingService {
     private readonly repository: WeddingRepository,
     private readonly inviteCodePepper: string,
     private readonly rsvpNotifier?: RsvpNotifier,
+    private readonly householdMessenger?: HouseholdMessenger,
   ) {}
 
   async getRsvp(inviteCode: string): Promise<{ household: Household; rsvp?: StoredRsvp }> {
@@ -60,10 +64,15 @@ export class WeddingService {
       submittedAt: existing?.submittedAt ?? now,
       updatedAt: now,
     };
+    const updatedHousehold: Household = {
+      ...household,
+      rsvpStatus: deriveRsvpStatus(rsvp),
+      updatedAt: now,
+    };
 
     await this.repository.saveRsvp(household.householdId, rsvp);
-    await this.notifyRsvpChanged(household, rsvp);
-    return { household, rsvp };
+    await this.notifyRsvpChanged(updatedHousehold, rsvp);
+    return { household: updatedHousehold, rsvp };
   }
 
   async listHouseholds(): Promise<AdminHouseholdRecord[]> {
@@ -92,6 +101,7 @@ export class WeddingService {
       householdId,
       displayName: parsed.data.displayName,
       email: parsed.data.email || undefined,
+      phone: normalizeOptionalPhoneNumber(parsed.data.phone),
       mailingAddress: parsed.data.mailingAddress,
       members: parsed.data.members.map((member, index) => ({
         id: `${householdId}-${index + 1}`,
@@ -132,7 +142,11 @@ export class WeddingService {
     }
 
     const now = new Date().toISOString();
-    const households = buildHouseholdsFromRows(parsedRows, now);
+    const normalizedRows = parsedRows.map((row, index) =>
+      normalizeImportedHouseholdRow(row, index + 2),
+    );
+
+    const households = buildHouseholdsFromRows(normalizedRows, now);
     for (const household of households) {
       await this.repository.saveHousehold(household);
     }
@@ -152,6 +166,7 @@ export class WeddingService {
       ...household,
       displayName: parsed.data.displayName,
       email: parsed.data.email || undefined,
+      phone: normalizeOptionalPhoneNumber(parsed.data.phone),
       mailingAddress: parsed.data.mailingAddress,
       maxPlusOnes: parsed.data.maxPlusOnes,
       updatedAt: now,
@@ -297,6 +312,48 @@ export class WeddingService {
     return { inviteCode, inviteCodeHash };
   }
 
+  async sendHouseholdNotification(
+    householdId: string,
+    input: unknown,
+  ): Promise<SendHouseholdNotificationResponse> {
+    const household = await this.requireHousehold(householdId);
+    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+      throw new PublicError('Archived households cannot receive guest notifications', 409);
+    }
+
+    const parsed = SendHouseholdNotificationInputSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError(
+        'Household notification is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
+    }
+
+    if (!this.householdMessenger) {
+      throw new PublicError('Outbound household notifications are not available', 503);
+    }
+
+    const payload = parsed.data;
+    if (payload.channel === 'email' && !household.email) {
+      throw new PublicError('This household does not have a contact email address', 422);
+    }
+    if (payload.channel === 'sms' && !household.phone) {
+      throw new PublicError('This household does not have a mobile number for SMS', 422);
+    }
+
+    try {
+      return await this.householdMessenger.sendHouseholdNotification({
+        household,
+        ...payload,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to send household notification';
+      throw new PublicError(message, 502);
+    }
+  }
+
   async exportRsvps(): Promise<string> {
     const households = await this.repository.listHouseholds();
     const rows = await Promise.all(
@@ -440,6 +497,48 @@ export class WeddingService {
       });
     }
   }
+}
+
+function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: number): HouseholdImportRow {
+  try {
+    return {
+      ...row,
+      phone: normalizeOptionalPhoneNumber(row.phone) ?? '',
+    };
+  } catch (error) {
+    if (error instanceof PublicError) {
+      throw new PublicError(`Import row ${rowNumber} is invalid`, 422, [
+        `phone: ${error.message}`,
+      ]);
+    }
+
+    throw error;
+  }
+}
+
+function normalizeOptionalPhoneNumber(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
+  const normalized = trimmed.startsWith('+')
+    ? `+${digits}`
+    : digits.length === 10
+      ? `+1${digits}`
+      : digits.length === 11 && digits.startsWith('1')
+        ? `+${digits}`
+        : undefined;
+
+  if (!normalized || !/^\+[1-9]\d{7,14}$/.test(normalized)) {
+    throw new PublicError(
+      'Phone number must be a valid E.164 value or a 10-digit US mobile number',
+      422,
+    );
+  }
+
+  return normalized;
 }
 
 function summarizeAttendance(

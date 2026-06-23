@@ -40,6 +40,8 @@ describe('HouseholdCardActions', () => {
         }}
         isInviteExpanded={false}
         initialMenuOpen={false}
+        canNotify
+        onNotify={() => {}}
         onEdit={() => {}}
         onRotateInviteCode={() => {}}
         onToggleInvite={() => {}}

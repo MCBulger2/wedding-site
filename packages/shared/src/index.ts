@@ -19,6 +19,22 @@ export const InviteLifecycleStatusSchema = z.enum([
 ]);
 export type InviteLifecycleStatus = z.infer<typeof InviteLifecycleStatusSchema>;
 
+export const PhoneNumberSchema = z
+  .string()
+  .regex(/^\+[1-9]\d{7,14}$/, 'Phone number must use E.164 format');
+export type PhoneNumber = z.infer<typeof PhoneNumberSchema>;
+
+export const HouseholdPhoneInputSchema = z
+  .string()
+  .trim()
+  .min(7)
+  .max(32)
+  .regex(
+    /^[0-9+(). -]+$/,
+    'Phone number contains unsupported characters',
+  );
+export type HouseholdPhoneInput = z.infer<typeof HouseholdPhoneInputSchema>;
+
 export const MailingAddressSchema = z.object({
   line1: z.string().trim().max(160).optional().default(''),
   line2: z.string().trim().max(160).optional().default(''),
@@ -44,6 +60,7 @@ export const HouseholdSchema = z.object({
   householdId: z.string().min(1),
   displayName: z.string().trim().min(1).max(160),
   email: z.string().email().optional(),
+  phone: PhoneNumberSchema.optional(),
   mailingAddress: MailingAddressSchema.optional(),
   members: z.array(HouseholdMemberSchema).min(1),
   maxPlusOnes: z.number().int().min(0).max(10).default(0),
@@ -126,6 +143,7 @@ export const HouseholdImportRowSchema = z.object({
   householdId: z.string().trim().min(1).max(80),
   displayName: z.string().trim().min(1).max(160),
   email: z.string().trim().email().optional().or(z.literal('')),
+  phone: HouseholdPhoneInputSchema.optional().or(z.literal('')),
   addressLine1: z.string().trim().max(160).optional().default(''),
   addressLine2: z.string().trim().max(160).optional().default(''),
   city: z.string().trim().max(100).optional().default(''),
@@ -181,6 +199,7 @@ export type CreateHouseholdMember = z.infer<typeof CreateHouseholdMemberSchema>;
 export const CreateHouseholdInputSchema = z.object({
   displayName: z.string().trim().min(1).max(160),
   email: z.string().trim().email().optional().or(z.literal('')),
+  phone: HouseholdPhoneInputSchema.optional().or(z.literal('')),
   mailingAddress: MailingAddressSchema.optional(),
   members: z.array(CreateHouseholdMemberSchema).min(1).max(12),
   maxPlusOnes: z.number().int().min(0).max(10).default(0),
@@ -190,6 +209,7 @@ export type CreateHouseholdInput = z.infer<typeof CreateHouseholdInputSchema>;
 export const UpdateHouseholdInputSchema = z.object({
   displayName: z.string().trim().min(1).max(160),
   email: z.string().trim().email().optional().or(z.literal('')),
+  phone: HouseholdPhoneInputSchema.optional().or(z.literal('')),
   mailingAddress: MailingAddressSchema.optional(),
   maxPlusOnes: z.number().int().min(0).max(10),
 });
@@ -224,6 +244,33 @@ export const AdminHouseholdRecordSchema = z.object({
   attendance: AdminAttendanceSchema,
 });
 export type AdminHouseholdRecord = z.infer<typeof AdminHouseholdRecordSchema>;
+
+export const EmailHouseholdNotificationInputSchema = z.object({
+  channel: z.literal('email'),
+  subject: z.string().trim().min(1).max(160),
+  message: z.string().trim().min(1).max(4000),
+});
+
+export const SmsHouseholdNotificationInputSchema = z.object({
+  channel: z.literal('sms'),
+  message: z.string().trim().min(1).max(1400),
+});
+
+export const SendHouseholdNotificationInputSchema = z.discriminatedUnion(
+  'channel',
+  [EmailHouseholdNotificationInputSchema, SmsHouseholdNotificationInputSchema],
+);
+export type SendHouseholdNotificationInput = z.infer<
+  typeof SendHouseholdNotificationInputSchema
+>;
+
+export const SendHouseholdNotificationResponseSchema = z.object({
+  channel: z.enum(['email', 'sms']),
+  deliveredTo: z.string().trim().min(1),
+});
+export type SendHouseholdNotificationResponse = z.infer<
+  typeof SendHouseholdNotificationResponseSchema
+>;
 
 export const GenericInviteError = 'We could not find that RSVP. Please check your invitation link.';
 

@@ -4,6 +4,7 @@ import {
   CreateHouseholdInputSchema,
   HotelBlockSchema,
   RsvpUpdateSchema,
+  SendHouseholdNotificationInputSchema,
   UpdateHouseholdInputSchema,
   generateIcs,
 } from './index.js';
@@ -65,6 +66,7 @@ describe('CreateHouseholdInputSchema', () => {
     const result = CreateHouseholdInputSchema.safeParse({
       displayName: 'Jordan and Casey',
       email: 'jordan@example.com',
+      phone: '(480) 555-0100',
       mailingAddress: {
         line1: '123 Main St',
         city: 'Phoenix',
@@ -93,6 +95,7 @@ describe('UpdateHouseholdInputSchema', () => {
     const result = UpdateHouseholdInputSchema.safeParse({
       displayName: 'The Updated Household',
       email: '',
+      phone: '+14805550100',
       maxPlusOnes: 2,
       mailingAddress: {
         line1: '456 Oak Ave',
@@ -102,6 +105,27 @@ describe('UpdateHouseholdInputSchema', () => {
         postalCode: '85251',
         country: 'USA',
       },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('SendHouseholdNotificationInputSchema', () => {
+  it('accepts email notifications with a subject', () => {
+    const result = SendHouseholdNotificationInputSchema.safeParse({
+      channel: 'email',
+      subject: 'Wedding update',
+      message: 'The shuttle will leave at 4:15 PM.',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts SMS notifications without a subject', () => {
+    const result = SendHouseholdNotificationInputSchema.safeParse({
+      channel: 'sms',
+      message: 'Ceremony starts at 3:00 PM. Safe travels.',
     });
 
     expect(result.success).toBe(true);
