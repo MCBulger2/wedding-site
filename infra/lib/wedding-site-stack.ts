@@ -424,6 +424,22 @@ export class WeddingSiteStack extends Stack {
               props.notificationSenderEmail,
             );
       sesIdentity.grantSendEmail(apiHandler);
+      apiHandler.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+          resources: [
+            sesIdentity.emailIdentityArn,
+            ...props.notificationRecipientEmails.map(
+              (email) => `arn:${Stack.of(this).partition}:ses:${Stack.of(this).region}:${Stack.of(this).account}:identity/${email}`,
+            ),
+          ],
+          conditions: {
+            StringEquals: {
+              'ses:FromAddress': props.notificationSenderEmail,
+            },
+          },
+        }),
+      );
     }
 
     apiHandler.addToRolePolicy(
