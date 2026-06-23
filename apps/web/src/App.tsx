@@ -185,12 +185,12 @@ export function HouseholdCardActions({
         )[0]?.focus();
         break;
       case 'End':
-        event.preventDefault();
+        { event.preventDefault();
         const menuItems = menuRef.current?.querySelectorAll<HTMLButtonElement>(
           '.household-action-menu-item',
         );
         menuItems?.[menuItems.length - 1]?.focus();
-        break;
+        break; }
       case 'Escape':
         event.preventDefault();
         setIsMenuOpen(false);
