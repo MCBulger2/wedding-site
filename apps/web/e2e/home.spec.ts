@@ -10,6 +10,7 @@ const household = {
   householdId: 'h1',
   displayName: 'The Example Household',
   email: 'sam@example.com',
+  phone: '+14805550100',
   members: [
     {
       id: 'h1-1',
@@ -333,6 +334,12 @@ test('guest can look up an invite code and submit an RSVP', async ({
 test('admin route is reachable, can create households, and shows RSVP results', async ({
   page,
 }) => {
+  const deliveredNotifications: Array<{
+    channel: string;
+    deliveredTo: string;
+    subject?: string;
+    message: string;
+  }> = [];
   let households: Array<{
     household: Record<string, unknown>;
     attendance: Record<string, number>;
@@ -392,6 +399,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     const payload = route.request().postDataJSON() as {
       displayName: string;
       email: string;
+      phone: string;
       maxPlusOnes: number;
       mailingAddress?: Record<string, string>;
       members: Array<{
@@ -404,6 +412,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       householdId: 'h2',
       displayName: payload.displayName,
       email: payload.email,
+      phone: payload.phone,
       members: payload.members.map((member, index) => ({
         id: `h2-${index + 1}`,
         firstName: member.firstName,
@@ -442,6 +451,33 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
+  await page.route('**/api/admin/households/h1/notifications', async (route) => {
+    const payload = route.request().postDataJSON() as {
+      channel: 'email' | 'sms';
+      subject?: string;
+      message: string;
+    };
+    const deliveredTo =
+      payload.channel === 'email'
+        ? String(
+            households.find((record) => record.household.householdId === 'h1')
+              ?.household.email ?? '',
+          )
+        : String(
+            households.find((record) => record.household.householdId === 'h1')
+              ?.household.phone ?? '',
+          );
+    deliveredNotifications.push({ ...payload, deliveredTo });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        channel: payload.channel,
+        deliveredTo,
+      }),
+    });
+  });
+
   await page.route('**/api/admin/households/h2/invite-code', async (route) => {
     households = households.map((record) =>
       record.household.householdId === 'h2'
@@ -471,6 +507,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       const payload = route.request().postDataJSON() as {
         displayName: string;
         email: string;
+        phone: string;
         maxPlusOnes: number;
         mailingAddress?: Record<string, string>;
       };
@@ -628,6 +665,46 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('generated').first()).toBeVisible();
   await expect(page.getByText('Jamie Guest')).toBeVisible();
+  await expect(page.getByText('+14805550100')).toBeVisible();
+
+  const exampleCard = page
+    .getByLabel('Households')
+    .locator('article')
+    .filter({ hasText: 'The Example Household' });
+  await exampleCard.getByRole('button', { name: 'Notify' }).click();
+  await page.getByLabel('Notification subject').fill('Travel update');
+  await page
+    .getByLabel('Notification message')
+    .fill('The shuttle now departs at 4:15 PM.');
+  await page.getByRole('button', { name: 'Send update' }).click();
+  await expect(
+    page.getByText(
+      'Sent EMAIL to The Example Household at sam@example.com.',
+    ),
+  ).toBeVisible();
+  expect(deliveredNotifications[0]).toMatchObject({
+    channel: 'email',
+    deliveredTo: 'sam@example.com',
+    subject: 'Travel update',
+  });
+
+  await exampleCard.getByRole('button', { name: 'Notify' }).click();
+  await page.getByLabel('Delivery channel').selectOption('sms');
+  await expect(page.getByLabel('Notification subject')).toHaveCount(0);
+  await page
+    .getByLabel('Notification message')
+    .fill('Ceremony starts at 3:00 PM.');
+  await page.getByRole('button', { name: 'Send update' }).click();
+  await expect(
+    page.getByText(
+      'Sent SMS to The Example Household at +14805550100.',
+    ),
+  ).toBeVisible();
+  expect(deliveredNotifications[1]).toMatchObject({
+    channel: 'sms',
+    deliveredTo: '+14805550100',
+    message: 'Ceremony starts at 3:00 PM.',
+  });
 
   await page.getByRole('button', { name: 'Export invitations' }).click();
   await expect(
@@ -637,10 +714,6 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('exported').first()).toBeVisible();
 
-  const exampleCard = page
-    .getByLabel('Households')
-    .locator('article')
-    .filter({ hasText: 'The Example Household' });
   await expect(
     exampleCard.getByRole('button', { name: 'Show invitation' }),
   ).toBeVisible();
@@ -680,6 +753,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.getByLabel('Household display name').fill('The Harper Household');
   await page.getByLabel('Contact email').fill('harper@example.com');
+  await page.getByLabel('Mobile phone').fill('4805550222');
   await page.getByLabel('Max plus-ones').fill('1');
   await page.getByLabel('Member 1 first name').fill('Harper');
   await page.getByLabel('Member 1 last name').fill('Example');

@@ -4,6 +4,7 @@ import {
   type AdminHouseholdRecord,
   type CreateHouseholdInput,
   type Household,
+  type SendHouseholdNotificationInput,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
 import {
@@ -22,6 +23,8 @@ import {
   KeyRound,
   Mail,
   MapPin,
+  MessageSquare,
+  Phone,
   Plus,
   Search,
   Send,
@@ -64,6 +67,7 @@ import {
   removeHouseholdMember,
   rotateInviteCode,
   saveRsvp,
+  sendHouseholdNotification,
   updateHousehold,
   updateHouseholdMember,
   updateInviteLifecycleStatus,
@@ -84,6 +88,7 @@ type RsvpFieldErrorMap = Record<string, string>;
 interface HouseholdFormState {
   displayName: string;
   email: string;
+  phone: string;
   maxPlusOnes: string;
   mailingAddress: {
     line1: string;
@@ -108,6 +113,12 @@ interface RevealedInvite {
   displayName: string;
   inviteCode: string;
   inviteCodeHash: string;
+}
+
+interface HouseholdNotificationFormState {
+  channel: 'email' | 'sms';
+  subject: string;
+  message: string;
 }
 
 export function App() {
@@ -1304,6 +1315,16 @@ function AdminPage() {
     useState<HouseholdFormState>(emptyHouseholdForm());
   const [showCreateHouseholdModal, setShowCreateHouseholdModal] =
     useState(false);
+  const [notificationHousehold, setNotificationHousehold] = useState<
+    Household | undefined
+  >();
+  const [notificationForm, setNotificationForm] =
+    useState<HouseholdNotificationFormState>({
+      channel: 'email',
+      subject: '',
+      message: '',
+    });
+  const [sendingNotification, setSendingNotification] = useState(false);
   const [qrModalInvite, setQrModalInvite] = useState<
     RevealedInvite | undefined
   >();
@@ -1456,6 +1477,20 @@ function AdminPage() {
     }
   };
 
+  const openNotificationModal = (household: Household) => {
+    setNotificationHousehold(household);
+    setNotificationForm(defaultNotificationFormState(household));
+  };
+
+  const closeNotificationModal = () => {
+    setNotificationHousehold(undefined);
+    setNotificationForm({
+      channel: 'email',
+      subject: '',
+      message: '',
+    });
+  };
+
   const handleRotateInviteCode = async (record: AdminHouseholdRecord) => {
     try {
       if (!session) {
@@ -1536,6 +1571,48 @@ function AdminPage() {
       setMessage(
         error instanceof Error ? error.message : 'Unable to export data',
       );
+    }
+  };
+
+  const submitHouseholdNotification = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      if (!session) {
+        throw new Error('Sign in before sending guest notifications.');
+      }
+      if (!notificationHousehold) {
+        throw new Error('Select a household before sending a notification.');
+      }
+
+      setSendingNotification(true);
+      const payload: SendHouseholdNotificationInput =
+        notificationForm.channel === 'email'
+          ? {
+              channel: 'email',
+              subject: notificationForm.subject,
+              message: notificationForm.message,
+            }
+          : {
+              channel: 'sms',
+              message: notificationForm.message,
+            };
+      const response = await sendHouseholdNotification(
+        session.accessToken,
+        notificationHousehold.householdId,
+        payload,
+      );
+      closeNotificationModal();
+      setMessage(
+        `Sent ${response.channel.toUpperCase()} to ${notificationHousehold.displayName} at ${response.deliveredTo}.`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to send household notification',
+      );
+    } finally {
+      setSendingNotification(false);
     }
   };
 
@@ -1688,6 +1765,7 @@ function AdminPage() {
       [
         record.household.displayName,
         record.household.email ?? '',
+        record.household.phone ?? '',
         ...record.household.members.map(formatMemberName),
       ]
         .join(' ')
@@ -1844,6 +1922,22 @@ function AdminPage() {
             creating={creating}
             onSubmit={submitHousehold}
             onCancel={() => setShowCreateHouseholdModal(false)}
+          />
+        </Modal>
+      )}
+
+      {notificationHousehold && (
+        <Modal
+          title={`Notify ${notificationHousehold.displayName}`}
+          onClose={closeNotificationModal}
+        >
+          <HouseholdNotificationForm
+            household={notificationHousehold}
+            form={notificationForm}
+            setForm={setNotificationForm}
+            sending={sendingNotification}
+            onSubmit={submitHouseholdNotification}
+            onCancel={closeNotificationModal}
           />
         </Modal>
       )}
@@ -2026,6 +2120,12 @@ function AdminPage() {
                             {record.household.email}
                           </span>
                         )}
+                        {record.household.phone && (
+                          <span>
+                            <Phone aria-hidden="true" />
+                            {record.household.phone}
+                          </span>
+                        )}
                         {record.household.inviteCodeLastRotatedAt && (
                           <span>
                             <KeyRound aria-hidden="true" />
@@ -2097,6 +2197,17 @@ function AdminPage() {
                       </div>
                     </div>
                     <div className="toolbar-actions">
+                      <button
+                        type="button"
+                        className="secondary-button button-inline"
+                        onClick={() => openNotificationModal(record.household)}
+                        disabled={
+                          !record.household.email && !record.household.phone
+                        }
+                      >
+                        <MessageSquare aria-hidden="true" />
+                        Notify
+                      </button>
                       <button
                         type="button"
                         className="secondary-button button-inline"
@@ -2221,11 +2332,26 @@ function AdminPage() {
                           Contact email
                           <input
                             aria-label={`${record.household.displayName} edit contact email`}
+                            type="email"
                             value={editForm.email}
                             onChange={(event) =>
                               setEditForm({
                                 ...editForm,
                                 email: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Mobile phone
+                          <input
+                            aria-label={`${record.household.displayName} edit mobile phone`}
+                            type="tel"
+                            value={editForm.phone}
+                            onChange={(event) =>
+                              setEditForm({
+                                ...editForm,
+                                phone: event.target.value,
                               })
                             }
                           />
@@ -2793,6 +2919,7 @@ function emptyHouseholdForm(): HouseholdFormState {
   return {
     displayName: '',
     email: '',
+    phone: '',
     maxPlusOnes: '0',
     mailingAddress: {
       line1: '',
@@ -2820,6 +2947,7 @@ function toCreateHouseholdInput(
   return {
     displayName: form.displayName,
     email: form.email,
+    phone: form.phone,
     maxPlusOnes: Number(form.maxPlusOnes || 0),
     mailingAddress: form.mailingAddress,
     members: form.members.map((member) => ({
@@ -2836,6 +2964,7 @@ function toUpdateHouseholdInput(form: HouseholdFormState) {
   return {
     displayName: form.displayName,
     email: form.email,
+    phone: form.phone,
     maxPlusOnes: Number(form.maxPlusOnes || 0),
     mailingAddress: form.mailingAddress,
   };
@@ -2845,6 +2974,7 @@ function toHouseholdFormState(household: Household): HouseholdFormState {
   return {
     displayName: household.displayName,
     email: household.email ?? '',
+    phone: household.phone ?? '',
     maxPlusOnes: String(household.maxPlusOnes),
     mailingAddress: {
       line1: household.mailingAddress?.line1 ?? '',
@@ -2862,6 +2992,19 @@ function toHouseholdFormState(household: Household): HouseholdFormState {
       weddingPartyRole: member.weddingPartyRole ?? '',
       rehearsalDinnerInvited: member.rehearsalDinnerInvited ?? false,
     })),
+  };
+}
+
+function defaultNotificationFormState(
+  household: Household,
+): HouseholdNotificationFormState {
+  const channel =
+    household.email || !household.phone ? 'email' : 'sms';
+
+  return {
+    channel,
+    subject: `Wedding update for ${household.displayName}`,
+    message: '',
   };
 }
 
@@ -3017,6 +3160,18 @@ function HouseholdForm({
           onChange={(event) => setForm({ ...form, email: event.target.value })}
         />
       </label>
+      <label>
+        Mobile phone
+        <input
+          aria-label="Mobile phone"
+          type="tel"
+          value={form.phone}
+          onChange={(event) => setForm({ ...form, phone: event.target.value })}
+        />
+      </label>
+      <p className="form-message compact-message">
+        Use a US 10-digit number or E.164 format such as +14805550100 for SMS.
+      </p>
       <label>
         Max plus-ones
         <input
@@ -3183,6 +3338,102 @@ function HouseholdForm({
         <button type="submit" disabled={creating}>
           <Users aria-hidden="true" />
           {creating ? 'Creating...' : 'Create household'}
+        </button>
+        <button type="button" className="secondary-button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function HouseholdNotificationForm({
+  household,
+  form,
+  setForm,
+  sending,
+  onSubmit,
+  onCancel,
+}: {
+  household: Household;
+  form: HouseholdNotificationFormState;
+  setForm: Dispatch<SetStateAction<HouseholdNotificationFormState>>;
+  sending: boolean;
+  onSubmit: (event: FormEvent) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const canEmail = Boolean(household.email);
+  const canSms = Boolean(household.phone);
+
+  return (
+    <form className="modal-form" onSubmit={onSubmit}>
+      <p className="form-message">
+        Send a direct update to this household by email or SMS.
+      </p>
+      <div className="confirmation-row">
+        <div>
+          <strong>{household.displayName}</strong>
+          <p className="form-message">
+            {form.channel === 'email'
+              ? household.email ?? 'No contact email on file.'
+              : household.phone ?? 'No mobile number on file.'}
+          </p>
+        </div>
+      </div>
+      <label>
+        Delivery channel
+        <select
+          aria-label="Delivery channel"
+          value={form.channel}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              channel: event.target.value as 'email' | 'sms',
+            }))
+          }
+        >
+          {canEmail && <option value="email">Email</option>}
+          {canSms && <option value="sms">SMS</option>}
+        </select>
+      </label>
+      {form.channel === 'email' && (
+        <label>
+          Subject
+          <input
+            aria-label="Notification subject"
+            value={form.subject}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                subject: event.target.value,
+              }))
+            }
+          />
+        </label>
+      )}
+      <label>
+        Message
+        <textarea
+          aria-label="Notification message"
+          rows={form.channel === 'email' ? 8 : 5}
+          value={form.message}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              message: event.target.value,
+            }))
+          }
+        />
+      </label>
+      {form.channel === 'sms' && (
+        <p className="form-message compact-message">
+          SMS uses Amazon SNS and should stay concise.
+        </p>
+      )}
+      <div className="toolbar-actions">
+        <button type="submit" disabled={sending}>
+          <Send aria-hidden="true" />
+          {sending ? 'Sending...' : 'Send update'}
         </button>
         <button type="button" className="secondary-button" onClick={onCancel}>
           Cancel

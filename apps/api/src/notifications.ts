@@ -1,5 +1,11 @@
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
-import type { Household, StoredRsvp } from '@matt-alison-wedding/shared';
+import type {
+  Household,
+  SendHouseholdNotificationInput,
+  SendHouseholdNotificationResponse,
+  StoredRsvp,
+} from '@matt-alison-wedding/shared';
 
 export interface RsvpNotificationInput {
   household: Household;
@@ -10,22 +16,43 @@ export interface RsvpNotifier {
   notifyRsvpChanged(input: RsvpNotificationInput): Promise<void>;
 }
 
-export interface SesRsvpNotifierConfig {
-  senderEmail: string;
-  recipientEmails: string[];
-  adminDashboardUrl: string;
+export type HouseholdNotificationInput = SendHouseholdNotificationInput & {
+  household: Household;
+};
+
+export interface HouseholdMessenger {
+  sendHouseholdNotification(
+    input: HouseholdNotificationInput,
+  ): Promise<SendHouseholdNotificationResponse>;
 }
 
-export class SesRsvpNotifier implements RsvpNotifier {
+export interface WeddingNotificationsConfig {
+  senderEmail?: string;
+  recipientEmails: string[];
+  adminDashboardUrl?: string;
+}
+
+export class AwsWeddingNotificationsClient
+  implements RsvpNotifier, HouseholdMessenger
+{
   constructor(
-    private readonly config: SesRsvpNotifierConfig,
-    private readonly client = new SESv2Client({}),
+    private readonly config: WeddingNotificationsConfig,
+    private readonly sesClient = new SESv2Client({}),
+    private readonly snsClient = new SNSClient({}),
   ) {}
 
   async notifyRsvpChanged(input: RsvpNotificationInput): Promise<void> {
+    if (
+      !this.config.senderEmail ||
+      this.config.recipientEmails.length === 0 ||
+      !this.config.adminDashboardUrl
+    ) {
+      throw new Error('RSVP admin email notifications are not fully configured');
+    }
+
     const email = buildRsvpNotificationEmail(input, this.config.adminDashboardUrl);
 
-    await this.client.send(
+    await this.sesClient.send(
       new SendEmailCommand({
         FromEmailAddress: this.config.senderEmail,
         Destination: {
@@ -47,6 +74,63 @@ export class SesRsvpNotifier implements RsvpNotifier {
         },
       }),
     );
+  }
+
+  async sendHouseholdNotification(
+    input: HouseholdNotificationInput,
+  ): Promise<SendHouseholdNotificationResponse> {
+    if (input.channel === 'email') {
+      if (!this.config.senderEmail) {
+        throw new Error('Email notifications are not configured');
+      }
+      if (!input.household.email) {
+        throw new Error('Household does not have a contact email address');
+      }
+
+      await this.sesClient.send(
+        new SendEmailCommand({
+          FromEmailAddress: this.config.senderEmail,
+          Destination: {
+            ToAddresses: [input.household.email],
+          },
+          Content: {
+            Simple: {
+              Subject: {
+                Charset: 'UTF-8',
+                Data: input.subject,
+              },
+              Body: {
+                Text: {
+                  Charset: 'UTF-8',
+                  Data: input.message,
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      return {
+        channel: 'email',
+        deliveredTo: input.household.email,
+      };
+    }
+
+    if (!input.household.phone) {
+      throw new Error('Household does not have a contact mobile number');
+    }
+
+    await this.snsClient.send(
+      new PublishCommand({
+        PhoneNumber: input.household.phone,
+        Message: input.message,
+      }),
+    );
+
+    return {
+      channel: 'sms',
+      deliveredTo: input.household.phone,
+    };
   }
 }
 
@@ -77,18 +161,34 @@ export function buildRsvpNotificationEmail(
 }
 
 export function createNotifierFromEnvironment(): RsvpNotifier | undefined {
-  const senderEmail = process.env.RSVP_NOTIFICATION_SENDER_EMAIL;
+  const senderEmail = resolveOptionalValue(
+    process.env.NOTIFICATION_SENDER_EMAIL,
+    process.env.RSVP_NOTIFICATION_SENDER_EMAIL,
+  );
   const recipientEmails = splitCsv(process.env.RSVP_NOTIFICATION_RECIPIENT_EMAILS);
-  const adminDashboardUrl = process.env.ADMIN_DASHBOARD_URL;
+  const adminDashboardUrl = resolveOptionalValue(process.env.ADMIN_DASHBOARD_URL);
 
   if (!senderEmail || recipientEmails.length === 0 || !adminDashboardUrl) {
     return undefined;
   }
 
-  return new SesRsvpNotifier({
+  return new AwsWeddingNotificationsClient({
     senderEmail,
     recipientEmails,
     adminDashboardUrl,
+  });
+}
+
+export function createHouseholdMessengerFromEnvironment(): HouseholdMessenger {
+  const senderEmail = resolveOptionalValue(
+    process.env.NOTIFICATION_SENDER_EMAIL,
+    process.env.RSVP_NOTIFICATION_SENDER_EMAIL,
+  );
+
+  return new AwsWeddingNotificationsClient({
+    senderEmail,
+    recipientEmails: splitCsv(process.env.RSVP_NOTIFICATION_RECIPIENT_EMAILS),
+    adminDashboardUrl: resolveOptionalValue(process.env.ADMIN_DASHBOARD_URL),
   });
 }
 
@@ -97,4 +197,8 @@ function splitCsv(value: string | undefined): string[] {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function resolveOptionalValue(...values: Array<string | undefined>): string | undefined {
+  return values.map((value) => value?.trim()).find(Boolean);
 }
