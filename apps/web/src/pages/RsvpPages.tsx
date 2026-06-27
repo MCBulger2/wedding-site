@@ -6,7 +6,18 @@ import {
   type Household,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
-import { CalendarDays, Heart, LifeBuoy, Plus, Search, Send, Trash2 } from 'lucide-react';
+import {
+  CalendarDays,
+  Check,
+  Heart,
+  Home,
+  LifeBuoy,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, fetchRsvp, recoverRsvpLink, saveRsvp, type RsvpPayload } from '../api.js';
 import { siteContent } from '../siteContent.js';
@@ -78,33 +89,60 @@ export function RsvpLookupPage() {
   };
 
   return (
-    <main className="narrow-page">
-      <section className="lookup-card">
-        <p className="eyebrow">Private RSVP</p>
-        <h1>Enter your invitation code</h1>
-        <p className="page-lede">
-          Your mailed invitation includes a private RSVP code. Enter it here to
-          view or update your household&apos;s response.
-        </p>
-        <form className="lookup-form" onSubmit={submit}>
-          <label>
-            Invitation code
-            <input
-              aria-label="Invitation code"
-              autoCapitalize="off"
-              autoCorrect="off"
-              autoFocus
-              value={inviteCode}
-              onChange={(event) => {
-                setInviteCode(event.target.value);
-              }}
-            />
-          </label>
-          <button type="submit" disabled={status === 'submitting'}>
-            <Search aria-hidden="true" />
-            {status === 'submitting' ? 'Opening RSVP...' : 'View RSVP'}
-          </button>
-        </form>
+    <main className="narrow-page rsvp-flow-page">
+      <section className="lookup-card rsvp-lookup-card">
+        <div className="rsvp-lookup-guide">
+          <p className="eyebrow">Private RSVP</p>
+          <h1>Enter your invitation code</h1>
+          <p className="page-lede">
+            Your mailed invitation includes a private RSVP code. Enter it here
+            to view or update your household&apos;s response.
+          </p>
+          <ol className="rsvp-step-list" aria-label="RSVP steps">
+            <li>
+              <span>1</span>
+              <div>
+                <strong>Enter code</strong>
+                <p>Start with the code printed on your invitation.</p>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>Review household</strong>
+                <p>We&apos;ll load the guests included with your invitation.</p>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>Save response</strong>
+                <p>Submit your RSVP securely, and return later if plans change.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <div className="rsvp-lookup-panel">
+          <form className="lookup-form" onSubmit={submit}>
+            <label>
+              Invitation code
+              <input
+                aria-label="Invitation code"
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoFocus
+                placeholder="Enter your code"
+                value={inviteCode}
+                onChange={(event) => {
+                  setInviteCode(event.target.value);
+                }}
+              />
+            </label>
+            <button type="submit" disabled={status === 'submitting'}>
+              <Search aria-hidden="true" />
+              {status === 'submitting' ? 'Opening RSVP...' : 'View RSVP'}
+            </button>
+          </form>
         {status === 'submitting' && (
           <div className="inline-loading-shell">
             <LoadingPulse
@@ -114,10 +152,12 @@ export function RsvpLookupPage() {
             />
           </div>
         )}
-        <div className="lookup-divider" aria-hidden="true" />
+        <div className="lookup-divider">
+          <span>or</span>
+        </div>
         <button
           type="button"
-          className="text-button recovery-toggle"
+          className="recovery-toggle"
           aria-expanded={recoveryExpanded}
           aria-controls="rsvp-recovery-form"
           onClick={() => {
@@ -133,7 +173,7 @@ export function RsvpLookupPage() {
         {recoveryExpanded && (
           <form
             id="rsvp-recovery-form"
-            className="lookup-form recovery-form"
+            className="recovery-form"
             onSubmit={submitRecovery}
           >
             <label className={recoveryError ? 'field-error' : undefined}>
@@ -147,6 +187,7 @@ export function RsvpLookupPage() {
                 autoCapitalize="off"
                 autoCorrect="off"
                 inputMode="email"
+                placeholder="name@example.com or (555) 123-4567"
                 value={recoveryContact}
                 onChange={(event) => {
                   setRecoveryContact(event.target.value);
@@ -171,7 +212,11 @@ export function RsvpLookupPage() {
               Enter the email address or mobile number already saved with your
               household.
             </p>
-            <button type="submit" disabled={recoveryStatus === 'submitting'}>
+            <button
+              type="submit"
+              className="recovery-submit-button"
+              disabled={recoveryStatus === 'submitting'}
+            >
               <Send aria-hidden="true" />
               {recoveryStatus === 'submitting'
                 ? 'Sending link...'
@@ -193,6 +238,7 @@ export function RsvpLookupPage() {
             )}
           </form>
         )}
+        </div>
       </section>
     </main>
   );
@@ -412,8 +458,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
     }
   };
 
+  const activeMembers = household.members.filter((member) => !member.archivedAt);
+
   return (
-    <main className="narrow-page">
+    <main className="narrow-page rsvp-flow-page">
       <p className="eyebrow">Private RSVP</p>
       <h1>{household.displayName}</h1>
       <p className="page-lede">
@@ -424,11 +472,18 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         {household.maxPlusOnes === 1 ? '' : 's'}.
       </p>
       {savedRsvp && (
-        <div className="confirmation-row">
-          <p className="form-message">
-            Submitted {formatDateTime(savedRsvp.submittedAt)}. Last updated{' '}
-            {formatDateTime(savedRsvp.updatedAt)}.
-          </p>
+        <div className="confirmation-row update-status-banner">
+          <div>
+            <strong>Your RSVP is already submitted.</strong>
+            <p className="form-message">
+              You&apos;re reviewing an existing response. Make any changes below
+              and select Save RSVP to update it.
+            </p>
+            <p className="form-message timestamp-note">
+              Submitted {formatDateTime(savedRsvp.submittedAt)}. Last updated{' '}
+              {formatDateTime(savedRsvp.updatedAt)}.
+            </p>
+          </div>
           <a
             className="secondary-button button-inline"
             href={calendarHref}
@@ -439,6 +494,32 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </a>
         </div>
       )}
+      <div className="rsvp-summary-band" aria-label="RSVP overview">
+        <div>
+          <CalendarDays aria-hidden="true" />
+          <span>
+            <strong>RSVP by {siteContent.rsvpDeadline}</strong>
+            <small>We can&apos;t wait to celebrate with you.</small>
+          </span>
+        </div>
+        <div>
+          <Users aria-hidden="true" />
+          <span>
+            <strong>{household.displayName}</strong>
+            <small>
+              {activeMembers.length} household guest
+              {activeMembers.length === 1 ? '' : 's'}
+              {household.maxPlusOnes > 0
+                ? `, up to ${household.maxPlusOnes} plus-one${household.maxPlusOnes === 1 ? '' : 's'}`
+                : ''}
+            </small>
+          </span>
+        </div>
+        <a className="secondary-button button-inline" href="/rsvp">
+          <Search aria-hidden="true" />
+          Not you?
+        </a>
+      </div>
       <form className="rsvp-form" onSubmit={submit}>
         {status === 'saving' && (
           <div className="inline-loading-shell" aria-live="polite">
@@ -449,65 +530,121 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             />
           </div>
         )}
-        {household.members.map((member, memberIndex) => {
-          const memberRsvp = form.members.find(
-            (item) => item.memberId === member.id,
-          )!;
-          const fullName = `${member.firstName} ${member.lastName}`;
-          return (
-            <fieldset key={member.id}>
-              <legend>{fullName}</legend>
-              <label className="checkbox-row">
-                <input
-                  aria-label={`${fullName} attending`}
-                  type="checkbox"
-                  checked={memberRsvp.attending}
-                  onChange={(event) =>
-                    updateMember(member.id, {
-                      attending: event.target.checked,
-                      mealChoice: event.target.checked ? 'buffet' : 'none',
-                    })
-                  }
-                />
-                Attending
-              </label>
-              <label
-                className={
-                  fieldError(`members.${memberIndex}.dietaryNotes`)
-                    ? 'field-error'
-                    : undefined
-                }
-              >
-                Dietary notes
-                <input
-                  aria-label={`${fullName} dietary notes`}
-                  aria-describedby={
-                    fieldError(`members.${memberIndex}.dietaryNotes`)
-                      ? buildFieldErrorId(`members.${memberIndex}.dietaryNotes`)
-                      : undefined
-                  }
-                  aria-invalid={
-                    fieldError(`members.${memberIndex}.dietaryNotes`)
-                      ? 'true'
-                      : 'false'
-                  }
-                  maxLength={500}
-                  value={memberRsvp.dietaryNotes}
-                  onChange={(event) => {
-                    clearFieldError(`members.${memberIndex}.dietaryNotes`);
-                    updateMember(member.id, {
-                      dietaryNotes: event.target.value,
-                    });
-                  }}
-                />
-                <FieldError
-                  path={`members.${memberIndex}.dietaryNotes`}
-                  errors={fieldErrors}
-                />
-              </label>
-            </fieldset>
-          );
-        })}
+        <section className="rsvp-form-section" aria-labelledby="rsvp-guests-heading">
+          <div className="section-heading">
+            <div>
+              <h2 id="rsvp-guests-heading">Guests</h2>
+              <p className="form-message">
+                Choose attendance for each person, then add any dietary notes
+                for guests who are attending.
+              </p>
+            </div>
+          </div>
+          {household.members.map((member, memberIndex) => {
+            const memberRsvp = form.members.find(
+              (item) => item.memberId === member.id,
+            )!;
+            const fullName = `${member.firstName} ${member.lastName}`;
+            return (
+              <fieldset className="guest-response-card" key={member.id}>
+                <legend>{fullName}</legend>
+                <div className="guest-response-grid">
+                  <div className="guest-response-person">
+                    <strong>{fullName}</strong>
+                    <span>
+                      {member.weddingPartyRole ||
+                        (member.canBringPlusOne ? 'Plus-one eligible' : 'Guest')}
+                    </span>
+                  </div>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label={`${fullName} attendance`}
+                  >
+                    <button
+                      type="button"
+                      className={`rsvp-segment ${memberRsvp.attending ? 'is-selected' : ''}`}
+                      aria-pressed={memberRsvp.attending}
+                      aria-label={`${fullName} attending`}
+                      onClick={() =>
+                        updateMember(member.id, {
+                          attending: true,
+                          mealChoice:
+                            memberRsvp.mealChoice === 'none'
+                              ? 'buffet'
+                              : memberRsvp.mealChoice,
+                        })
+                      }
+                    >
+                      <Check aria-hidden="true" />
+                      Attending
+                    </button>
+                    <button
+                      type="button"
+                      className={`rsvp-segment ${!memberRsvp.attending ? 'is-selected' : ''}`}
+                      aria-pressed={!memberRsvp.attending}
+                      aria-label={`${fullName} not attending`}
+                      onClick={() =>
+                        updateMember(member.id, {
+                          attending: false,
+                          mealChoice: 'none',
+                        })
+                      }
+                    >
+                      Not attending
+                    </button>
+                  </div>
+                  <div className="guest-response-detail">
+                    {memberRsvp.attending ? (
+                      <label
+                        className={
+                          fieldError(`members.${memberIndex}.dietaryNotes`)
+                            ? 'field-error'
+                            : undefined
+                        }
+                      >
+                        Dietary notes
+                        <input
+                          aria-label={`${fullName} dietary notes`}
+                          aria-describedby={
+                            fieldError(`members.${memberIndex}.dietaryNotes`)
+                              ? buildFieldErrorId(
+                                  `members.${memberIndex}.dietaryNotes`,
+                                )
+                              : undefined
+                          }
+                          aria-invalid={
+                            fieldError(`members.${memberIndex}.dietaryNotes`)
+                              ? 'true'
+                              : 'false'
+                          }
+                          maxLength={500}
+                          placeholder="E.g., no nuts"
+                          value={memberRsvp.dietaryNotes}
+                          onChange={(event) => {
+                            clearFieldError(`members.${memberIndex}.dietaryNotes`);
+                            updateMember(member.id, {
+                              dietaryNotes: event.target.value,
+                            });
+                          }}
+                        />
+                        <FieldError
+                          path={`members.${memberIndex}.dietaryNotes`}
+                          errors={fieldErrors}
+                        />
+                      </label>
+                    ) : (
+                      <p className="form-message guest-decline-note">
+                        No additional details needed for guests who are not
+                        attending.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </fieldset>
+            );
+          })}
+        </section>
 
         {household.maxPlusOnes > 0 && (
           <section className="subsection-card">
@@ -665,6 +802,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                         : 'false'
                     }
                     maxLength={500}
+                    placeholder="E.g., allergies"
                     value={plusOne.dietaryNotes}
                     onChange={(event) => {
                       clearFieldError(`plusOnes.${index}.dietaryNotes`);
@@ -691,50 +829,32 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </section>
         )}
 
-        <label className={fieldError('notes') ? 'field-error' : undefined}>
-          Household notes
-          <textarea
-            aria-describedby={
-              fieldError('notes') ? buildFieldErrorId('notes') : undefined
-            }
-            aria-invalid={fieldError('notes') ? 'true' : 'false'}
-            maxLength={1000}
-            value={form.notes}
-            onChange={(event) => {
-              clearFieldError('notes');
-              clearFormMessage();
-              setForm({ ...form, notes: event.target.value });
-            }}
-          />
-          <FieldError path="notes" errors={fieldErrors} />
-        </label>
-        <label
-          className={
-            fieldError('accessibilityNotes') ? 'field-error' : undefined
-          }
-        >
-          Accessibility notes
-          <textarea
-            aria-describedby={
-              fieldError('accessibilityNotes')
-                ? buildFieldErrorId('accessibilityNotes')
-                : undefined
-            }
-            aria-invalid={fieldError('accessibilityNotes') ? 'true' : 'false'}
-            maxLength={1000}
-            value={form.accessibilityNotes}
-            onChange={(event) => {
-              clearFieldError('accessibilityNotes');
-              clearFormMessage();
-              setForm({ ...form, accessibilityNotes: event.target.value });
-            }}
-          />
-          <FieldError path="accessibilityNotes" errors={fieldErrors} />
-        </label>
-        <button type="submit" disabled={status === 'saving'}>
-          <Heart aria-hidden="true" />
-          {status === 'saving' ? 'Saving...' : 'Save RSVP'}
-        </button>
+        <section className="rsvp-notes-grid single-notes" aria-label="Additional notes">
+          <label className={fieldError('notes') ? 'field-error' : undefined}>
+            Household notes
+            <textarea
+              aria-label="Household notes"
+              aria-describedby={
+                fieldError('notes') ? buildFieldErrorId('notes') : undefined
+              }
+              aria-invalid={fieldError('notes') ? 'true' : 'false'}
+              maxLength={1000}
+              placeholder="Share a note, song request, or timing detail..."
+              value={form.notes}
+              onChange={(event) => {
+                clearFieldError('notes');
+                clearFormMessage();
+                setForm({ ...form, notes: event.target.value });
+              }}
+            />
+            <FieldError path="notes" errors={fieldErrors} />
+          </label>
+        </section>
+        <div className="rsvp-save-bar">
+          <button type="submit" disabled={status === 'saving'}>
+            {status === 'saving' ? 'Saving...' : 'Save RSVP'}
+          </button>
+        </div>
         {message && (
           <p
             className={`form-message ${Object.keys(fieldErrors).length > 0 ? 'error-message' : ''}`}
@@ -832,10 +952,15 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
     );
   }
 
+  const responseSummary = buildRsvpSummary(household, savedRsvp);
+
   return (
-    <main className="narrow-page">
-      <section className="lookup-card success-card">
+    <main className="narrow-page rsvp-flow-page">
+      <section className="lookup-card success-card rsvp-success-card">
         <p className="eyebrow">Private RSVP</p>
+        <div className="success-mark" aria-hidden="true">
+          <Check />
+        </div>
         <h1>RSVP received</h1>
         <p className="page-lede">
           Thanks, {household.displayName}. Your response was submitted{' '}
@@ -856,12 +981,51 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
             Add to calendar
           </a>
         </div>
+        <div className="rsvp-response-summary" aria-label="RSVP response summary">
+          <section>
+            <h2>Attending ({responseSummary.attending.length})</h2>
+            {responseSummary.attending.length ? (
+              <ul>
+                {responseSummary.attending.map((guest) => (
+                  <li key={guest}>{guest}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="form-message">None</p>
+            )}
+          </section>
+          <section>
+            <h2>Not attending ({responseSummary.notAttending.length})</h2>
+            {responseSummary.notAttending.length ? (
+              <ul>
+                {responseSummary.notAttending.map((guest) => (
+                  <li key={guest}>{guest}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="form-message">None</p>
+            )}
+          </section>
+          <section>
+            <h2>Notes</h2>
+            {responseSummary.notes.length ? (
+              <ul>
+                {responseSummary.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="form-message">No notes added.</p>
+            )}
+          </section>
+        </div>
         <div className="hero-actions compact-actions">
           <a className="icon-button" href={buildGuestRsvpPath(inviteCode)}>
             <Heart aria-hidden="true" />
             Review or update RSVP
           </a>
           <a className="secondary-button" href="/">
+            <Home aria-hidden="true" />
             Back home
           </a>
         </div>
@@ -898,6 +1062,56 @@ function formatDateTime(value: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function buildRsvpSummary(household: Household, rsvp: StoredRsvp): {
+  attending: string[];
+  notAttending: string[];
+  notes: string[];
+} {
+  const memberNames = new Map(
+    household.members.map((member) => [
+      member.id,
+      `${member.firstName} ${member.lastName}`,
+    ]),
+  );
+  const attending = rsvp.members
+    .filter((member) => member.attending)
+    .map((member) => memberNames.get(member.memberId) ?? 'Household guest');
+  const notAttending = rsvp.members
+    .filter((member) => !member.attending)
+    .map((member) => memberNames.get(member.memberId) ?? 'Household guest');
+
+  for (const plusOne of rsvp.plusOnes) {
+    const sponsor = memberNames.get(plusOne.sponsorMemberId);
+    attending.push(
+      `${plusOne.firstName} ${plusOne.lastName}${sponsor ? ` (guest of ${sponsor})` : ''}`,
+    );
+  }
+
+  const dietaryNotes = [
+    ...rsvp.members
+      .filter((member) => member.attending && member.dietaryNotes.trim())
+      .map((member) => {
+        const name = memberNames.get(member.memberId) ?? 'Household guest';
+        return `${name}: ${member.dietaryNotes}`;
+      }),
+    ...rsvp.plusOnes
+      .filter((plusOne) => plusOne.dietaryNotes.trim())
+      .map(
+        (plusOne) =>
+          `${plusOne.firstName} ${plusOne.lastName}: ${plusOne.dietaryNotes}`,
+      ),
+  ];
+
+  return {
+    attending,
+    notAttending,
+    notes: [
+      ...dietaryNotes,
+      ...(rsvp.notes.trim() ? [`Household note: ${rsvp.notes}`] : []),
+    ],
+  };
 }
 
 function FieldError({
