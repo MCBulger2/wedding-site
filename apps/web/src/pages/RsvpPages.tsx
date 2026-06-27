@@ -19,7 +19,13 @@ import {
   Users,
 } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, fetchRsvp, recoverRsvpLink, saveRsvp, type RsvpPayload } from '../api.js';
+import {
+  ApiError,
+  fetchRsvp,
+  recoverRsvpLink,
+  saveRsvp,
+  type RsvpPayload,
+} from '../api.js';
 import { siteContent } from '../siteContent.js';
 
 type RsvpFieldErrorMap = Record<string, string>;
@@ -46,7 +52,7 @@ export function RsvpLookupPage() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const normalized = inviteCode.trim();
+    const normalized = inviteCode.trim().toUpperCase();
     if (!normalized) {
       return;
     }
@@ -117,7 +123,9 @@ export function RsvpLookupPage() {
               <span>3</span>
               <div>
                 <strong>Save response</strong>
-                <p>Submit your RSVP securely, and return later if plans change.</p>
+                <p>
+                  Submit your RSVP securely, and return later if plans change.
+                </p>
               </div>
             </li>
           </ol>
@@ -128,13 +136,15 @@ export function RsvpLookupPage() {
               Invitation code
               <input
                 aria-label="Invitation code"
-                autoCapitalize="off"
+                autoCapitalize="characters"
                 autoCorrect="off"
                 autoFocus
+                inputMode="text"
+                maxLength={128}
                 placeholder="Enter your code"
                 value={inviteCode}
                 onChange={(event) => {
-                  setInviteCode(event.target.value);
+                  setInviteCode(event.target.value.toUpperCase());
                 }}
               />
             </label>
@@ -143,101 +153,101 @@ export function RsvpLookupPage() {
               {status === 'submitting' ? 'Opening RSVP...' : 'View RSVP'}
             </button>
           </form>
-        {status === 'submitting' && (
-          <div className="inline-loading-shell">
-            <LoadingPulse
-              label="Opening your RSVP"
-              message="Following your invitation link and loading your household details."
-              compact
-            />
-          </div>
-        )}
-        <div className="lookup-divider">
-          <span>or</span>
-        </div>
-        <button
-          type="button"
-          className="recovery-toggle"
-          aria-expanded={recoveryExpanded}
-          aria-controls="rsvp-recovery-form"
-          onClick={() => {
-            setRecoveryExpanded((current) => !current);
-            setRecoveryError('');
-            setRecoveryMessage('');
-            setRecoveryStatus('idle');
-          }}
-        >
-          <LifeBuoy aria-hidden="true" />
-          Don&apos;t have a code?
-        </button>
-        {recoveryExpanded && (
-          <form
-            id="rsvp-recovery-form"
-            className="recovery-form"
-            onSubmit={submitRecovery}
-          >
-            <label className={recoveryError ? 'field-error' : undefined}>
-              Email or mobile number
-              <input
-                ref={recoveryInputRef}
-                aria-describedby={
-                  recoveryError ? 'rsvp-recovery-contact-error' : undefined
-                }
-                aria-invalid={recoveryError ? 'true' : 'false'}
-                autoCapitalize="off"
-                autoCorrect="off"
-                inputMode="email"
-                placeholder="name@example.com or (555) 123-4567"
-                value={recoveryContact}
-                onChange={(event) => {
-                  setRecoveryContact(event.target.value);
-                  setRecoveryError('');
-                  if (recoveryStatus !== 'submitting') {
-                    setRecoveryMessage('');
-                    setRecoveryStatus('idle');
-                  }
-                }}
+          {status === 'submitting' && (
+            <div className="inline-loading-shell">
+              <LoadingPulse
+                label="Opening your RSVP"
+                message="Following your invitation link and loading your household details."
+                compact
               />
-              {recoveryError && (
-                <span
-                  id="rsvp-recovery-contact-error"
-                  className="field-error-message"
-                  role="alert"
-                >
-                  {recoveryError}
-                </span>
-              )}
-            </label>
-            <p className="form-message recovery-helper">
-              Enter the email address or mobile number already saved with your
-              household.
-            </p>
-            <button
-              type="submit"
-              className="recovery-submit-button"
-              disabled={recoveryStatus === 'submitting'}
+            </div>
+          )}
+          <div className="lookup-divider">
+            <span>or</span>
+          </div>
+          <button
+            type="button"
+            className="recovery-toggle"
+            aria-expanded={recoveryExpanded}
+            aria-controls="rsvp-recovery-form"
+            onClick={() => {
+              setRecoveryExpanded((current) => !current);
+              setRecoveryError('');
+              setRecoveryMessage('');
+              setRecoveryStatus('idle');
+            }}
+          >
+            <LifeBuoy aria-hidden="true" />
+            Don&apos;t have a code?
+          </button>
+          {recoveryExpanded && (
+            <form
+              id="rsvp-recovery-form"
+              className="recovery-form"
+              onSubmit={submitRecovery}
             >
-              <Send aria-hidden="true" />
-              {recoveryStatus === 'submitting'
-                ? 'Sending link...'
-                : 'Send private RSVP link'}
-            </button>
-            {recoveryStatus === 'submitting' && (
-              <div className="inline-loading-shell">
-                <LoadingPulse
-                  label="Sending your RSVP link"
-                  message="Checking for a saved household contact and sending the private link if one matches."
-                  compact
+              <label className={recoveryError ? 'field-error' : undefined}>
+                Email or mobile number
+                <input
+                  ref={recoveryInputRef}
+                  aria-describedby={
+                    recoveryError ? 'rsvp-recovery-contact-error' : undefined
+                  }
+                  aria-invalid={recoveryError ? 'true' : 'false'}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  inputMode="email"
+                  placeholder="name@example.com or (555) 123-4567"
+                  value={recoveryContact}
+                  onChange={(event) => {
+                    setRecoveryContact(event.target.value);
+                    setRecoveryError('');
+                    if (recoveryStatus !== 'submitting') {
+                      setRecoveryMessage('');
+                      setRecoveryStatus('idle');
+                    }
+                  }}
                 />
-              </div>
-            )}
-            {recoveryMessage && (
-              <p className="form-message" aria-live="polite">
-                {recoveryMessage}
+                {recoveryError && (
+                  <span
+                    id="rsvp-recovery-contact-error"
+                    className="field-error-message"
+                    role="alert"
+                  >
+                    {recoveryError}
+                  </span>
+                )}
+              </label>
+              <p className="form-message recovery-helper">
+                Enter the email address or mobile number already saved with your
+                household.
               </p>
-            )}
-          </form>
-        )}
+              <button
+                type="submit"
+                className="recovery-submit-button"
+                disabled={recoveryStatus === 'submitting'}
+              >
+                <Send aria-hidden="true" />
+                {recoveryStatus === 'submitting'
+                  ? 'Sending link...'
+                  : 'Send private RSVP link'}
+              </button>
+              {recoveryStatus === 'submitting' && (
+                <div className="inline-loading-shell">
+                  <LoadingPulse
+                    label="Sending your RSVP link"
+                    message="Checking for a saved household contact and sending the private link if one matches."
+                    compact
+                  />
+                </div>
+              )}
+              {recoveryMessage && (
+                <p className="form-message" aria-live="polite">
+                  {recoveryMessage}
+                </p>
+              )}
+            </form>
+          )}
         </div>
       </section>
     </main>
@@ -458,7 +468,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
     }
   };
 
-  const activeMembers = household.members.filter((member) => !member.archivedAt);
+  const activeMembers = household.members.filter(
+    (member) => !member.archivedAt,
+  );
 
   return (
     <main className="narrow-page rsvp-flow-page">
@@ -530,7 +542,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             />
           </div>
         )}
-        <section className="rsvp-form-section" aria-labelledby="rsvp-guests-heading">
+        <section
+          className="rsvp-form-section"
+          aria-labelledby="rsvp-guests-heading"
+        >
           <div className="section-heading">
             <div>
               <h2 id="rsvp-guests-heading">Guests</h2>
@@ -553,7 +568,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                     <strong>{fullName}</strong>
                     <span>
                       {member.weddingPartyRole ||
-                        (member.canBringPlusOne ? 'Plus-one eligible' : 'Guest')}
+                        (member.canBringPlusOne
+                          ? 'Plus-one eligible'
+                          : 'Guest')}
                     </span>
                   </div>
                   <div
@@ -622,7 +639,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                           placeholder="E.g., no nuts"
                           value={memberRsvp.dietaryNotes}
                           onChange={(event) => {
-                            clearFieldError(`members.${memberIndex}.dietaryNotes`);
+                            clearFieldError(
+                              `members.${memberIndex}.dietaryNotes`,
+                            );
                             updateMember(member.id, {
                               dietaryNotes: event.target.value,
                             });
@@ -829,7 +848,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </section>
         )}
 
-        <section className="rsvp-notes-grid single-notes" aria-label="Additional notes">
+        <section
+          className="rsvp-notes-grid single-notes"
+          aria-label="Additional notes"
+        >
           <label className={fieldError('notes') ? 'field-error' : undefined}>
             Household notes
             <textarea
@@ -981,7 +1003,10 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
             Add to calendar
           </a>
         </div>
-        <div className="rsvp-response-summary" aria-label="RSVP response summary">
+        <div
+          className="rsvp-response-summary"
+          aria-label="RSVP response summary"
+        >
           <section>
             <h2>Attending ({responseSummary.attending.length})</h2>
             {responseSummary.attending.length ? (
@@ -1064,7 +1089,10 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-function buildRsvpSummary(household: Household, rsvp: StoredRsvp): {
+function buildRsvpSummary(
+  household: Household,
+  rsvp: StoredRsvp,
+): {
   attending: string[];
   notAttending: string[];
   notes: string[];

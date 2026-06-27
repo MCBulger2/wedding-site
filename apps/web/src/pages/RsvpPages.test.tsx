@@ -98,13 +98,9 @@ describe('RsvpLookupPage', () => {
   it('keeps the lost-code form collapsed by default and expands it with focus', async () => {
     render(<RsvpLookupPage />);
 
-    expect(
-      screen.queryByLabelText('Email or mobile number'),
-    ).toBeNull();
+    expect(screen.queryByLabelText('Email or mobile number')).toBeNull();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: "Don't have a code?" }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
 
     const recoveryInput = await screen.findByLabelText(
       'Email or mobile number',
@@ -120,9 +116,7 @@ describe('RsvpLookupPage', () => {
   it('validates recovery contact input before submitting', async () => {
     render(<RsvpLookupPage />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: "Don't have a code?" }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
     fireEvent.change(screen.getByLabelText('Email or mobile number'), {
       target: { value: 'not-a-contact' },
     });
@@ -144,9 +138,7 @@ describe('RsvpLookupPage', () => {
     });
     render(<RsvpLookupPage />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: "Don't have a code?" }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
     fireEvent.change(screen.getByLabelText('Email or mobile number'), {
       target: { value: 'sam@example.com' },
     });
@@ -170,13 +162,11 @@ describe('RsvpLookupPage', () => {
     render(<RsvpLookupPage />);
 
     fireEvent.change(screen.getByLabelText('Invitation code'), {
-      target: { value: 'invite-code-123' },
+      target: { value: 'a2b3c4d5e6' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'View RSVP' }));
 
-    expect(window.location.assign).toHaveBeenCalledWith(
-      '/rsvp/invite-code-123',
-    );
+    expect(window.location.assign).toHaveBeenCalledWith('/rsvp/A2B3C4D5E6');
   });
 });
 
