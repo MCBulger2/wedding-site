@@ -23,7 +23,6 @@ import {
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
 import { createHash, randomUUID } from 'node:crypto';
-import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
 import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
@@ -811,47 +810,20 @@ export class WeddingService {
 }
 
 function createInvitationLabelsPdf(rows: PreparedInvitationExportRow[]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      autoFirstPage: false,
-      bufferPages: false,
-      compress: false,
-      info: {
-        Title: 'Invitation QR Labels',
-        Subject: 'Print-ready wedding invitation RSVP QR labels',
-        Creator: 'Matt and Alison Wedding Admin',
-      },
-      margin: 0,
-      size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight],
-    });
-    const chunks: Buffer[] = [];
-
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    const labelsPerPage = AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows;
-    rows.forEach((row, index) => {
-      if (index % labelsPerPage === 0) {
-        doc.addPage({ margin: 0, size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight] });
-      }
-
-      drawInvitationLabel(doc, row, index % labelsPerPage);
-    });
-
-    if (rows.length === 0) {
-      doc.addPage({ margin: 0, size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight] });
-    }
-
-    doc.end();
+  const labelsPerPage = AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows;
+  const pageCount = Math.max(1, Math.ceil(rows.length / labelsPerPage));
+  const pageStreams = Array.from({ length: pageCount }, (_, pageIndex) => {
+    const pageRows = rows.slice(pageIndex * labelsPerPage, (pageIndex + 1) * labelsPerPage);
+    return pageRows.map((row, index) => drawInvitationLabel(row, index)).join('\n');
   });
+
+  return Promise.resolve(buildPdf(pageStreams));
 }
 
 function drawInvitationLabel(
-  doc: PDFKit.PDFDocument,
   row: PreparedInvitationExportRow,
   pageLabelIndex: number,
-): void {
+): string {
   const column = pageLabelIndex % AVERY_5160_LABEL.columns;
   const labelRow = Math.floor(pageLabelIndex / AVERY_5160_LABEL.columns);
   const x = AVERY_5160_LABEL.marginLeft + column * AVERY_5160_LABEL.horizontalPitch;
@@ -861,57 +833,131 @@ function drawInvitationLabel(
   const qrY = y + 9;
   const textX = qrX + qrSize + 8;
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
+  const householdText = truncatePdfText(row.household.displayName, Math.floor(textWidth / 4.8));
 
-  drawQrCode(doc, row.rsvpUrl, qrX, qrY, qrSize);
-  doc
-    .fillColor('#243238')
-    .font('Helvetica-Bold')
-    .fontSize(8.5)
-    .text(row.household.displayName, textX, y + 15, {
-      ellipsis: true,
-      height: 24,
-      lineGap: 1,
-      width: textWidth,
-    });
-  doc
-    .fillColor('#52625f')
-    .font('Helvetica')
-    .fontSize(7)
-    .text('RSVP', textX, y + 43, {
-      characterSpacing: 0.5,
-      width: textWidth,
-    });
+  return [
+    drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
+    textCommand(householdText, textX, y + 22, 8.5, 'F2', '0.141 0.196 0.220'),
+    textCommand('RSVP', textX, y + 50, 7, 'F1', '0.322 0.384 0.373'),
+  ].join('\n');
 }
 
 function drawQrCode(
-  doc: PDFKit.PDFDocument,
   value: string,
   x: number,
   y: number,
   size: number,
-): void {
+): string {
   const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
   const quietModules = 2;
   const totalModules = qr.modules.size + quietModules * 2;
   const moduleSize = size / totalModules;
+  const commands = [
+    'q',
+    '1 1 1 rg',
+    `${formatPdfNumber(x)} ${formatPdfNumber(toPdfY(y + size))} ${formatPdfNumber(size)} ${formatPdfNumber(size)} re`,
+    'f',
+    '0 0 0 rg',
+  ];
 
-  doc.save();
-  doc.rect(x, y, size, size).fill('#ffffff');
-  doc.fillColor('#000000');
   for (let row = 0; row < qr.modules.size; row += 1) {
     for (let column = 0; column < qr.modules.size; column += 1) {
       if (qr.modules.get(row, column)) {
-        doc.rect(
-          x + (column + quietModules) * moduleSize,
-          y + (row + quietModules) * moduleSize,
-          moduleSize,
-          moduleSize,
+        commands.push(
+          `${formatPdfNumber(x + (column + quietModules) * moduleSize)} ${formatPdfNumber(
+            toPdfY(y + (row + quietModules + 1) * moduleSize),
+          )} ${formatPdfNumber(moduleSize)} ${formatPdfNumber(moduleSize)} re`,
         );
       }
     }
   }
-  doc.fill();
-  doc.restore();
+  commands.push('f', 'Q');
+  return commands.join('\n');
+}
+
+function buildPdf(pageStreams: string[]): Buffer {
+  const objects: string[] = [];
+  const pageObjectIds: number[] = [];
+
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+
+  for (const stream of pageStreams) {
+    const contentObjectId = objects.length;
+    objects[contentObjectId] = `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`;
+
+    const pageObjectId = objects.length;
+    pageObjectIds.push(pageObjectId);
+    objects[pageObjectId] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${formatPdfNumber(AVERY_5160_LABEL.pageWidth)} ${formatPdfNumber(
+        AVERY_5160_LABEL.pageHeight,
+      )}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
+  }
+
+  objects[2] = `<< /Type /Pages /Count ${pageObjectIds.length} /Kids [${pageObjectIds
+    .map((id) => `${id} 0 R`)
+    .join(' ')}] >>`;
+
+  const chunks: Buffer[] = [Buffer.from('%PDF-1.4\n', 'ascii')];
+  const offsets = [0];
+  for (let objectId = 1; objectId < objects.length; objectId += 1) {
+    offsets[objectId] = Buffer.concat(chunks).length;
+    chunks.push(Buffer.from(`${objectId} 0 obj\n${objects[objectId]}\nendobj\n`, 'ascii'));
+  }
+
+  const xrefOffset = Buffer.concat(chunks).length;
+  const xrefRows = offsets
+    .slice(1)
+    .map((offset) => `${offset.toString().padStart(10, '0')} 00000 n `)
+    .join('\n');
+  chunks.push(
+    Buffer.from(
+      `xref\n0 ${objects.length}\n0000000000 65535 f \n${xrefRows}\ntrailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+      'ascii',
+    ),
+  );
+
+  return Buffer.concat(chunks);
+}
+
+function textCommand(
+  value: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  fontResource: 'F1' | 'F2',
+  rgb: string,
+): string {
+  return [
+    'BT',
+    `${rgb} rg`,
+    `/${fontResource} ${formatPdfNumber(fontSize)} Tf`,
+    `1 0 0 1 ${formatPdfNumber(x)} ${formatPdfNumber(toPdfY(y))} Tm`,
+    `(${escapePdfString(value)}) Tj`,
+    'ET',
+  ].join('\n');
+}
+
+function truncatePdfText(value: string, maxLength: number): string {
+  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function escapePdfString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function toPdfY(y: number): number {
+  return AVERY_5160_LABEL.pageHeight - y;
+}
+
+function formatPdfNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: number): HouseholdImportRow {

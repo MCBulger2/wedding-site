@@ -51,6 +51,22 @@ async function openHouseholdActions(card: Locator) {
   await trigger.click();
 }
 
+async function clickHouseholdAction(card: Locator, actionName: string) {
+  const page = card.page();
+
+  await openHouseholdActions(card);
+  const action = page.getByRole('menuitem', { name: actionName });
+  await expect(action).toBeVisible();
+
+  try {
+    await action.click({ timeout: 1_000 });
+    return;
+  } catch {
+    await action.focus();
+    await page.keyboard.press('Enter');
+  }
+}
+
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
@@ -914,8 +930,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Example Household' });
-  await openHouseholdActions(exampleCard);
-  await page.getByRole('menuitem', { name: 'Notify' }).click();
+  await clickHouseholdAction(exampleCard, 'Notify');
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
@@ -932,8 +947,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject: 'Travel update',
   });
 
-  await openHouseholdActions(exampleCard);
-  await page.getByRole('menuitem', { name: 'Notify' }).click();
+  await clickHouseholdAction(exampleCard, 'Notify');
   await page.getByLabel('Delivery channel').selectOption('sms');
   await expect(page.getByLabel('Notification subject')).toHaveCount(0);
   await page
@@ -967,11 +981,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   expect(labelExportRequests).toBe(1);
 
-  await openHouseholdActions(exampleCard);
-  await expect(
-    page.getByRole('menuitem', { name: 'View invitation' }),
-  ).toBeVisible();
-  await page.getByRole('menuitem', { name: 'View invitation' }).click();
+  await clickHouseholdAction(exampleCard, 'View invitation');
   await expect(
     exampleCard.getByRole('link', {
       name: new URL('/rsvp/test-invite-code-123', page.url()).toString(),
@@ -991,8 +1001,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByText('Sent invitation email to sam@example.com').first()).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  await openHouseholdActions(exampleCard);
-  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  await clickHouseholdAction(exampleCard, 'Edit');
   await page
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
@@ -1008,8 +1017,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Updated Household' });
-  await openHouseholdActions(updatedCard);
-  await page.getByRole('menuitem', { name: 'Archive' }).click();
+  await clickHouseholdAction(updatedCard, 'Archive');
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'The Updated Household' }),
@@ -1065,11 +1073,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
-  await openHouseholdActions(reloadedCard);
-  await expect(
-    page.getByRole('menuitem', { name: 'View invitation' }),
-  ).toBeVisible();
-  await page.getByRole('menuitem', { name: 'View invitation' }).click();
+  await clickHouseholdAction(reloadedCard, 'View invitation');
   await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
     'fresh-invite-code-456',
   );

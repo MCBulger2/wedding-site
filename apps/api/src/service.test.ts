@@ -341,7 +341,7 @@ describe('WeddingService', () => {
     const pdfText = pdf.toString('utf8');
 
     expect(pdf.subarray(0, 4).toString('utf8')).toBe('%PDF');
-    expect(pdfText).toContain(Buffer.from('The Example Household').toString('hex'));
+    expect(pdfText).toContain('The Example Household');
     expect(pdfText).not.toContain(inviteCode);
     expect(pdfText).not.toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
     expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('exported');

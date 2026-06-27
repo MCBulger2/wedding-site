@@ -17,12 +17,10 @@
     "@aws-sdk/client-sns": "^3.716.0",
     "@aws-sdk/lib-dynamodb": "^3.716.0",
     "@matt-alison-wedding/shared": "0.1.0",
-    "pdfkit": "^0.19.1",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.146",
-    "@types/pdfkit": "^0.17.6",
     "@types/qrcode": "^1.5.6"
   }
 }
