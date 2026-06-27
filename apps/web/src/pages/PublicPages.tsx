@@ -4,6 +4,9 @@ import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { siteContent } from '../siteContent.js';
 
+const PHOTO_WHEEL_SCROLL_THRESHOLD = 90;
+const PHOTO_WHEEL_NAVIGATION_INTERVAL_MS = 450;
+
 export function HomePage() {
   const calendarHref = useMemo(() => {
     const ics = generateIcs(siteContent.weddingEvent);
@@ -283,7 +286,7 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
     loop: hasMultiplePhotos,
   });
   const carouselRef = useRef<HTMLDivElement>(null);
-  const lastWheelTimeRef = useRef(0);
+  const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
   const syncActivePhoto = useCallback(() => {
     if (!emblaApi) {
@@ -316,11 +319,31 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
 
-      const now = Date.now();
-      if (now - lastWheelTimeRef.current < 300) return;
-      lastWheelTimeRef.current = now;
+      const scroll = wheelScrollRef.current;
+      const deltaDirection = Math.sign(e.deltaX);
+      const currentDirection = Math.sign(scroll.deltaX);
+      scroll.deltaX =
+        currentDirection !== 0 && deltaDirection !== currentDirection
+          ? e.deltaX
+          : scroll.deltaX + e.deltaX;
 
-      if (e.deltaX > 0) {
+      if (Math.abs(scroll.deltaX) < PHOTO_WHEEL_SCROLL_THRESHOLD) return;
+
+      const now = Date.now();
+      if (
+        now - scroll.lastNavigationAt <
+        PHOTO_WHEEL_NAVIGATION_INTERVAL_MS
+      ) {
+        scroll.deltaX =
+          Math.sign(scroll.deltaX) * PHOTO_WHEEL_SCROLL_THRESHOLD;
+        return;
+      }
+
+      scroll.lastNavigationAt = now;
+      const shouldScrollNext = scroll.deltaX > 0;
+      scroll.deltaX = 0;
+
+      if (shouldScrollNext) {
         emblaApi.scrollNext();
       } else {
         emblaApi.scrollPrev();
