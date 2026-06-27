@@ -185,25 +185,17 @@ export const siteContent = {
   weddingEvent,
   photos: [
     {
-      src: '/hero-wedding.png',
-      alt: 'Candlelit garden reception table at sunset',
-      caption: 'Mesa, Arizona',
-      detail:
-        'A desert-garden preview while engagement and wedding-weekend photos are gathered.',
+      src: '/ring.jpg',
+      alt: "A close up of Alison's engagement ring",
+      caption: 'Engagement ring',
+      detail: "Alison's beautiful engagement ring.",
       objectPosition: 'center',
     },
     {
-      src: '/test-ceremony-aisle.png',
-      alt: 'Temporary test photo of a desert garden ceremony aisle',
-      caption: 'Ceremony preview',
-      detail: 'Temporary test image for carousel layout and controls.',
-      objectPosition: 'center',
-    },
-    {
-      src: '/test-cocktail-hour.png',
-      alt: 'Temporary test photo of outdoor wedding cocktail hour details',
-      caption: 'Cocktail hour preview',
-      detail: 'Temporary test image for carousel layout and controls.',
+      src: '/smile.jpg',
+      alt: 'Alison & Matt, shortly after the proposal',
+      caption: 'Alison & Matt after the proposal',
+      detail: 'Alison & Matt, shortly after the proposal.',
       objectPosition: 'center',
     },
   ] satisfies GalleryPhoto[],
