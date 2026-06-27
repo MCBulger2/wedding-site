@@ -46,9 +46,10 @@ Required testing areas include:
 
 ## Security Expectations
 
-- Store only hashed RSVP invite codes.
+- Store RSVP invite-code hashes for guest lookup and, when recoverability is needed, store only KMS-encrypted invite-code ciphertext.
 - Keep secrets in AWS Secrets Manager or secure CI secrets.
 - Do not commit plaintext secrets, guest data, or production invite codes.
+- Plaintext invite codes may appear only in authenticated admin responses, invitation CSV exports, and outgoing invitation emails. Never log them or store them raw in DynamoDB or environment variables.
 - Use least-privilege IAM policies.
 - Require HTTPS.
 - Keep S3 buckets private.

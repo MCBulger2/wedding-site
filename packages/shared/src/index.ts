@@ -242,8 +242,40 @@ export const AdminHouseholdRecordSchema = z.object({
   household: HouseholdSchema,
   rsvp: StoredRsvpSchema.optional(),
   attendance: AdminAttendanceSchema,
+  hasRecoverableInviteCode: z.boolean().default(false),
 });
 export type AdminHouseholdRecord = z.infer<typeof AdminHouseholdRecordSchema>;
+
+export const InvitationDetailsSchema = z.object({
+  householdId: z.string().min(1),
+  inviteCode: InviteCodeSchema,
+  inviteCodeHash: z.string().min(1),
+  rsvpUrl: z.string().url(),
+});
+export type InvitationDetails = z.infer<typeof InvitationDetailsSchema>;
+
+export const InvitationEmailResultStatusSchema = z.enum(['sent', 'skipped', 'failed']);
+export type InvitationEmailResultStatus = z.infer<typeof InvitationEmailResultStatusSchema>;
+
+export const InvitationEmailResultSchema = z.object({
+  householdId: z.string().min(1),
+  displayName: z.string().trim().min(1),
+  status: InvitationEmailResultStatusSchema,
+  deliveredTo: z.string().email().optional(),
+  message: z.string().trim().min(1),
+});
+export type InvitationEmailResult = z.infer<typeof InvitationEmailResultSchema>;
+
+export const SendInvitationEmailResponseSchema = z.object({
+  result: InvitationEmailResultSchema,
+  invitation: InvitationDetailsSchema.optional(),
+});
+export type SendInvitationEmailResponse = z.infer<typeof SendInvitationEmailResponseSchema>;
+
+export const BulkInvitationEmailResponseSchema = z.object({
+  results: z.array(InvitationEmailResultSchema),
+});
+export type BulkInvitationEmailResponse = z.infer<typeof BulkInvitationEmailResponseSchema>;
 
 export const EmailHouseholdNotificationInputSchema = z.object({
   channel: z.literal('email'),

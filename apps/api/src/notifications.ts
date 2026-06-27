@@ -3,6 +3,8 @@ import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import { siteContent } from '@matt-alison-wedding/shared';
 import type {
   Household,
+  InvitationEmailResult,
+  InvitationDetails,
   SendHouseholdNotificationInput,
   SendHouseholdNotificationResponse,
   StoredRsvp,
@@ -25,6 +27,12 @@ export interface HouseholdMessenger {
   sendHouseholdNotification(
     input: HouseholdNotificationInput,
   ): Promise<SendHouseholdNotificationResponse>;
+  sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult>;
+}
+
+export interface InvitationEmailInput {
+  household: Household;
+  invitation: InvitationDetails;
 }
 
 export interface WeddingNotificationsConfig {
@@ -144,6 +152,47 @@ export class AwsWeddingNotificationsClient
       deliveredTo: input.household.phone,
     };
   }
+
+  async sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult> {
+    if (!this.config.senderEmail) {
+      throw new Error('Email notifications are not configured');
+    }
+    if (!input.household.email) {
+      throw new Error('Household does not have a contact email address');
+    }
+
+    const email = buildInvitationEmail(input);
+    await this.sesClient.send(
+      new SendEmailCommand({
+        FromEmailAddress: this.config.senderEmail,
+        Destination: {
+          ToAddresses: [input.household.email],
+        },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: 'UTF-8',
+              Data: email.subject,
+            },
+            Body: {
+              Text: {
+                Charset: 'UTF-8',
+                Data: email.text,
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    return {
+      householdId: input.household.householdId,
+      displayName: input.household.displayName,
+      status: 'sent',
+      deliveredTo: input.household.email,
+      message: `Sent invitation email to ${input.household.email}`,
+    };
+  }
 }
 
 export function buildRsvpNotificationEmail(
@@ -234,6 +283,30 @@ export function buildHouseholdNotificationEmail(
       footer:
         'Please use the private RSVP link from your invitation to respond. This email never includes invite-code secrets.',
     }),
+  };
+}
+
+export function buildInvitationEmail({
+  household,
+  invitation,
+}: InvitationEmailInput): { subject: string; text: string } {
+  return {
+    subject: "You're invited to Matt and Alison's wedding",
+    text: [
+      `Hi ${household.displayName},`,
+      '',
+      "You're invited to Matt and Alison's wedding.",
+      '',
+      'Please use your private RSVP link to view your household and respond:',
+      invitation.rsvpUrl,
+      '',
+      `Invitation code: ${invitation.inviteCode}`,
+      '',
+      'We will still send a paper invitation as well, but this email gives you the same private RSVP access.',
+      '',
+      'With love,',
+      'Matt and Alison',
+    ].join('\n'),
   };
 }
 

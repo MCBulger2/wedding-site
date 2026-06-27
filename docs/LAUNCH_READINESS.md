@@ -36,7 +36,7 @@ npm run deploy:infra:production -- \
 
 ## SES Verification
 
-RSVP notifications use SES through the API Lambda. If the notification sender email is under the hosted zone domain, CDK creates an SES domain identity and DKIM DNS records. Recipient verification and SES sandbox removal still need to be completed in AWS before production launch.
+RSVP notifications and invitation emails use SES through the API Lambda. If the notification sender email is under the hosted zone domain, CDK creates an SES domain identity and DKIM DNS records. Recipient verification and SES sandbox removal still need to be completed in AWS before production launch.
 
 Notifications are best-effort. Guest RSVP saves continue even if SES delivery fails, and failures are logged with household ID and RSVP update time.
 
@@ -56,8 +56,10 @@ References:
 Before printing invitations:
 
 - Deploy staging with the intended domain, auth domain, and SES notification settings.
-- Create test households, generate/export invitation URLs and QR codes, and verify old URLs are not rotated after export or sent status.
+- Create test households, generate/reveal/export invitation URLs and QR codes, and verify old URLs are not rotated after export or sent status.
+- Verify invitation email send and re-send reuse the same RSVP URL.
 - Submit and update RSVP responses from invite links.
 - Verify RSVP notification emails arrive and do not contain invite codes or hashes.
+- Confirm invite codes are stored only as hashes and KMS-encrypted ciphertext, not raw plaintext DynamoDB attributes or logs.
 - Verify admin dashboard login, household editing, archive behavior, invitation CSV export, RSVP CSV export, and SPA routing.
-- Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, DynamoDB PITR, CloudWatch retention, and Secrets Manager invite-code pepper.
+- Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, DynamoDB PITR, KMS key access, CloudWatch retention, and Secrets Manager invite-code pepper.
