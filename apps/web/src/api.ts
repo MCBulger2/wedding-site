@@ -15,6 +15,24 @@ import type {
   UpdateHouseholdInput,
   UpdateHouseholdMemberInput,
 } from '@matt-alison-wedding/shared';
+import {
+  localAdminMockEnabled,
+  mockArchiveHousehold,
+  mockCreateHousehold,
+  mockDownloadInvitationsCsv,
+  mockDownloadRsvpsCsv,
+  mockEmailHouseholdInvitation,
+  mockEmailInvitations,
+  mockFetchAdminAuthConfig,
+  mockFetchHouseholds,
+  mockRemoveHouseholdMember,
+  mockRevealInvitation,
+  mockRotateInviteCode,
+  mockSendHouseholdNotification,
+  mockUpdateHousehold,
+  mockUpdateHouseholdMember,
+  mockUpdateInviteLifecycleStatus,
+} from './localAdminMock.js';
 
 export type RsvpPayload = RsvpUpdate;
 
@@ -83,10 +101,18 @@ export async function recoverRsvpLink(
 }
 
 export async function fetchAdminAuthConfig(): Promise<AdminAuthConfigResponse> {
+  if (localAdminMockEnabled) {
+    return mockFetchAdminAuthConfig();
+  }
+
   return request<AdminAuthConfigResponse>('/admin/auth/config');
 }
 
 export async function fetchHouseholds(adminToken: string): Promise<AdminHouseholdsResponse> {
+  if (localAdminMockEnabled) {
+    return mockFetchHouseholds();
+  }
+
   return request<AdminHouseholdsResponse>('/admin/households', {
     headers: authHeaders(adminToken),
   });
@@ -96,6 +122,10 @@ export async function createHousehold(
   adminToken: string,
   payload: CreateHouseholdInput,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockCreateHousehold(payload);
+  }
+
   return request<CreateHouseholdResponse>('/admin/households', {
     method: 'POST',
     headers: authHeaders(adminToken),
@@ -108,6 +138,10 @@ export async function updateHousehold(
   householdId: string,
   payload: UpdateHouseholdInput,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockUpdateHousehold(householdId, payload);
+  }
+
   return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}`, {
     method: 'PUT',
     headers: authHeaders(adminToken),
@@ -119,6 +153,10 @@ export async function archiveHousehold(
   adminToken: string,
   householdId: string,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockArchiveHousehold(householdId);
+  }
+
   return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}`, {
     method: 'DELETE',
     headers: authHeaders(adminToken),
@@ -131,6 +169,10 @@ export async function updateHouseholdMember(
   memberId: string,
   payload: UpdateHouseholdMemberInput,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockUpdateHouseholdMember(householdId, memberId, payload);
+  }
+
   return request<CreateHouseholdResponse>(
     `/admin/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(memberId)}`,
     {
@@ -146,6 +188,10 @@ export async function removeHouseholdMember(
   householdId: string,
   memberId: string,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockRemoveHouseholdMember(householdId, memberId);
+  }
+
   return request<CreateHouseholdResponse>(
     `/admin/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(memberId)}`,
     {
@@ -160,6 +206,10 @@ export async function updateInviteLifecycleStatus(
   householdId: string,
   status: InviteLifecycleStatus,
 ): Promise<CreateHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockUpdateInviteLifecycleStatus(householdId, status);
+  }
+
   return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}/invite-lifecycle`, {
     method: 'PUT',
     headers: authHeaders(adminToken),
@@ -172,6 +222,10 @@ export async function rotateInviteCode(
   householdId: string,
   confirmRotation = false,
 ): Promise<RotateInviteCodeResponse> {
+  if (localAdminMockEnabled) {
+    return mockRotateInviteCode(householdId);
+  }
+
   return request<RotateInviteCodeResponse>(`/admin/households/${encodeURIComponent(householdId)}/invite-code`, {
     method: 'POST',
     headers: authHeaders(adminToken),
@@ -183,6 +237,10 @@ export async function revealInvitation(
   adminToken: string,
   householdId: string,
 ): Promise<RevealInvitationResponse> {
+  if (localAdminMockEnabled) {
+    return mockRevealInvitation(householdId);
+  }
+
   return request<RevealInvitationResponse>(`/admin/households/${encodeURIComponent(householdId)}/invitation`, {
     headers: authHeaders(adminToken),
   });
@@ -192,6 +250,10 @@ export async function emailHouseholdInvitation(
   adminToken: string,
   householdId: string,
 ): Promise<EmailInvitationResponse> {
+  if (localAdminMockEnabled) {
+    return mockEmailHouseholdInvitation(householdId);
+  }
+
   return request<EmailInvitationResponse>(
     `/admin/households/${encodeURIComponent(householdId)}/invitation-email`,
     {
@@ -203,6 +265,10 @@ export async function emailHouseholdInvitation(
 }
 
 export async function emailInvitations(adminToken: string): Promise<BulkEmailInvitationsResponse> {
+  if (localAdminMockEnabled) {
+    return mockEmailInvitations();
+  }
+
   return request<BulkEmailInvitationsResponse>('/admin/invitations/email', {
     method: 'POST',
     headers: authHeaders(adminToken),
@@ -215,6 +281,10 @@ export async function sendHouseholdNotification(
   householdId: string,
   payload: SendHouseholdNotificationInput,
 ): Promise<NotifyHouseholdResponse> {
+  if (localAdminMockEnabled) {
+    return mockSendHouseholdNotification(householdId, payload);
+  }
+
   return request<NotifyHouseholdResponse>(
     `/admin/households/${encodeURIComponent(householdId)}/notifications`,
     {
@@ -226,10 +296,18 @@ export async function sendHouseholdNotification(
 }
 
 export async function downloadRsvpsCsv(adminToken: string): Promise<Blob> {
+  if (localAdminMockEnabled) {
+    return mockDownloadRsvpsCsv();
+  }
+
   return downloadCsv('/admin/rsvps/export', adminToken);
 }
 
 export async function downloadInvitationsCsv(adminToken: string): Promise<Blob> {
+  if (localAdminMockEnabled) {
+    return mockDownloadInvitationsCsv();
+  }
+
   return downloadCsv('/admin/invitations/export', adminToken);
 }
 

@@ -91,6 +91,10 @@ button,
   display: flex;
 }
 
+.stats-inline span {
+  gap: 0.2rem;
+}
+
 .brand {
   color: var(--accent-strong);
   font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
@@ -190,7 +194,7 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(3.25rem, 8vw, 7.5rem);
+  font-size: clamp(3rem, 6.5vw, 6.5rem);
   line-height: 0.95;
   margin: 0;
 }
@@ -222,6 +226,14 @@ h3 {
 .hero-actions {
   flex-wrap: wrap;
   gap: 0.9rem;
+}
+
+.hero-facts span {
+  align-items: center;
+  display: flex;
+  font-size: 0.9rem;
+  font-weight: 700;
+  gap: 0.45rem;
 }
 
 .hero-facts span,
@@ -361,7 +373,7 @@ button {
   width: 12px;
 }
 
-.photo-dot[aria-current="true"] {
+.photo-dot[aria-current='true'] {
   background: var(--accent);
   width: 32px;
 }
@@ -371,7 +383,7 @@ button {
 .registry-section,
 .narrow-page,
 .admin-page {
-  padding: clamp(4rem, 8vw, 6rem) clamp(1.25rem, 5vw, 4rem);
+  padding: clamp(1.25rem, 5vh, 4rem) clamp(1.25rem, 5vw, 4rem);
 }
 
 .section-grid {
@@ -671,7 +683,6 @@ button {
 
 .admin-page {
   gap: 1.5rem;
-  max-width: 1280px;
   width: 100%;
 }
 
@@ -1162,10 +1173,15 @@ textarea:focus {
   gap: 0.85rem;
 }
 
+.meta-row span {
+  gap: 0.4rem;
+}
+
 .stats-inline {
   border-top: 1px solid rgba(36, 42, 47, 0.08);
   border-bottom: 1px solid rgba(36, 42, 47, 0.08);
   padding: 0.85rem 0;
+  display: flex;
 }
 
 .member-list {
@@ -1712,7 +1728,7 @@ textarea:focus {
   }
 
   h1 {
-    font-size: clamp(2.7rem, 12vw, 4.1rem);
+    font-size: clamp(2.7rem, 10vw, 4.1rem);
   }
 
   .stats-grid {
@@ -1728,7 +1744,7 @@ textarea:focus {
   }
 
   .venue-map-frame {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 9;
   }
 
   .photo-controls {
