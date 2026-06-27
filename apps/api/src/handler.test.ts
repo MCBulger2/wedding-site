@@ -95,6 +95,27 @@ describe('handleRequest', () => {
     expect(httpResponse.statusCode).toBe(202);
     expect(JSON.parse(httpResponse.body as string)).toHaveProperty('accepted', true);
   });
+
+  it('returns invitation QR labels as a base64 PDF download', async () => {
+    const exportInvitationLabels = vi.fn(async () => Buffer.from('%PDF-labels'));
+    const service = createServiceDouble({ exportInvitationLabels });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/admin/invitations/labels', 'GET'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(httpResponse.isBase64Encoded).toBe(true);
+    expect(httpResponse.headers).toMatchObject({
+      'content-type': 'application/pdf',
+      'content-disposition': 'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
+      'cache-control': 'no-store',
+    });
+    expect(Buffer.from(httpResponse.body as string, 'base64').toString('utf8')).toBe('%PDF-labels');
+    expect(exportInvitationLabels).toHaveBeenCalledWith('https://frontend.example.com');
+  });
 });
 
 function createEvent(
@@ -143,6 +164,7 @@ function createServiceDouble(
   return {
     archiveHousehold: notUsed,
     createHousehold: notUsed,
+    exportInvitationLabels: notUsed,
     exportInvitations: notUsed,
     exportRsvps: notUsed,
     getRsvp: notUsed,

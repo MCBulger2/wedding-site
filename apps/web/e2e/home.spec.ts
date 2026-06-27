@@ -441,6 +441,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     householdId: string;
     deliveredTo: string;
   }> = [];
+  let labelExportRequests = 0;
   let households: Array<{
     household: Record<string, unknown>;
     attendance: Record<string, number>;
@@ -803,6 +804,23 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
+  await page.route('**/api/admin/invitations/labels', async (route) => {
+    labelExportRequests += 1;
+    households = households.map((record) => ({
+      ...record,
+      household: {
+        ...record.household,
+        inviteLifecycleStatus: 'exported',
+        inviteExportedAt: '2026-06-15T22:15:00.000Z',
+      },
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-labels',
+    });
+  });
+
   await page.route('**/api/admin/invitations/email', async (route) => {
     const results = households.map((record) => {
       if (!record.household.email) {
@@ -930,6 +948,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     ),
   ).toBeVisible();
   await expect(page.getByText('exported').first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Export QR labels' }).click();
+  await expect(
+    page.getByText(
+      'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
+    ),
+  ).toBeVisible();
+  expect(labelExportRequests).toBe(1);
 
   await exampleCard.getByRole('button', { name: 'Actions' }).click();
   await expect(

@@ -23,6 +23,7 @@ import {
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
 import { createHash, randomUUID } from 'node:crypto';
+import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
 import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
@@ -33,6 +34,24 @@ import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
 const RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RSVP_RECOVERY_CONTACT_LIMIT = 3;
 const RSVP_RECOVERY_IP_LIMIT = 10;
+const POINTS_PER_INCH = 72;
+const AVERY_5160_LABEL = {
+  pageWidth: 8.5 * POINTS_PER_INCH,
+  pageHeight: 11 * POINTS_PER_INCH,
+  columns: 3,
+  rows: 10,
+  labelWidth: 2.625 * POINTS_PER_INCH,
+  labelHeight: 1 * POINTS_PER_INCH,
+  marginLeft: 0.1875 * POINTS_PER_INCH,
+  marginTop: 0.5 * POINTS_PER_INCH,
+  horizontalPitch: 2.75 * POINTS_PER_INCH,
+  verticalPitch: 1 * POINTS_PER_INCH,
+};
+
+interface PreparedInvitationExportRow {
+  household: Household;
+  rsvpUrl: string;
+}
 
 export class PublicError extends Error {
   constructor(
@@ -513,54 +532,21 @@ export class WeddingService {
   }
 
   async exportInvitations(baseUrl: string): Promise<string> {
-    const households = (await this.repository.listHouseholds()).filter((household) => !household.archivedAt);
-    const rows = [];
-    const now = new Date().toISOString();
-
-    for (const household of households) {
-      const inviteCode =
-        (await this.getRecoverableInviteCode(household)) ??
-        (!household.inviteCodeHash ? generateInviteCode() : undefined);
-
-      if (!inviteCode) {
-        rows.push({
-          household,
-          rsvpUrl: '',
-          qrCodeDataUrl: '',
-        });
-        continue;
-      }
-
-      const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
-      if (!household.inviteCodeHash) {
-        await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
-      }
-
-      const updated: Household =
-        household.inviteLifecycleStatus === 'sent'
-          ? household
-          : {
-              ...household,
-              inviteLifecycleStatus: 'exported',
-              inviteCodeHash,
-              inviteCodeGeneratedAt: household.inviteCodeGeneratedAt ?? now,
-              inviteExportedAt: household.inviteExportedAt ?? now,
-              inviteCodeLastRotatedAt: household.inviteCodeLastRotatedAt ?? now,
-              updatedAt: now,
-            };
-      if (updated !== household) {
-        await this.repository.saveHousehold(updated);
-      }
-
-      const rsvpUrl = `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`;
-      rows.push({
-        household: updated,
+    const rows = await this.prepareInvitationExportRows(baseUrl);
+    const csvRows = await Promise.all(
+      rows.map(async ({ household, rsvpUrl }) => ({
+        household,
         rsvpUrl,
-        qrCodeDataUrl: await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 }),
-      });
-    }
+        qrCodeDataUrl: rsvpUrl ? await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 }) : '',
+      })),
+    );
 
-    return invitationExportToCsv(rows);
+    return invitationExportToCsv(csvRows);
+  }
+
+  async exportInvitationLabels(baseUrl: string): Promise<Buffer> {
+    const rows = await this.prepareInvitationExportRows(baseUrl);
+    return createInvitationLabelsPdf(rows.filter((row) => row.rsvpUrl));
   }
 
   private async ensureRecoverableInvitation(
@@ -631,6 +617,56 @@ export class WeddingService {
     }
 
     return inviteCode;
+  }
+
+  private async prepareInvitationExportRows(baseUrl: string): Promise<PreparedInvitationExportRow[]> {
+    const households = (await this.repository.listHouseholds()).filter(
+      (household) => !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
+    );
+    const rows: PreparedInvitationExportRow[] = [];
+    const now = new Date().toISOString();
+
+    for (const household of households) {
+      const inviteCode =
+        (await this.getRecoverableInviteCode(household)) ??
+        (!household.inviteCodeHash ? generateInviteCode() : undefined);
+
+      if (!inviteCode) {
+        rows.push({
+          household,
+          rsvpUrl: '',
+        });
+        continue;
+      }
+
+      const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
+      if (!household.inviteCodeHash) {
+        await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
+      }
+
+      const updated: Household =
+        household.inviteLifecycleStatus === 'sent'
+          ? household
+          : {
+              ...household,
+              inviteLifecycleStatus: 'exported',
+              inviteCodeHash,
+              inviteCodeGeneratedAt: household.inviteCodeGeneratedAt ?? now,
+              inviteExportedAt: household.inviteExportedAt ?? now,
+              inviteCodeLastRotatedAt: household.inviteCodeLastRotatedAt ?? now,
+              updatedAt: now,
+            };
+      if (updated !== household) {
+        await this.repository.saveHousehold(updated);
+      }
+
+      rows.push({
+        household: updated,
+        rsvpUrl: `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`,
+      });
+    }
+
+    return rows;
   }
 
   private buildInvitationDetails(
@@ -772,6 +808,110 @@ export class WeddingService {
       });
     }
   }
+}
+
+function createInvitationLabelsPdf(rows: PreparedInvitationExportRow[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      autoFirstPage: false,
+      bufferPages: false,
+      compress: false,
+      info: {
+        Title: 'Invitation QR Labels',
+        Subject: 'Print-ready wedding invitation RSVP QR labels',
+        Creator: 'Matt and Alison Wedding Admin',
+      },
+      margin: 0,
+      size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight],
+    });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const labelsPerPage = AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows;
+    rows.forEach((row, index) => {
+      if (index % labelsPerPage === 0) {
+        doc.addPage({ margin: 0, size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight] });
+      }
+
+      drawInvitationLabel(doc, row, index % labelsPerPage);
+    });
+
+    if (rows.length === 0) {
+      doc.addPage({ margin: 0, size: [AVERY_5160_LABEL.pageWidth, AVERY_5160_LABEL.pageHeight] });
+    }
+
+    doc.end();
+  });
+}
+
+function drawInvitationLabel(
+  doc: PDFKit.PDFDocument,
+  row: PreparedInvitationExportRow,
+  pageLabelIndex: number,
+): void {
+  const column = pageLabelIndex % AVERY_5160_LABEL.columns;
+  const labelRow = Math.floor(pageLabelIndex / AVERY_5160_LABEL.columns);
+  const x = AVERY_5160_LABEL.marginLeft + column * AVERY_5160_LABEL.horizontalPitch;
+  const y = AVERY_5160_LABEL.marginTop + labelRow * AVERY_5160_LABEL.verticalPitch;
+  const qrSize = 54;
+  const qrX = x + 8;
+  const qrY = y + 9;
+  const textX = qrX + qrSize + 8;
+  const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
+
+  drawQrCode(doc, row.rsvpUrl, qrX, qrY, qrSize);
+  doc
+    .fillColor('#243238')
+    .font('Helvetica-Bold')
+    .fontSize(8.5)
+    .text(row.household.displayName, textX, y + 15, {
+      ellipsis: true,
+      height: 24,
+      lineGap: 1,
+      width: textWidth,
+    });
+  doc
+    .fillColor('#52625f')
+    .font('Helvetica')
+    .fontSize(7)
+    .text('RSVP', textX, y + 43, {
+      characterSpacing: 0.5,
+      width: textWidth,
+    });
+}
+
+function drawQrCode(
+  doc: PDFKit.PDFDocument,
+  value: string,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
+  const quietModules = 2;
+  const totalModules = qr.modules.size + quietModules * 2;
+  const moduleSize = size / totalModules;
+
+  doc.save();
+  doc.rect(x, y, size, size).fill('#ffffff');
+  doc.fillColor('#000000');
+  for (let row = 0; row < qr.modules.size; row += 1) {
+    for (let column = 0; column < qr.modules.size; column += 1) {
+      if (qr.modules.get(row, column)) {
+        doc.rect(
+          x + (column + quietModules) * moduleSize,
+          y + (row + quietModules) * moduleSize,
+          moduleSize,
+          moduleSize,
+        );
+      }
+    }
+  }
+  doc.fill();
+  doc.restore();
 }
 
 function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: number): HouseholdImportRow {
