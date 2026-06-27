@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   AwsWeddingNotificationsClient,
   buildInvitationEmail,
+  buildRecoveryEmail,
+  buildRecoverySms,
   buildHouseholdNotificationEmail,
   buildRsvpNotificationEmail,
 } from './notifications.js';
@@ -147,6 +149,38 @@ describe('notifications', () => {
     expect(body?.Html?.Data).toContain('Matt &amp; Alison');
     expect(body?.Html?.Data).toContain('Open your RSVP');
     expect(body?.Html?.Data).toContain('invite-code-123');
+  });
+
+  it('builds recovery email content with the private RSVP link and no separate invite code field', () => {
+    const email = buildRecoveryEmail({
+      household: createHousehold(),
+      invitation: {
+        householdId: 'h1',
+        inviteCode: 'invite-code-123',
+        inviteCodeHash: 'hash-value',
+        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+      },
+    });
+
+    expect(email.text).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(email.text).not.toContain('Invitation code:');
+    expect(email.html).toContain('Open your RSVP');
+    expect(email.html).not.toContain('Invitation code');
+  });
+
+  it('builds recovery SMS content with only the private RSVP link', () => {
+    const message = buildRecoverySms({
+      household: createHousehold({ phone: '+14805550100' }),
+      invitation: {
+        householdId: 'h1',
+        inviteCode: 'invite-code-123',
+        inviteCodeHash: 'hash-value',
+        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+      },
+    });
+
+    expect(message).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(message).not.toContain('Invitation code');
   });
 });
 

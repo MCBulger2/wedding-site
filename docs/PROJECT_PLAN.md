@@ -51,7 +51,7 @@ Mailed invites should include a short URL or QR code like `/rsvp/{inviteCode}`.
 Guest RSVP behavior:
 
 - Each household receives one high-entropy invite code.
-- The backend stores a hash of the invite code for guest lookup and may store a KMS-encrypted ciphertext copy for admin-only recovery, exports, and invitation emails.
+- The backend stores a hash of the invite code for guest lookup and may store a KMS-encrypted ciphertext copy for admin-only recovery, exports, invitation emails, and lost-code recovery delivery to stored household contacts.
 - Guests can view and edit the household RSVP using the same invite code.
 - The RSVP form should support household members, attendance, meal choice, plus-one rules, notes, accessibility or dietary notes, and timestamped edits.
 - Invalid codes should return a generic message that does not reveal whether a household exists.
@@ -150,7 +150,7 @@ Initial backend endpoints:
 
 The first invitation mailing export is CSV. Each row includes household display name, admin-only mailing address fields, invite lifecycle status and timestamps, a direct RSVP URL, and a QR-code PNG data URL.
 
-Production invite codes are never persisted as raw plaintext. Generation stores the hash for RSVP lookup and a KMS-encrypted ciphertext copy for authenticated admin reveal/export/email workflows. Exports and email re-sends reuse the recoverable code instead of rotating URLs. Once a household is marked `sent`, dashboard invite-code rotation is blocked to protect mailed RSVP URLs.
+Production invite codes are never persisted as raw plaintext. Generation stores the hash for RSVP lookup and a KMS-encrypted ciphertext copy for authenticated admin reveal/export/email workflows plus lost-code recovery sent to a stored household email address or mobile number. Exports and email re-sends reuse the recoverable code instead of rotating URLs. Once a household is marked `sent`, dashboard invite-code rotation is blocked to protect mailed RSVP URLs.
 
 ## Testing Plan
 

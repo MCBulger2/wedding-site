@@ -28,9 +28,16 @@ export interface HouseholdMessenger {
     input: HouseholdNotificationInput,
   ): Promise<SendHouseholdNotificationResponse>;
   sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult>;
+  sendRecoveryEmail(input: RecoveryMessageInput): Promise<void>;
+  sendRecoverySms(input: RecoveryMessageInput): Promise<void>;
 }
 
 export interface InvitationEmailInput {
+  household: Household;
+  invitation: InvitationDetails;
+}
+
+export interface RecoveryMessageInput {
   household: Household;
   invitation: InvitationDetails;
 }
@@ -193,6 +200,56 @@ export class AwsWeddingNotificationsClient
       message: `Sent invitation email to ${input.household.email}`,
     };
   }
+
+  async sendRecoveryEmail(input: RecoveryMessageInput): Promise<void> {
+    if (!this.config.senderEmail) {
+      throw new Error('Email notifications are not configured');
+    }
+    if (!input.household.email) {
+      throw new Error('Household does not have a contact email address');
+    }
+
+    const email = buildRecoveryEmail(input);
+    await this.sesClient.send(
+      new SendEmailCommand({
+        FromEmailAddress: this.config.senderEmail,
+        Destination: {
+          ToAddresses: [input.household.email],
+        },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: 'UTF-8',
+              Data: email.subject,
+            },
+            Body: {
+              Text: {
+                Charset: 'UTF-8',
+                Data: email.text,
+              },
+              Html: {
+                Charset: 'UTF-8',
+                Data: email.html,
+              },
+            },
+          },
+        },
+      }),
+    );
+  }
+
+  async sendRecoverySms(input: RecoveryMessageInput): Promise<void> {
+    if (!input.household.phone) {
+      throw new Error('Household does not have a contact mobile number');
+    }
+
+    await this.snsClient.send(
+      new PublishCommand({
+        PhoneNumber: input.household.phone,
+        Message: buildRecoverySms(input),
+      }),
+    );
+  }
 }
 
 export function buildRsvpNotificationEmail(
@@ -344,6 +401,67 @@ export function buildInvitationEmail({
         'This RSVP link and invitation code are private to your household. Please do not forward this email.',
     }),
   };
+}
+
+export function buildRecoveryEmail({
+  household,
+  invitation,
+}: RecoveryMessageInput): { subject: string; text: string; html: string } {
+  const subject = `${siteContent.coupleNames} RSVP link`;
+  const intro = [
+    `Hi ${household.displayName},`,
+    "Here's your private RSVP link for Matt and Alison's wedding.",
+    'Please use this link to view your household and respond.',
+  ].join('\n');
+
+  return {
+    subject,
+    text: [
+      `Hi ${household.displayName},`,
+      '',
+      "Here's your private RSVP link for Matt and Alison's wedding:",
+      invitation.rsvpUrl,
+      '',
+      `${siteContent.dateLabel} in ${siteContent.location}`,
+      `${siteContent.venueName}`,
+      `RSVP by ${siteContent.rsvpDeadline}.`,
+      '',
+      'This private RSVP link is only for your household. Please do not forward it.',
+      '',
+      'With love,',
+      'Matt and Alison',
+    ].join('\n'),
+    html: buildEmailDocument({
+      previewText: `${siteContent.coupleNames} RSVP link`,
+      title: siteContent.coupleNames,
+      subtitle: siteContent.dateLabel,
+      intro,
+      rows: [
+        ['Where', `${siteContent.venueName}, ${siteContent.location}`],
+        ['When', `${siteContent.dateLabel} at ${siteContent.ceremonyTime}`],
+        ['Reception', `${siteContent.receptionTime} dinner & reception`],
+        ['RSVP by', siteContent.rsvpDeadline],
+      ],
+      schedule: siteContent.schedule,
+      cta: {
+        label: 'Open your RSVP',
+        url: invitation.rsvpUrl,
+      },
+      footer:
+        'This email includes your household private RSVP link only. It does not include a separate invite-code field.',
+    }),
+  };
+}
+
+export function buildRecoverySms({
+  household,
+  invitation,
+}: RecoveryMessageInput): string {
+  return [
+    `${household.displayName}: your private RSVP link for Matt & Alison's wedding:`,
+    invitation.rsvpUrl,
+    'Please do not forward this link.',
+  ].join(' ');
 }
 
 export function createNotifierFromEnvironment(): RsvpNotifier | undefined {

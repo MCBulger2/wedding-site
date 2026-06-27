@@ -3,11 +3,14 @@ import {
   formatValidationIssues,
   type AdminHouseholdRecord,
   type BulkInvitationEmailResponse,
+  GenericRecoverySuccessMessage,
   GenericInviteError,
   HouseholdImportRowSchema,
   InviteLifecycleUpdateSchema,
   type InvitationDetails,
   type InvitationEmailResult,
+  type RsvpRecoveryAcceptedResponse,
+  RsvpRecoveryRequestSchema,
   RsvpUpdateSchema,
   type SendInvitationEmailResponse,
   SendHouseholdNotificationInputSchema,
@@ -19,13 +22,17 @@ import {
   type RsvpUpdate,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
 import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
 import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
 import type { InviteCodeProtector } from './inviteCodeProtector.js';
 import type { HouseholdMessenger, RsvpNotifier } from './notifications.js';
 import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
+
+const RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RSVP_RECOVERY_CONTACT_LIMIT = 3;
+const RSVP_RECOVERY_IP_LIMIT = 10;
 
 export class PublicError extends Error {
   constructor(
@@ -81,6 +88,66 @@ export class WeddingService {
     return { household: updatedHousehold, rsvp };
   }
 
+  async requestRsvpRecovery(
+    input: unknown,
+    requestContext: { sourceIp?: string; baseUrl: string },
+  ): Promise<RsvpRecoveryAcceptedResponse> {
+    const parsed = RsvpRecoveryRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError('Recovery contact is invalid', 422, [
+        'contact: Enter a valid email address or mobile number.',
+      ]);
+    }
+
+    const contact = normalizeRecoveryContact(parsed.data.contact);
+    const contactHash = stableHash(`recovery-contact:${contact.kind}:${contact.value}`, this.inviteCodePepper);
+    const sourceIpHash = stableHash(
+      `recovery-ip:${requestContext.sourceIp?.trim() || 'unknown'}`,
+      this.inviteCodePepper,
+    );
+    const rateLimited = await this.isRsvpRecoveryRateLimited(contactHash, sourceIpHash);
+    if (rateLimited) {
+      return acceptedRecoveryResponse();
+    }
+
+    const households =
+      contact.kind === 'email'
+        ? await this.repository.listHouseholdsByEmail(contact.value)
+        : await this.repository.listHouseholdsByPhone(contact.value);
+
+    if (!this.householdMessenger || households.length === 0) {
+      return acceptedRecoveryResponse();
+    }
+
+    for (const household of households) {
+      if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+        continue;
+      }
+
+      try {
+        const inviteCode = await this.getRecoverableInviteCode(household);
+        if (!inviteCode) {
+          continue;
+        }
+
+        const invitation = this.buildInvitationDetails(household, inviteCode, requestContext.baseUrl);
+        if (contact.kind === 'email') {
+          await this.householdMessenger.sendRecoveryEmail({ household, invitation });
+        } else {
+          await this.householdMessenger.sendRecoverySms({ household, invitation });
+        }
+      } catch (error) {
+        console.error('RSVP recovery delivery failed', {
+          householdId: household.householdId,
+          contactKind: contact.kind,
+          error,
+        });
+      }
+    }
+
+    return acceptedRecoveryResponse();
+  }
+
   async listHouseholds(): Promise<AdminHouseholdRecord[]> {
     const households = await this.repository.listHouseholds();
     return Promise.all(
@@ -109,7 +176,7 @@ export class WeddingService {
     const household: Household = {
       householdId,
       displayName: parsed.data.displayName,
-      email: parsed.data.email || undefined,
+      email: normalizeOptionalEmail(parsed.data.email),
       phone: normalizeOptionalPhoneNumber(parsed.data.phone),
       mailingAddress: parsed.data.mailingAddress,
       members: parsed.data.members.map((member, index) => ({
@@ -174,7 +241,7 @@ export class WeddingService {
     const updated: Household = {
       ...household,
       displayName: parsed.data.displayName,
-      email: parsed.data.email || undefined,
+      email: normalizeOptionalEmail(parsed.data.email),
       phone: normalizeOptionalPhoneNumber(parsed.data.phone),
       mailingAddress: parsed.data.mailingAddress,
       maxPlusOnes: parsed.data.maxPlusOnes,
@@ -613,6 +680,36 @@ export class WeddingService {
     return this.repository.getRsvp(householdId);
   }
 
+  private async isRsvpRecoveryRateLimited(
+    contactHash: string,
+    sourceIpHash: string,
+  ): Promise<boolean> {
+    const now = Date.now();
+    const contactAttempts = await this.recordRsvpRecoveryAttempt('contact', contactHash, now);
+    const ipAttempts = await this.recordRsvpRecoveryAttempt('ip', sourceIpHash, now);
+    return contactAttempts > RSVP_RECOVERY_CONTACT_LIMIT || ipAttempts > RSVP_RECOVERY_IP_LIMIT;
+  }
+
+  private async recordRsvpRecoveryAttempt(
+    scope: 'contact' | 'ip',
+    keyHash: string,
+    now: number,
+  ): Promise<number> {
+    const existing = await this.repository.getRecoveryRateLimitRecord(scope, keyHash);
+    const withinWindow = existing && existing.windowExpiresAt > now;
+    const attempts = withinWindow ? existing.attempts + 1 : 1;
+
+    await this.repository.saveRecoveryRateLimitRecord({
+      scope,
+      keyHash,
+      attempts,
+      windowExpiresAt: now + RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS,
+      updatedAt: new Date(now).toISOString(),
+    });
+
+    return attempts;
+  }
+
   private validateRsvpAgainstHousehold(household: Household, rsvp: RsvpUpdate): void {
     const activeMembers = household.members.filter((member) => !member.archivedAt);
     const allowedMemberIds = new Set(activeMembers.map((member) => member.id));
@@ -681,6 +778,7 @@ function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: numbe
   try {
     return {
       ...row,
+      email: normalizeOptionalEmail(row.email) ?? '',
       phone: normalizeOptionalPhoneNumber(row.phone) ?? '',
     };
   } catch (error) {
@@ -692,6 +790,11 @@ function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: numbe
 
     throw error;
   }
+}
+
+function normalizeOptionalEmail(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.toLowerCase() : undefined;
 }
 
 function normalizeOptionalPhoneNumber(value: string | undefined): string | undefined {
@@ -717,6 +820,39 @@ function normalizeOptionalPhoneNumber(value: string | undefined): string | undef
   }
 
   return normalized;
+}
+
+type RecoveryContact = { kind: 'email'; value: string } | { kind: 'phone'; value: string };
+
+function normalizeRecoveryContact(value: string): RecoveryContact {
+  const email = normalizeOptionalEmail(value);
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { kind: 'email', value: email };
+  }
+
+  try {
+    const phone = normalizeOptionalPhoneNumber(value);
+    if (phone) {
+      return { kind: 'phone', value: phone };
+    }
+  } catch {
+    // Fall through to the generic validation error below.
+  }
+
+  throw new PublicError('Recovery contact is invalid', 422, [
+    'contact: Enter a valid email address or mobile number.',
+  ]);
+}
+
+function stableHash(value: string, pepper: string): string {
+  return createHash('sha256').update(`${pepper}:${value}`).digest('hex');
+}
+
+function acceptedRecoveryResponse(): RsvpRecoveryAcceptedResponse {
+  return {
+    accepted: true,
+    message: GenericRecoverySuccessMessage,
+  };
 }
 
 function summarizeAttendance(
