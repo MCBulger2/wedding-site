@@ -453,6 +453,31 @@ button {
   margin-top: 1rem;
 }
 
+.venue-address-link {
+  color: var(--accent-strong);
+  text-decoration-color: rgba(49, 95, 83, 0.42);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.venue-map-frame {
+  aspect-ratio: 16 / 9;
+  background: rgba(36, 42, 47, 0.08);
+  border: 1px solid rgba(36, 42, 47, 0.12);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  margin-top: 1.25rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.venue-map-frame iframe {
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
 .hotel-list {
   display: grid;
   gap: 1rem;
@@ -1584,6 +1609,10 @@ textarea:focus {
 
   .photo-frame {
     aspect-ratio: 4 / 5;
+  }
+
+  .venue-map-frame {
+    aspect-ratio: 4 / 3;
   }
 
   .photo-controls {

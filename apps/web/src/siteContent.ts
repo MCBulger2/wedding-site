@@ -66,6 +66,10 @@ export const siteContent = {
   venueName: 'Desert Garden Venue',
   venueAddress: '1234 Celebration Way, Scottsdale, AZ 85251',
   venueMapUrl: 'https://www.google.com/maps/search/?api=1&query=1234%20Celebration%20Way%20Scottsdale%20AZ%2085251',
+  venueAppleMapsUrl:
+    'https://maps.apple.com/?q=1234%20Celebration%20Way%2C%20Scottsdale%2C%20AZ%2085251',
+  venueMapEmbedUrl:
+    'https://www.openstreetmap.org/export/embed.html?bbox=-111.9337%2C33.4887%2C-111.9169%2C33.4997&layer=mapnik&marker=33.4942%2C-111.9256',
   ceremonyTime: '3:00 PM',
   receptionTime: '5:00 PM',
   dressCode: 'Garden formal. Ceremony and cocktail hour are planned outdoors, so choose shoes that work on lawn and desert paths.',

@@ -267,7 +267,7 @@ export class WeddingSiteStack extends Stack {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
           contentSecurityPolicy:
-            "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'",
           override: true,
         },
         contentTypeOptions: { override: true },

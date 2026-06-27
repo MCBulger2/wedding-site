@@ -378,6 +378,7 @@ function HomePage() {
     const ics = generateIcs(siteContent.weddingEvent);
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
+  const venueMapHref = getNativeMapUrl();
 
   return (
     <main>
@@ -429,7 +430,14 @@ function HomePage() {
           <ul className="plain-list">
             <li>
               <MapPin aria-hidden="true" />
-              {siteContent.venueAddress}
+              <a
+                className="venue-address-link"
+                href={venueMapHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {siteContent.venueAddress}
+              </a>
             </li>
             <li>
               <Clock aria-hidden="true" />
@@ -441,10 +449,18 @@ function HomePage() {
               {siteContent.dressCode}
             </li>
           </ul>
+          <div className="venue-map-frame">
+            <iframe
+              title={`${siteContent.venueName} map`}
+              src={siteContent.venueMapEmbedUrl}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+          </div>
           <div className="hero-actions compact-actions">
             <a
               className="icon-button"
-              href={siteContent.venueMapUrl}
+              href={venueMapHref}
               target="_blank"
               rel="noreferrer"
             >
@@ -562,6 +578,21 @@ function HomePage() {
       </section>
     </main>
   );
+}
+
+function getNativeMapUrl(): string {
+  if (typeof navigator === 'undefined') {
+    return siteContent.venueMapUrl;
+  }
+
+  const platform = navigator.platform.toLowerCase();
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isAppleDevice =
+    /mac|iphone|ipad|ipod/.test(platform) ||
+    /iphone|ipad|ipod/.test(userAgent) ||
+    (platform === 'macintel' && navigator.maxTouchPoints > 1);
+
+  return isAppleDevice ? siteContent.venueAppleMapsUrl : siteContent.venueMapUrl;
 }
 
 function RegistryPage() {
