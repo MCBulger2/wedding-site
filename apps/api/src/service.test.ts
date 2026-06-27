@@ -331,6 +331,23 @@ describe('WeddingService', () => {
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
+  it('exports invitation QR labels as a PDF without searchable invite secrets', async () => {
+    const { service, repository } = await createSeededService({
+      inviteLifecycleStatus: 'not_generated',
+      inviteCodeHash: undefined,
+    });
+
+    const pdf = await service.exportInvitationLabels('https://wedding.example.com');
+    const pdfText = pdf.toString('utf8');
+
+    expect(pdf.subarray(0, 4).toString('utf8')).toBe('%PDF');
+    expect(pdfText).toContain(Buffer.from('The Example Household').toString('hex'));
+    expect(pdfText).not.toContain(inviteCode);
+    expect(pdfText).not.toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('exported');
+    expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
+  });
+
   it('reveals an existing recoverable invitation without exposing it in household lists', async () => {
     const { service } = await createSeededService();
 

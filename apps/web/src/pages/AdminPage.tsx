@@ -4,7 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Archive, CheckSquare, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
-import { archiveHousehold, createHousehold, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
+import { archiveHousehold, createHousehold, downloadInvitationLabelsPdf, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
 import { createLocalAdminMockSession, localAdminMockAuthConfig, localAdminMockEnabled } from '../localAdminMock.js';
 
 interface HouseholdFormState {
@@ -427,7 +427,7 @@ export function AdminPage() {
     }
   };
 
-  const handleExport = async (kind: 'rsvps' | 'invitations') => {
+  const handleExport = async (kind: 'rsvps' | 'invitations' | 'labels') => {
     try {
       if (!session) {
         throw new Error('Sign in before exporting data.');
@@ -436,17 +436,29 @@ export function AdminPage() {
       const blob =
         kind === 'rsvps'
           ? await downloadRsvpsCsv(session.accessToken)
-          : await downloadInvitationsCsv(session.accessToken);
+          : kind === 'invitations'
+            ? await downloadInvitationsCsv(session.accessToken)
+            : await downloadInvitationLabelsPdf(session.accessToken);
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = kind === 'rsvps' ? 'rsvps.csv' : 'invitations.csv';
+      anchor.download =
+        kind === 'rsvps'
+          ? 'rsvps.csv'
+          : kind === 'invitations'
+            ? 'invitations.csv'
+            : 'invitation-qr-labels-avery-5160.pdf';
       anchor.click();
       window.URL.revokeObjectURL(url);
       if (kind === 'invitations') {
         await load();
         setMessage(
           'Exported invitation mailing data. Review the CSV before printing.',
+        );
+      } else if (kind === 'labels') {
+        await load();
+        setMessage(
+          'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
         );
       }
     } catch (error) {
@@ -870,6 +882,14 @@ export function AdminPage() {
           >
             <Download aria-hidden="true" />
             Export invitations
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => void handleExport('labels')}
+          >
+            <Download aria-hidden="true" />
+            Export QR labels
           </button>
           <button
             type="button"

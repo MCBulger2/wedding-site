@@ -311,7 +311,15 @@ export async function downloadInvitationsCsv(adminToken: string): Promise<Blob> 
   return downloadCsv('/admin/invitations/export', adminToken);
 }
 
+export async function downloadInvitationLabelsPdf(adminToken: string): Promise<Blob> {
+  return downloadFile('/admin/invitations/labels', adminToken);
+}
+
 async function downloadCsv(path: string, adminToken: string): Promise<Blob> {
+  return downloadFile(path, adminToken);
+}
+
+async function downloadFile(path: string, adminToken: string): Promise<Blob> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: authHeaders(adminToken),
   });

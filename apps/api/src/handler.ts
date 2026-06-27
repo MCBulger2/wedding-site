@@ -31,6 +31,7 @@ export async function handleRequest(
     | 'archiveHousehold'
     | 'createHousehold'
     | 'exportInvitations'
+    | 'exportInvitationLabels'
     | 'exportRsvps'
     | 'getRsvp'
     | 'importHouseholds'
@@ -198,6 +199,20 @@ export async function handleRequest(
           'content-disposition': 'attachment; filename="invitations.csv"',
         },
         body: await service.exportInvitations(frontendBaseUrl(event)),
+      };
+    }
+
+    if (method === 'GET' && path === '/admin/invitations/labels') {
+      const pdf = await service.exportInvitationLabels(frontendBaseUrl(event));
+      return {
+        statusCode: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': 'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
+          'cache-control': 'no-store',
+        },
+        isBase64Encoded: true,
+        body: pdf.toString('base64'),
       };
     }
 
