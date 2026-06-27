@@ -10,6 +10,7 @@ import {
   SendHouseholdNotificationInputSchema,
   UpdateHouseholdInputSchema,
   generateIcs,
+  siteContent,
 } from './index.js';
 
 describe('RsvpUpdateSchema', () => {
@@ -175,6 +176,17 @@ describe('invitation admin schemas', () => {
 });
 
 describe('structured public planning data', () => {
+  it('uses a parseable OpenStreetMap embed URL with a venue marker', () => {
+    const embedUrl = new URL(siteContent.venueMapEmbedUrl);
+
+    expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
+    expect(embedUrl.hostname).toBe('www.openstreetmap.org');
+    expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
+    expect(embedUrl.searchParams.get('marker')).toBe(
+      '33.4374400,-111.5989000',
+    );
+  });
+
   it('validates hotel block data', () => {
     const result = HotelBlockSchema.safeParse({
       name: 'Example Hotel',

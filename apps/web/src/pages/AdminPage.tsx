@@ -1,10 +1,11 @@
 import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
 import { archiveHousehold, createHousehold, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
+import { createLocalAdminMockSession, localAdminMockAuthConfig, localAdminMockEnabled } from '../localAdminMock.js';
 
 interface HouseholdFormState {
   displayName: string;
@@ -41,6 +42,9 @@ interface HouseholdCardActionsProps {
   onEdit: () => void;
   onRotateInviteCode: () => void;
   onManageInvitation: () => void;
+  onArchive: () => void;
+  onMarkSent?: () => void;
+  onMarkExported?: () => void;
 }
 
 export function HouseholdCardActions({
@@ -53,6 +57,9 @@ export function HouseholdCardActions({
   onEdit,
   onRotateInviteCode,
   onManageInvitation,
+  onArchive,
+  onMarkSent,
+  onMarkExported,
 }: HouseholdCardActionsProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(initialMenuOpen);
 
@@ -65,7 +72,6 @@ export function HouseholdCardActions({
       <DropdownMenu.Trigger asChild>
         <button type="button" className="secondary-button button-inline">
           <MoreHorizontal aria-hidden="true" />
-          Actions
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content
@@ -73,6 +79,10 @@ export function HouseholdCardActions({
         align="end"
         sideOffset={6}
       >
+        <DropdownMenu.Item className="household-action-menu-item" onClick={onEdit}>
+          <Edit3 aria-hidden="true" />
+          Edit
+        </DropdownMenu.Item>
         <DropdownMenu.Item
           className="household-action-menu-item"
           disabled={!canNotify}
@@ -91,10 +101,6 @@ export function HouseholdCardActions({
             ? 'Resend invitation email'
             : 'Email invitation'}
         </DropdownMenu.Item>
-        <DropdownMenu.Item className="household-action-menu-item" onClick={onEdit}>
-          <Edit3 aria-hidden="true" />
-          Edit
-        </DropdownMenu.Item>
         <DropdownMenu.Item
           className="household-action-menu-item"
           onClick={onManageInvitation}
@@ -111,6 +117,29 @@ export function HouseholdCardActions({
             Rotate code
           </DropdownMenu.Item>
         )}
+        {onMarkSent && (
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            onClick={onMarkSent}
+          >
+            <CheckSquare aria-hidden="true" />
+            Mark as sent
+          </DropdownMenu.Item>
+        )}
+        {onMarkExported && (
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            onClick={onMarkExported}
+        >
+          <CheckSquare aria-hidden="true" />
+          Mark as exported
+        </DropdownMenu.Item>)}
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            onClick={onArchive}>
+          <Archive aria-hidden="true" />
+          Archive
+        </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
@@ -225,6 +254,16 @@ export function AdminPage() {
 
     const initializeAuth = async () => {
       try {
+        if (localAdminMockEnabled) {
+          const mockSession = createLocalAdminMockSession();
+          setAuthConfig(localAdminMockAuthConfig);
+          setSession(mockSession);
+          setAuthStatus('ready');
+          setMessage('Loading local mock households...');
+          await load(mockSession.accessToken);
+          return;
+        }
+
         const config = await fetchAdminAuthConfig();
         if (cancelled) {
           return;
@@ -784,7 +823,7 @@ export function AdminPage() {
       <section className="admin-toolbar">
         <div>
           <p className="eyebrow">Admin</p>
-          <h1>RSVP dashboard</h1>
+          <h2>RSVP dashboard</h2>
           {profileName && (
             <p className="form-message">Signed in as {profileName}</p>
           )}
@@ -1062,33 +1101,13 @@ export function AdminPage() {
                         {record.household.email && (
                           <span>
                             <Mail aria-hidden="true" />
-                            {record.household.email}
+                            <a href={`mailto:${record.household.email}`}>{record.household.email}</a>
                           </span>
                         )}
                         {record.household.phone && (
                           <span>
                             <Phone aria-hidden="true" />
-                            {record.household.phone}
-                          </span>
-                        )}
-                        {record.household.inviteCodeLastRotatedAt && (
-                          <span>
-                            <KeyRound aria-hidden="true" />
-                            Code updated{' '}
-                            {formatDateTime(
-                              record.household.inviteCodeLastRotatedAt,
-                            )}
-                          </span>
-                        )}
-                        {record.household.inviteExportedAt && (
-                          <span>
-                            Exported{' '}
-                            {formatDateTime(record.household.inviteExportedAt)}
-                          </span>
-                        )}
-                        {record.household.inviteSentAt && (
-                          <span>
-                            Sent {formatDateTime(record.household.inviteSentAt)}
+                            <a href={`tel:${record.household.phone}`}>{record.household.phone}</a>
                           </span>
                         )}
                       </div>
@@ -1108,16 +1127,12 @@ export function AdminPage() {
                           void handleRotateInviteCode(record)
                         }
                         onManageInvitation={() => void handleManageInvitation(record)}
+                        onMarkSent={() => void markInviteStatus(record, 'sent')}
+                        onMarkExported={() => void markInviteStatus(record, 'exported')}
+                        onArchive={() => void handleArchiveHousehold(record)}
                       />
                     </div>
                   </div>
-
-                  {inviteWarning(record.household) && (
-                    <p className="warning-message">
-                      {inviteWarning(record.household)}
-                    </p>
-                  )}
-
                   {invitation && isInvitationExpanded && (
                     <section
                       className="invite-preview-card"
@@ -1188,43 +1203,6 @@ export function AdminPage() {
                       </div>
                     </section>
                   )}
-
-                  <div className="toolbar-actions">
-                    <button
-                      type="button"
-                      className="secondary-button button-inline"
-                      onClick={() => void markInviteStatus(record, 'exported')}
-                      disabled={
-                        isHouseholdArchived(record.household) ||
-                        record.household.inviteLifecycleStatus === 'exported' ||
-                        record.household.inviteLifecycleStatus === 'sent'
-                      }
-                    >
-                      <Download aria-hidden="true" />
-                      Mark exported
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button button-inline"
-                      onClick={() => void markInviteStatus(record, 'sent')}
-                      disabled={
-                        isHouseholdArchived(record.household) ||
-                        record.household.inviteLifecycleStatus !== 'exported'
-                      }
-                    >
-                      <Send aria-hidden="true" />
-                      Mark sent
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button button-inline danger-button"
-                      onClick={() => void handleArchiveHousehold(record)}
-                      disabled={isHouseholdArchived(record.household)}
-                    >
-                      <Archive aria-hidden="true" />
-                      Archive
-                    </button>
-                  </div>
 
                   {editingHouseholdId === record.household.householdId && (
                     <section
@@ -1451,9 +1429,9 @@ export function AdminPage() {
                   )}
 
                   <div className="stats-inline">
-                    <span>{record.attendance.attendingGuests} attending</span>
-                    <span>{record.attendance.pendingGuests} pending</span>
-                    <span>{record.attendance.plusOneGuests} plus-ones</span>
+                    <span><b>{record.attendance.attendingGuests}</b> attending</span>
+                    <span><b>{record.attendance.pendingGuests}</b> pending</span>
+                    <span><b>{record.attendance.plusOneGuests}</b> plus-ones</span>
                   </div>
 
                   <div className="member-list">
@@ -1508,13 +1486,6 @@ export function AdminPage() {
       </section>
     </main>
   );
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
 }
 
 function AddressFields({
@@ -1742,16 +1713,6 @@ function isHouseholdArchived(household: Household): boolean {
     household.inviteLifecycleStatus === 'archived' ||
     Boolean(household.archivedAt)
   );
-}
-
-function inviteWarning(household: Household): string {
-  if (household.inviteLifecycleStatus === 'sent') {
-    return 'This invitation is marked sent. Invite-code rotation is blocked to protect the mailed URL.';
-  }
-  if (household.inviteLifecycleStatus === 'exported') {
-    return 'This invitation was exported. Rotating the code requires confirmation because printed materials may already include it.';
-  }
-  return '';
 }
 
 function formatMemberName(member: {

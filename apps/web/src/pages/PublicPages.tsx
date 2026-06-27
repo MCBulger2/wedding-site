@@ -239,7 +239,7 @@ export function RegistryPage() {
         <p className="eyebrow">Registry</p>
         <h1>{registry.title}</h1>
         <p className="page-lede">{registry.intro}</p>
-        <p className="form-message">{registry.note}</p>
+        <p className="form-message"><i>{registry.note}</i></p>
       </section>
 
       {hasRegistryLinks ? (
