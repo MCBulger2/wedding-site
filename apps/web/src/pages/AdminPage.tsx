@@ -78,73 +78,84 @@ export function HouseholdCardActions({
           <MoreHorizontal aria-hidden="true" />
         </button>
       </DropdownMenu.Trigger>
-      <DropdownMenu.Content
-        className="household-action-menu"
-        align="end"
-        sideOffset={6}
-      >
-        <DropdownMenu.Item className="household-action-menu-item" onClick={onEdit}>
-          <Edit3 aria-hidden="true" />
-          Edit
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          className="household-action-menu-item"
-          disabled={!canNotify}
-          onClick={onNotify}
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          className="household-action-menu"
+          align="end"
+          collisionPadding={12}
+          sideOffset={6}
         >
-          <MessageSquare aria-hidden="true" />
-          Notify
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          className="household-action-menu-item"
-          disabled={!canEmailInvitation}
-          onClick={onEmailInvitation}
-        >
-          <Mail aria-hidden="true" />
-          {household.inviteSentAt
-            ? 'Resend invitation email'
-            : 'Email invitation'}
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          className="household-action-menu-item"
-          onClick={onManageInvitation}
-        >
-          <KeyRound aria-hidden="true" />
-          {household.inviteCodeHash ? 'View invitation' : 'Generate invitation'}
-        </DropdownMenu.Item>
-        {household.inviteCodeHash && (
           <DropdownMenu.Item
             className="household-action-menu-item"
-            onClick={onRotateInviteCode}
+            onClick={onEdit}
+          >
+            <Edit3 aria-hidden="true" />
+            Edit
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            disabled={!canNotify}
+            onClick={onNotify}
+          >
+            <MessageSquare aria-hidden="true" />
+            Notify
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            disabled={!canEmailInvitation}
+            onClick={onEmailInvitation}
+          >
+            <Mail aria-hidden="true" />
+            {household.inviteSentAt
+              ? 'Resend invitation email'
+              : 'Email invitation'}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            onClick={onManageInvitation}
           >
             <KeyRound aria-hidden="true" />
-            Rotate code
+            {household.inviteCodeHash
+              ? 'View invitation'
+              : 'Generate invitation'}
           </DropdownMenu.Item>
-        )}
-        {onMarkSent && (
+          {household.inviteCodeHash && (
+            <DropdownMenu.Item
+              className="household-action-menu-item"
+              onClick={onRotateInviteCode}
+            >
+              <KeyRound aria-hidden="true" />
+              Rotate code
+            </DropdownMenu.Item>
+          )}
+          {onMarkSent && (
+            <DropdownMenu.Item
+              className="household-action-menu-item"
+              onClick={onMarkSent}
+            >
+              <CheckSquare aria-hidden="true" />
+              Mark as sent
+            </DropdownMenu.Item>
+          )}
+          {onMarkExported && (
+            <DropdownMenu.Item
+              className="household-action-menu-item"
+              onClick={onMarkExported}
+            >
+              <CheckSquare aria-hidden="true" />
+              Mark as exported
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item
             className="household-action-menu-item"
-            onClick={onMarkSent}
+            disabled={Boolean(household.archivedAt)}
+            onClick={onArchive}
           >
-            <CheckSquare aria-hidden="true" />
-            Mark as sent
+            <Archive aria-hidden="true" />
+            Archive
           </DropdownMenu.Item>
-        )}
-        {onMarkExported && (
-          <DropdownMenu.Item
-            className="household-action-menu-item"
-            onClick={onMarkExported}
-        >
-          <CheckSquare aria-hidden="true" />
-          Mark as exported
-        </DropdownMenu.Item>)}
-          <DropdownMenu.Item
-            className="household-action-menu-item"
-            onClick={onArchive}>
-          <Archive aria-hidden="true" />
-          Archive
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
     </DropdownMenu.Root>
   );
 }
