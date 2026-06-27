@@ -83,7 +83,19 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Desert Garden Venue' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open map' })).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+    }),
+  ).toHaveAttribute('href', /google\.com\/maps/);
+  await expect(page.getByTitle('Desert Garden Venue map')).toHaveAttribute(
+    'src',
+    /openstreetmap\.org\/export\/embed\.html/,
+  );
+  await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
+    'href',
+    /google\.com\/maps/,
+  );
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toBeVisible();
@@ -128,11 +140,38 @@ test('homepage details render on mobile', async ({ page }) => {
     page.getByText('Ceremony at 3:00 PM; reception at 5:00 PM'),
   ).toBeVisible();
   await expect(
+    page.getByRole('link', {
+      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+    }),
+  ).toBeVisible();
+  await expect(page.getByTitle('Desert Garden Venue map')).toBeVisible();
+  await expect(
     page.getByText('Phoenix Sky Harbor International Airport'),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toHaveAttribute('href', /^data:text\/calendar/);
+});
+
+test('homepage map link opens Apple Maps on Apple devices', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'platform', {
+      configurable: true,
+      value: 'iPhone',
+    });
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
+    'href',
+    /maps\.apple\.com/,
+  );
+  await expect(
+    page.getByRole('link', {
+      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+    }),
+  ).toHaveAttribute('href', /maps\.apple\.com/);
 });
 
 test('photo carousel advances on horizontal wheel event', async ({ page }) => {
