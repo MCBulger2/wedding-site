@@ -155,7 +155,7 @@ button svg,
       rgba(13, 31, 25, 0.56) 42%,
       rgba(13, 31, 25, 0.16) 100%
     ),
-    url('/hero-wedding.png') center / cover;
+    url('/hero-wedding.jpg') center / cover;
   align-items: center;
   color: #fffffb;
   display: flex;
@@ -796,7 +796,7 @@ button {
   align-content: center;
   background:
     linear-gradient(135deg, rgba(8, 54, 41, 0.94), rgba(15, 81, 63, 0.78)),
-    url('/hero-wedding.png') center / cover;
+    url('/hero-wedding.jpg') center / cover;
   color: #fffffb;
   display: grid;
   padding: clamp(2rem, 5vw, 4rem);

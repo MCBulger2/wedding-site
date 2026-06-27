@@ -43,6 +43,16 @@ const household = {
   updatedAt: '2026-06-15T22:00:00.000Z',
 };
 
+const firstGalleryPhoto = {
+  alt: "A close up of Alison's engagement ring",
+  caption: 'Engagement ring',
+};
+
+const secondGalleryPhoto = {
+  alt: 'Alison & Matt, shortly after the proposal',
+  caption: 'Alison & Matt after the proposal',
+};
+
 async function openHouseholdActions(card: Locator) {
   const trigger = card.getByRole('button', { name: 'Actions' });
   await trigger.evaluate((element) => {
@@ -87,7 +97,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
   await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '0');
@@ -95,10 +105,10 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await carousel.hover();
   await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
   await page.getByRole('button', { name: 'Show next photo' }).click();
-  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Temporary test photo of a desert garden ceremony aisle',
+      name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
   await expect(
@@ -155,7 +165,7 @@ test('homepage details render on mobile', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
   await expect(
@@ -203,18 +213,19 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
 
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
 
   const carousel = page.getByLabel('Matt and Alison photos');
+  const activeCaption = carousel.locator('.photo-caption-row strong');
   await carousel.scrollIntoViewIfNeeded();
   const box = await carousel.boundingBox();
   if (!box) throw new Error('Carousel bounding box not found');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
   await page.mouse.wheel(20, 0);
-  await expect(carousel.getByText('Mesa, Arizona')).toBeVisible();
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 
   await page.mouse.wheel(300, 0);
 
@@ -223,17 +234,16 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
     await page.mouse.wheel(300, 0);
   }
 
-  await expect(carousel.getByText('Ceremony preview')).toBeVisible();
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
   await expect(
     page.getByRole('img', {
-      name: 'Temporary test photo of a desert garden ceremony aisle',
+      name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
-  await expect(carousel.getByText('Cocktail hour preview')).not.toBeVisible();
 
   await page.waitForTimeout(500);
   await page.mouse.wheel(300, 0);
-  await expect(carousel.getByText('Cocktail hour preview')).toBeVisible();
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
 
 test('registry page renders configured links', async ({ page }) => {
