@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 const adminAuthConfig = {
   clientId: 'admin-client-id',
@@ -43,6 +43,14 @@ const household = {
   updatedAt: '2026-06-15T22:00:00.000Z',
 };
 
+async function openHouseholdActions(card: Locator) {
+  const trigger = card.getByRole('button', { name: 'Actions' });
+  await trigger.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
+  });
+  await trigger.click();
+}
+
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
@@ -81,14 +89,14 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Wedding day' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Desert Garden Venue' }),
+    page.getByRole('heading', { name: 'Superstition Manor' }),
   ).toBeVisible();
   await expect(
     page.getByRole('link', {
-      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
     }),
   ).toHaveAttribute('href', /google\.com\/maps/);
-  await expect(page.getByTitle('Desert Garden Venue map')).toHaveAttribute(
+  await expect(page.getByTitle('Superstition Manor map')).toHaveAttribute(
     'src',
     /openstreetmap\.org\/export\/embed\.html/,
   );
@@ -103,10 +111,10 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Where to stay' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Sonoran Courtyard Hotel' }),
+    page.getByRole('heading', { name: 'TBD Hotel' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'View registry' }),
@@ -129,7 +137,7 @@ test('homepage details render on mobile', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByLabel('Wedding highlights').getByText('March 20, 2027'),
+    page.getByLabel('Wedding highlights').getByText('January 18, 2027'),
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
@@ -137,14 +145,14 @@ test('homepage details render on mobile', async ({ page }) => {
     }),
   ).toBeVisible();
   await expect(
-    page.getByText('Ceremony at 3:00 PM; reception at 5:00 PM'),
+    page.getByText('Ceremony at 4:30 PM; reception at 10:00 PM'),
   ).toBeVisible();
   await expect(
     page.getByRole('link', {
-      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
     }),
   ).toBeVisible();
-  await expect(page.getByTitle('Desert Garden Venue map')).toBeVisible();
+  await expect(page.getByTitle('Superstition Manor map')).toBeVisible();
   await expect(
     page.getByText('Phoenix Sky Harbor International Airport'),
   ).toBeVisible();
@@ -165,13 +173,13 @@ test('homepage map link opens Apple Maps on Apple devices', async ({ page }) => 
 
   await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
     'href',
-    /maps\.apple\.com/,
+    /maps\.apple\/p/,
   );
   await expect(
     page.getByRole('link', {
-      name: '1234 Celebration Way, Scottsdale, AZ 85251',
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
     }),
-  ).toHaveAttribute('href', /maps\.apple\.com/);
+  ).toHaveAttribute('href', /maps\.apple\/p/);
 });
 
 test('photo carousel advances on horizontal wheel event', async ({ page }) => {
@@ -198,25 +206,25 @@ test('photo carousel advances on horizontal wheel event', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('registry page renders coming soon state', async ({ page }) => {
+test('registry page renders configured links', async ({ page }) => {
   await page.goto('/registry');
 
   await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
   await expect(
     page.getByText('Your presence is the best gift.'),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Registry details coming soon' }),
+    page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
   await expect(
-    page.getByText('Check back closer to the celebration'),
+    page.getByRole('heading', { name: 'Down Payment Fund' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Back to wedding details' }),
-  ).toHaveAttribute('href', '/');
-  await expect(page.getByLabel('Registry links')).toHaveCount(0);
+    page.getByRole('link', { name: 'Contribute' }).first(),
+  ).toHaveAttribute('href', 'https://www.example.com/honeymoon-fund');
+  await expect(page.getByLabel('Registry links')).toBeVisible();
 });
 
 test('registry page renders on mobile', async ({ page }) => {
@@ -229,10 +237,10 @@ test('registry page renders on mobile', async ({ page }) => {
       .getByRole('link', { name: 'Registry' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Registry details coming soon' }),
+    page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
 });
 
@@ -581,6 +589,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   });
 
   await page.route('**/api/admin/households/*/invitation', async (route) => {
+    const requestOrigin = new URL(route.request().url()).origin;
     const householdId =
       route.request().url().match(/households\/([^/]+)\/invitation/)?.[1] ??
       '';
@@ -599,7 +608,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
               householdId,
               inviteCode,
               inviteCodeHash: record.household.inviteCodeHash,
-              rsvpUrl: `http://127.0.0.1:5173/rsvp/${inviteCode}`,
+              rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
             }
           : { message: 'Household not found' },
       ),
@@ -607,6 +616,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   });
 
   await page.route('**/api/admin/households/*/invitation-email', async (route) => {
+    const requestOrigin = new URL(route.request().url()).origin;
     const householdId =
       route.request().url().match(/households\/([^/]+)\/invitation-email/)?.[1] ??
       '';
@@ -650,7 +660,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
           householdId,
           inviteCode,
           inviteCodeHash: record.household.inviteCodeHash,
-          rsvpUrl: `http://127.0.0.1:5173/rsvp/${inviteCode}`,
+          rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
         },
         result: {
           householdId,
@@ -904,8 +914,8 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Example Household' });
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
+  await openHouseholdActions(exampleCard);
+  await page.getByRole('menuitem', { name: 'Notify' }).click();
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
@@ -922,8 +932,8 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject: 'Travel update',
   });
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
+  await openHouseholdActions(exampleCard);
+  await page.getByRole('menuitem', { name: 'Notify' }).click();
   await page.getByLabel('Delivery channel').selectOption('sms');
   await expect(page.getByLabel('Notification subject')).toHaveCount(0);
   await page
@@ -957,13 +967,15 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   expect(labelExportRequests).toBe(1);
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await openHouseholdActions(exampleCard);
   await expect(
-    exampleCard.getByRole('menuitem', { name: 'View invitation' }),
+    page.getByRole('menuitem', { name: 'View invitation' }),
   ).toBeVisible();
-  await exampleCard.getByRole('menuitem', { name: 'View invitation' }).click();
+  await page.getByRole('menuitem', { name: 'View invitation' }).click();
   await expect(
-    exampleCard.getByRole('link', { name: 'http://127.0.0.1:5173/rsvp/test-invite-code-123' }),
+    exampleCard.getByRole('link', {
+      name: new URL('/rsvp/test-invite-code-123', page.url()).toString(),
+    }),
   ).toBeVisible();
   await exampleCard.getByRole('button', { name: 'Email invitation' }).click();
   await expect(
@@ -979,8 +991,8 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByText('Sent invitation email to sam@example.com').first()).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Edit' }).click();
+  await openHouseholdActions(exampleCard);
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
   await page
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
@@ -996,16 +1008,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Updated Household' });
-  await updatedCard.getByRole('button', { name: 'Archive' }).click();
+  await openHouseholdActions(updatedCard);
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'The Updated Household' }),
   ).toHaveCount(0);
   await page.getByLabel('Show archived households').check();
   await expect(page.getByText('archived').first()).toBeVisible();
-  await expect(
-    updatedCard.getByRole('button', { name: 'Archive' }),
-  ).toBeDisabled();
 
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.getByLabel('Household display name').fill('The Harper Household');
@@ -1038,7 +1048,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   );
   await expect(
     newCard.getByRole('link', {
-      name: 'http://127.0.0.1:5173/rsvp/fresh-invite-code-456',
+      name: new URL('/rsvp/fresh-invite-code-456', page.url()).toString(),
     }),
   ).toBeVisible();
   await newCard.getByRole('button', { name: 'QR code' }).click();
@@ -1055,13 +1065,11 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
-  await reloadedCard.getByRole('button', { name: 'Actions' }).click();
+  await openHouseholdActions(reloadedCard);
   await expect(
-    reloadedCard.getByRole('menuitem', { name: 'View invitation' }),
+    page.getByRole('menuitem', { name: 'View invitation' }),
   ).toBeVisible();
-  await reloadedCard
-    .getByRole('menuitem', { name: 'View invitation' })
-    .click();
+  await page.getByRole('menuitem', { name: 'View invitation' }).click();
   await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
     'fresh-invite-code-456',
   );

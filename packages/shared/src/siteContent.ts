@@ -24,23 +24,35 @@ interface GalleryPhoto {
   objectPosition?: string;
 }
 
+const venue = {
+  name: 'Superstition Manor',
+  location: '1220 N Signal Butte Rd, Mesa, AZ 85207',
+  urls: {
+    googleMaps:
+      'https://www.google.com/maps/place/Superstition+Manor+Wedding+%26+Event+Center/@33.437824,-111.6011223,1301m/data=!3m2!1e3!4b1!4m6!3m5!1s0x872bb099b11510fd:0x63a10ccbb2e45498!8m2!3d33.437824!4d-111.5985474!16s%2Fg%2F11b5plb0_6?entry=ttu&g_ep=EgoyMDI2MDYyNC4wIKXMDSoASAFQAw%3D%3D',
+    appleMaps: 'https://maps.apple/p/.MpX6qJ9zEasjg',
+    openStreetMapEmbed:
+      'https://www.openstreetmap.org/export/embed.html?bbox=-111.60154044628145%2C33.43481681617157%2C-111.59690022468568%2C33.44042143559003&layer=mapnik&marker=33.4374400%2C-111.5989000',
+  },
+};
+
 const weddingEvent: CalendarEvent = {
-  title: 'Matt and Alison Wedding',
-  start: '2027-03-20T22:00:00.000Z',
-  end: '2027-03-21T04:00:00.000Z',
+  title: "Matt & Alison's Wedding",
+  start: '2027-01-18T22:00:00.000Z',
+  end: '2027-01-19T04:00:00.000Z',
   timezone: 'America/Phoenix',
-  location: 'Desert Garden Venue, 1234 Celebration Way, Scottsdale, AZ 85251',
+  location: venue.location,
   description: 'Ceremony, dinner, and reception for Matt and Alison.',
 };
 
 const hotels: HotelBlock[] = [
   {
-    name: 'Sonoran Courtyard Hotel',
-    address: '7420 E Camelback Rd, Scottsdale, AZ 85251',
+    name: 'TBD Hotel',
+    address: '123 TBD, Mesa, AZ 85251',
     bookingUrl: 'https://example.com/hotel-block',
     phoneNumber: '480-555-0127',
     groupCode: 'MATTALISON2027',
-    cutoffDate: 'February 20, 2027',
+    cutoffDate: 'November 30, 2026',
     nightlyRateNotes: 'Wedding block rate available while rooms last.',
     transportationNotes: 'Ten minutes from the venue by rideshare.',
     publiclyShareable: true,
@@ -48,48 +60,59 @@ const hotels: HotelBlock[] = [
 ];
 
 const registry: RegistryContent = {
-  title: 'Wedding registry',
+  title: 'Wedding Registry',
   intro:
     'Your presence is the best gift. For guests who have asked, registry details will be shared here once they are finalized.',
-  note:
-    'We are keeping everything simple and will link directly to our selected registries from this page.',
+  note: 'We are keeping everything simple and will link directly to our selected registries from this page.',
   comingSoonTitle: 'Registry details coming soon',
   comingSoonMessage:
     'Check back closer to the celebration for registry links and any gift notes from Matt and Alison.',
-  links: [],
+  links: [
+    {
+      name: 'Honeymoon Fund',
+      description:
+        'Help us make our honeymoon unforgettable with a contribution to our travel fund.',
+      url: 'https://www.example.com/honeymoon-fund',
+      linkLabel: 'Contribute',
+    },
+    {
+      name: 'Down Payment Fund',
+      description:
+        'Support our future home by contributing to our down payment fund.',
+      url: 'https://www.example.com/down-payment-fund',
+      linkLabel: 'Contribute',
+    },
+  ],
 };
 
 const rsvpDeadline = 'February 20, 2027';
 
 export const siteContent = {
   coupleNames: 'Matt & Alison',
-  dateLabel: 'March 20, 2027',
-  location: 'Scottsdale, Arizona',
-  venueName: 'Desert Garden Venue',
-  venueAddress: '1234 Celebration Way, Scottsdale, AZ 85251',
-  venueMapUrl:
-    'https://www.google.com/maps/search/?api=1&query=1234%20Celebration%20Way%20Scottsdale%20AZ%2085251',
-  venueAppleMapsUrl:
-    'https://maps.apple.com/?q=1234%20Celebration%20Way%2C%20Scottsdale%2C%20AZ%2085251',
-  venueMapEmbedUrl:
-    'https://www.openstreetmap.org/export/embed.html?bbox=-111.9337%2C33.4887%2C-111.9169%2C33.4997&layer=mapnik&marker=33.4942%2C-111.9256',
-  ceremonyTime: '3:00 PM',
-  receptionTime: '5:00 PM',
+  dateLabel: 'January 18, 2027',
+  location: 'Mesa, Arizona',
+  venueName: venue.name,
+  venueAddress: venue.location,
+  venueMapUrl: venue.urls.googleMaps,
+  venueAppleMapsUrl: venue.urls.appleMaps,
+  venueMapEmbedUrl: venue.urls.openStreetMapEmbed,
+  ceremonyTime: '4:30 PM',
+  receptionTime: '10:00 PM',
   rsvpDeadline,
   dressCode:
     'Garden formal. Ceremony and cocktail hour are planned outdoors, so choose shoes that work on lawn and desert paths.',
   announcement:
-    'We are getting married in Scottsdale and would love to celebrate with you. Invitations include a private RSVP link for each household.',
+    'We are getting married in Mesa, Arizona, and would love to celebrate with you. Invitations include a private RSVP link for each household.',
   schedule: [
-    { time: '2:30 PM', detail: 'Guest arrival at Desert Garden Venue' },
-    { time: '3:00 PM', detail: 'Ceremony in the garden courtyard' },
-    { time: '3:45 PM', detail: 'Cocktail hour on the terrace' },
-    { time: '5:00 PM', detail: 'Dinner and reception' },
-    { time: '9:30 PM', detail: 'Send-off' },
+    { time: '4:00 PM', detail: 'Guest arrival at Superstition Manor' },
+    { time: '4:30 PM', detail: 'Ceremony at the North Garden' },
+    { time: '5:00 PM', detail: 'Cocktail hour on the terrace' },
+    { time: '6:00 PM', detail: 'Dinner and reception' },
+    { time: '9:00 PM', detail: 'Send-off' },
   ],
   travel: [
     'Phoenix Sky Harbor International Airport is the closest major airport.',
-    'Rideshare is the easiest option between Scottsdale hotels and the venue.',
+    'Rideshare is the easiest option between Mesa hotels and the venue.',
     'Guests will receive RSVP links by mailed invitation.',
   ],
   hotels,
@@ -99,8 +122,9 @@ export const siteContent = {
     {
       src: '/hero-wedding.png',
       alt: 'Candlelit garden reception table at sunset',
-      caption: 'Scottsdale, Arizona',
-      detail: 'A desert-garden preview while engagement and wedding-weekend photos are gathered.',
+      caption: 'Mesa, Arizona',
+      detail:
+        'A desert-garden preview while engagement and wedding-weekend photos are gathered.',
       objectPosition: 'center',
     },
     {
@@ -125,11 +149,13 @@ export const siteContent = {
     },
     {
       question: 'Can I bring a guest?',
-      answer: 'Your invitation link will show the guests included with your household.',
+      answer:
+        'Your invitation link will show the guests included with your household.',
     },
     {
       question: 'What should I wear?',
-      answer: 'Garden formal attire is encouraged. Bring a light layer for the evening.',
+      answer:
+        'Garden formal attire is encouraged. Bring a light layer for the evening.',
     },
     {
       question: 'Where should I find updates?',
