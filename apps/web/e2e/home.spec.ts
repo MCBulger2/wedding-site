@@ -252,6 +252,64 @@ test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', as
   );
 });
 
+test('rsvp recovery stays collapsed by default and shows generic success when expanded', async ({
+  page,
+}) => {
+  await page.route('**/api/rsvp/recovery', async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accepted: true,
+        message:
+          "If that matches our guest list, we'll send your private RSVP link.",
+      }),
+    });
+  });
+
+  await page.goto('/rsvp');
+
+  await expect(
+    page.getByRole('button', { name: "Don't have a code?" }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByLabel('Email or mobile number')).toHaveCount(0);
+
+  await page.getByRole('button', { name: "Don't have a code?" }).click();
+  await expect(
+    page.getByRole('button', { name: "Don't have a code?" }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByLabel('Email or mobile number')).toBeFocused();
+
+  await page.getByLabel('Email or mobile number').fill('sam@example.com');
+  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
+  await expect(
+    page.getByText(
+      "If that matches our guest list, we'll send your private RSVP link.",
+    ),
+  ).toBeVisible();
+});
+
+test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/rsvp');
+
+  await page.getByRole('button', { name: "Don't have a code?" }).click();
+  await expect(page.getByLabel('Email or mobile number')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Send private RSVP link' }),
+  ).toBeVisible();
+
+  const cardBounds = await page.locator('.lookup-card').boundingBox();
+  const buttonBounds = await page
+    .getByRole('button', { name: 'Send private RSVP link' })
+    .boundingBox();
+  expect(cardBounds).not.toBeNull();
+  expect(buttonBounds).not.toBeNull();
+  expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(
+    cardBounds!.x + cardBounds!.width + 1,
+  );
+});
+
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
   await page.route('**/api/admin/auth/config', async (route) => {
     await route.fulfill({

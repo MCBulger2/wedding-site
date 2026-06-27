@@ -674,6 +674,13 @@ button {
   max-width: 520px;
 }
 
+.lookup-divider {
+  background: rgba(36, 42, 47, 0.08);
+  height: 1px;
+  margin: 1.5rem 0 1rem;
+  width: 100%;
+}
+
 .admin-page {
   gap: 1.5rem;
   width: 100%;
@@ -853,6 +860,31 @@ button,
     color 160ms ease,
     opacity 160ms ease,
     transform 160ms ease;
+}
+
+.text-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--accent-strong);
+  display: inline-flex;
+  gap: 0.45rem;
+  justify-content: flex-start;
+  min-height: 46px;
+  padding: 0;
+}
+
+.recovery-toggle {
+  font-weight: 800;
+}
+
+.recovery-form {
+  margin-top: 0.75rem;
+  max-width: 520px;
+}
+
+.recovery-helper {
+  margin: -0.35rem 0 0;
 }
 
 button:not(.secondary-button),
@@ -1684,6 +1716,14 @@ h1 {
   .invite-actions-row > a,
   .invite-actions-row > button {
     width: 100%;
+  }
+
+  .text-button {
+    width: auto;
+  }
+
+  .recovery-form {
+    max-width: none;
   }
 
   .modal-backdrop {

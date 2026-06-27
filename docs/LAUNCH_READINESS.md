@@ -60,6 +60,7 @@ Before printing invitations:
 - Verify invitation email send and re-send reuse the same RSVP URL.
 - Submit and update RSVP responses from invite links.
 - Verify RSVP notification emails arrive and do not contain invite codes or hashes.
+- Verify lost-code recovery email and SMS messages only include the private RSVP link, are sent only to stored household contacts, and do not include a separate plaintext invite-code field.
 - Confirm invite codes are stored only as hashes and KMS-encrypted ciphertext, not raw plaintext DynamoDB attributes or logs.
 - Verify admin dashboard login, household editing, archive behavior, invitation CSV export, RSVP CSV export, and SPA routing.
 - Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, DynamoDB PITR, KMS key access, CloudWatch retention, and Secrets Manager invite-code pepper.

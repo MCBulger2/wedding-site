@@ -14,6 +14,42 @@ let cachedPepper: string | undefined;
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const service = await createService();
+    return handleRequest(service, event);
+  } catch (error) {
+    if (error instanceof PublicError) {
+      return json({ message: error.message, details: error.details }, error.statusCode);
+    }
+
+    console.error(error);
+    return json({ message: 'Something went wrong' }, 500);
+  }
+};
+
+export async function handleRequest(
+  service: Pick<
+    WeddingService,
+    | 'archiveHousehold'
+    | 'createHousehold'
+    | 'exportInvitations'
+    | 'exportRsvps'
+    | 'getRsvp'
+    | 'importHouseholds'
+    | 'listHouseholds'
+    | 'requestRsvpRecovery'
+    | 'revealInvitation'
+    | 'rotateInviteCode'
+    | 'sendHouseholdNotification'
+    | 'sendInvitationEmail'
+    | 'sendInvitationEmails'
+    | 'updateHousehold'
+    | 'updateHouseholdMember'
+    | 'updateInviteLifecycle'
+    | 'updateRsvp'
+    | 'removeHouseholdMember'
+  >,
+  event: Parameters<APIGatewayProxyHandlerV2>[0],
+): Promise<APIGatewayProxyResultV2> {
+  try {
     const method = event.requestContext.http.method;
     const path = normalizePath(event.rawPath);
     const body = parseBody(event.body);
@@ -40,6 +76,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (method === 'PUT' && path.startsWith('/rsvp/')) {
       const inviteCode = decodeURIComponent(path.slice('/rsvp/'.length));
       return json(await service.updateRsvp(inviteCode, body));
+    }
+
+    if (method === 'POST' && path === '/rsvp/recovery') {
+      return json(
+        await service.requestRsvpRecovery(body, {
+          sourceIp: event.requestContext.http.sourceIp,
+          baseUrl: frontendBaseUrl(event),
+        }),
+        202,
+      );
     }
 
     if (method === 'GET' && path === '/admin/households') {
@@ -164,7 +210,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     console.error(error);
     return json({ message: 'Something went wrong' }, 500);
   }
-};
+}
 
 function parseBody(body?: string): any {
   if (!body) {

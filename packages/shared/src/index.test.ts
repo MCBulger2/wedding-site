@@ -3,8 +3,11 @@ import {
   CalendarEventSchema,
   BulkInvitationEmailResponseSchema,
   CreateHouseholdInputSchema,
+  GenericRecoverySuccessMessage,
   HotelBlockSchema,
   InvitationDetailsSchema,
+  RsvpRecoveryAcceptedResponseSchema,
+  RsvpRecoveryRequestSchema,
   RsvpUpdateSchema,
   SendInvitationEmailResponseSchema,
   SendHouseholdNotificationInputSchema,
@@ -133,6 +136,23 @@ describe('SendHouseholdNotificationInputSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('RsvpRecovery schemas', () => {
+  it('accepts a recovery request contact and generic accepted response', () => {
+    expect(
+      RsvpRecoveryRequestSchema.safeParse({
+        contact: 'sam@example.com',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      RsvpRecoveryAcceptedResponseSchema.safeParse({
+        accepted: true,
+        message: GenericRecoverySuccessMessage,
+      }).success,
+    ).toBe(true);
   });
 });
 
