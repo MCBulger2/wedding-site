@@ -169,18 +169,18 @@ export class AwsWeddingNotificationsClient
           ToAddresses: [input.household.email],
         },
         Content: {
-          Simple: {
-            Subject: {
-              Charset: 'UTF-8',
-              Data: email.subject,
-            },
-            Body: {
-              Text: {
+            Simple: {
+              Subject: {
                 Charset: 'UTF-8',
-                Data: email.text,
+                Data: email.subject,
+              },
+              Body: {
+                Html: {
+                  Charset: 'UTF-8',
+                  Data: email.html,
+                },
               },
             },
-          },
         },
       }),
     );
@@ -289,13 +289,35 @@ export function buildHouseholdNotificationEmail(
 export function buildInvitationEmail({
   household,
   invitation,
-}: InvitationEmailInput): { subject: string; text: string } {
+}: InvitationEmailInput): { subject: string; text: string; html: string } {
+  const subject = "You're invited to Matt and Alison's wedding";
+  const intro = [
+    `Hi ${household.displayName},`,
+    "You're invited to Matt and Alison's wedding.",
+    'Please use your private RSVP link to view your household and respond.',
+  ].join('\n');
+  const detailRows: Array<[label: string, value: string]> = [
+    ['Where', `${siteContent.venueName}, ${siteContent.location}`],
+    ['When', `${siteContent.dateLabel} at ${siteContent.ceremonyTime}`],
+    ['Reception', `${siteContent.receptionTime} dinner & reception`],
+    ['Dress code', siteContent.dressCode],
+    ['RSVP by', siteContent.rsvpDeadline],
+    ['Invitation code', invitation.inviteCode],
+  ];
+
   return {
-    subject: "You're invited to Matt and Alison's wedding",
+    subject,
     text: [
       `Hi ${household.displayName},`,
       '',
       "You're invited to Matt and Alison's wedding.",
+      '',
+      `${siteContent.dateLabel} in ${siteContent.location}`,
+      `${siteContent.venueName}`,
+      `${siteContent.ceremonyTime} ceremony`,
+      `${siteContent.receptionTime} dinner & reception`,
+      `Dress code: ${siteContent.dressCode}`,
+      `RSVP by ${siteContent.rsvpDeadline}.`,
       '',
       'Please use your private RSVP link to view your household and respond:',
       invitation.rsvpUrl,
@@ -307,6 +329,20 @@ export function buildInvitationEmail({
       'With love,',
       'Matt and Alison',
     ].join('\n'),
+    html: buildEmailDocument({
+      previewText: `${siteContent.coupleNames} invite you to celebrate with them.`,
+      title: siteContent.coupleNames,
+      subtitle: siteContent.dateLabel,
+      intro,
+      rows: detailRows,
+      schedule: siteContent.schedule,
+      cta: {
+        label: 'Open your RSVP',
+        url: invitation.rsvpUrl,
+      },
+      footer:
+        'This RSVP link and invitation code are private to your household. Please do not forward this email.',
+    }),
   };
 }
 

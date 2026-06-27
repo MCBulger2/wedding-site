@@ -441,6 +441,9 @@ describe('WeddingService', () => {
     expect(email.text).toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
     expect(email.text).toContain(`Invitation code: ${inviteCode}`);
     expect(email.text).toContain('paper invitation');
+    expect(email.html).toContain('Open your RSVP');
+    expect(email.html).toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
+    expect(email.html).toContain(`>${inviteCode}<`);
   });
 
   it('sends household email notifications to the saved contact email', async () => {
