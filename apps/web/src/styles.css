@@ -1185,6 +1185,32 @@ textarea:focus {
   min-width: 0;
 }
 
+.result-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.status-result {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+}
+
+.status-result.sent {
+  border-color: rgba(46, 125, 50, 0.35);
+}
+
+.status-result.failed {
+  border-color: rgba(176, 54, 54, 0.45);
+}
+
+.status-result span {
+  color: var(--copy-muted);
+}
+
 .invite-detail-label {
   color: var(--copy-muted);
   font-size: 0.78rem;
