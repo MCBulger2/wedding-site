@@ -216,20 +216,19 @@ function createPkceVerifier(): string {
 function createRandomString(length: number): string {
   const alphabet =
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  const maxUnbiasedByte = Math.floor(256 / alphabet.length) * alphabet.length;
   let value = '';
 
   while (value.length < length) {
     const remaining = length - value.length;
-    const bytes = crypto.getRandomValues(new Uint8Array(remaining));
+    const bytes = crypto.getRandomValues(
+      new Uint8Array(Math.max(remaining * 4, 32)),
+    );
     for (const byte of bytes) {
-      if (byte >= maxUnbiasedByte) {
+      if (byte >= alphabet.length) {
         continue;
       }
 
-      const alphabetIndex =
-        byte - Math.floor(byte / alphabet.length) * alphabet.length;
-      value += alphabet[alphabetIndex];
+      value += alphabet[byte];
       if (value.length === length) {
         break;
       }

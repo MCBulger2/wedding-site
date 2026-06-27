@@ -198,7 +198,7 @@ test('homepage map link opens Apple Maps on Apple devices', async ({
   ).toHaveAttribute('href', /maps\.apple\/p/);
 });
 
-test('photo carousel advances on horizontal wheel event', async ({ page }) => {
+test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
   await page.goto('/');
 
   await expect(
@@ -213,15 +213,27 @@ test('photo carousel advances on horizontal wheel event', async ({ page }) => {
   if (!box) throw new Error('Carousel bounding box not found');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-  // Horizontal scroll to the right should advance to the next photo
+  await page.mouse.wheel(20, 0);
+  await expect(carousel.getByText('Mesa, Arizona')).toBeVisible();
+
   await page.mouse.wheel(300, 0);
 
-  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  for (let i = 0; i < 3; i += 1) {
+    await page.waitForTimeout(50);
+    await page.mouse.wheel(300, 0);
+  }
+
+  await expect(carousel.getByText('Ceremony preview')).toBeVisible();
   await expect(
     page.getByRole('img', {
       name: 'Temporary test photo of a desert garden ceremony aisle',
     }),
   ).toBeVisible();
+  await expect(carousel.getByText('Cocktail hour preview')).not.toBeVisible();
+
+  await page.waitForTimeout(500);
+  await page.mouse.wheel(300, 0);
+  await expect(carousel.getByText('Cocktail hour preview')).toBeVisible();
 });
 
 test('registry page renders configured links', async ({ page }) => {
@@ -404,8 +416,9 @@ test('guest can look up an invite code and submit an RSVP', async ({
   await expect(
     page.getByRole('heading', { name: 'The Example Household' }),
   ).toBeVisible();
+  await expect(page.getByLabel('Sam Example meal choice')).toHaveCount(0);
 
-  await page.getByLabel('Taylor Example attending').uncheck();
+  await page.getByRole('button', { name: 'Taylor Example not attending' }).click();
   await page.getByRole('button', { name: 'Add plus-one' }).click();
   await page.getByRole('button', { name: 'Save RSVP' }).click();
 
@@ -450,6 +463,8 @@ test('guest can look up an invite code and submit an RSVP', async ({
     page.getByRole('link', { name: 'Review or update RSVP' }),
   ).toBeVisible();
   await expect(page.getByText('submitted')).toBeVisible();
+  await expect(page.getByText('Attending (2)')).toBeVisible();
+  await expect(page.getByText('Not attending (1)')).toBeVisible();
 });
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({
