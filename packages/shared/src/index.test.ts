@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   CalendarEventSchema,
+  BulkInvitationEmailResponseSchema,
   CreateHouseholdInputSchema,
   HotelBlockSchema,
+  InvitationDetailsSchema,
   RsvpUpdateSchema,
+  SendInvitationEmailResponseSchema,
   SendHouseholdNotificationInputSchema,
   UpdateHouseholdInputSchema,
   generateIcs,
@@ -129,6 +132,45 @@ describe('SendHouseholdNotificationInputSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('invitation admin schemas', () => {
+  it('validates revealed invitation details and email send results', () => {
+    const invitation = InvitationDetailsSchema.safeParse({
+      householdId: 'h1',
+      inviteCode: 'invite-code-123',
+      inviteCodeHash: 'hash',
+      rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+    });
+
+    expect(invitation.success).toBe(true);
+
+    expect(
+      SendInvitationEmailResponseSchema.safeParse({
+        invitation: invitation.success ? invitation.data : undefined,
+        result: {
+          householdId: 'h1',
+          displayName: 'The Example Household',
+          status: 'sent',
+          deliveredTo: 'guest@example.com',
+          message: 'Sent invitation email to guest@example.com',
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      BulkInvitationEmailResponseSchema.safeParse({
+        results: [
+          {
+            householdId: 'h1',
+            displayName: 'The Example Household',
+            status: 'skipped',
+            message: 'Household does not have a contact email address',
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 });
 

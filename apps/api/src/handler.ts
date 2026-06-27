@@ -5,6 +5,7 @@ import {
   createHouseholdMessengerFromEnvironment,
   createNotifierFromEnvironment,
 } from './notifications.js';
+import { createInviteCodeProtectorFromEnvironment } from './inviteCodeProtector.js';
 import { PublicError, WeddingService } from './service.js';
 
 const secrets = new SecretsManagerClient({});
@@ -98,6 +99,26 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       );
     }
 
+    const invitationMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation$/);
+    if (method === 'GET' && invitationMatch) {
+      return json(
+        await service.revealInvitation(
+          decodeURIComponent(invitationMatch[1]),
+          frontendBaseUrl(event),
+        ),
+      );
+    }
+
+    const invitationEmailMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation-email$/);
+    if (method === 'POST' && invitationEmailMatch) {
+      return json(
+        await service.sendInvitationEmail(
+          decodeURIComponent(invitationEmailMatch[1]),
+          frontendBaseUrl(event),
+        ),
+      );
+    }
+
     const householdNotificationMatch = path.match(/^\/admin\/households\/([^/]+)\/notifications$/);
     if (method === 'POST' && householdNotificationMatch) {
       return json(
@@ -106,6 +127,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           body,
         ),
       );
+    }
+
+    if (method === 'POST' && path === '/admin/invitations/email') {
+      return json(await service.sendInvitationEmails(frontendBaseUrl(event)));
     }
 
     if (method === 'GET' && path === '/admin/rsvps/export') {
@@ -120,18 +145,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     if (method === 'GET' && path === '/admin/invitations/export') {
-      const baseUrl =
-        firstPopulatedValue(
-          process.env.FRONTEND_BASE_URL,
-          headerValue(event.headers, 'origin'),
-        ) ?? 'https://example.com';
       return {
         statusCode: 200,
         headers: {
           'content-type': 'text/csv; charset=utf-8',
           'content-disposition': 'attachment; filename="invitations.csv"',
         },
-        body: await service.exportInvitations(baseUrl),
+        body: await service.exportInvitations(frontendBaseUrl(event)),
       };
     }
 
@@ -181,6 +201,7 @@ async function createService(): Promise<WeddingService> {
     pepper,
     createNotifierFromEnvironment(),
     createHouseholdMessengerFromEnvironment(),
+    createInviteCodeProtectorFromEnvironment(),
   );
 }
 
@@ -219,4 +240,13 @@ function headerValue(headers: Record<string, string | undefined>, name: string):
 
 function firstPopulatedValue(...values: Array<string | undefined>): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
+}
+
+function frontendBaseUrl(event: Parameters<APIGatewayProxyHandlerV2>[0]): string {
+  return (
+    firstPopulatedValue(
+      process.env.FRONTEND_BASE_URL,
+      headerValue(event.headers, 'origin'),
+    ) ?? 'https://example.com'
+  );
 }

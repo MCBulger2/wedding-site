@@ -8,13 +8,22 @@ export interface InviteCodeLookup {
   createdAt: string;
 }
 
+export interface InviteCodeSecret {
+  householdId: string;
+  inviteCodeHash: string;
+  inviteCodeCiphertext: string;
+  updatedAt: string;
+}
+
 export interface WeddingRepository {
   getHousehold(householdId: string): Promise<Household | undefined>;
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
+  getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined>;
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
   saveHousehold(household: Household): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
+  saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void>;
   saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void>;
 }
 
@@ -29,6 +38,12 @@ interface StoredInviteLookupItem extends InviteCodeLookup {
   pk: string;
   sk: string;
   entityType: 'InviteCodeLookup';
+}
+
+interface StoredInviteCodeSecretItem extends InviteCodeSecret {
+  pk: string;
+  sk: string;
+  entityType: 'InviteCodeSecret';
 }
 
 export class DynamoWeddingRepository implements WeddingRepository {
@@ -62,6 +77,27 @@ export class DynamoWeddingRepository implements WeddingRepository {
     }
 
     return this.getHousehold((lookup.Item as StoredInviteLookupItem).householdId);
+  }
+
+  async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: inviteCodeSecretKey(householdId),
+      }),
+    );
+
+    if (!result.Item) {
+      return undefined;
+    }
+
+    const item = result.Item as StoredInviteCodeSecretItem;
+    return {
+      householdId: item.householdId,
+      inviteCodeHash: item.inviteCodeHash,
+      inviteCodeCiphertext: item.inviteCodeCiphertext,
+      updatedAt: item.updatedAt,
+    };
   }
 
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
@@ -120,6 +156,19 @@ export class DynamoWeddingRepository implements WeddingRepository {
     );
   }
 
+  async saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void> {
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          ...secret,
+          ...inviteCodeSecretKey(secret.householdId),
+          entityType: 'InviteCodeSecret',
+        } satisfies StoredInviteCodeSecretItem,
+      }),
+    );
+  }
+
   async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
     const household = await this.getHousehold(householdId);
     if (!household) {
@@ -145,6 +194,7 @@ export class DynamoWeddingRepository implements WeddingRepository {
 export class InMemoryWeddingRepository implements WeddingRepository {
   readonly households = new Map<string, Household>();
   readonly inviteLookups = new Map<string, InviteCodeLookup>();
+  readonly inviteCodeSecrets = new Map<string, InviteCodeSecret>();
   readonly rsvps = new Map<string, StoredRsvp>();
 
   async getHousehold(householdId: string): Promise<Household | undefined> {
@@ -156,6 +206,10 @@ export class InMemoryWeddingRepository implements WeddingRepository {
   async getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined> {
     const lookup = this.inviteLookups.get(inviteCodeHash);
     return lookup ? this.getHousehold(lookup.householdId) : undefined;
+  }
+
+  async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
+    return this.inviteCodeSecrets.get(householdId);
   }
 
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
@@ -176,6 +230,10 @@ export class InMemoryWeddingRepository implements WeddingRepository {
 
   async saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void> {
     this.inviteLookups.set(lookup.inviteCodeHash, lookup);
+  }
+
+  async saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void> {
+    this.inviteCodeSecrets.set(secret.householdId, secret);
   }
 
   async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
@@ -209,6 +267,10 @@ function householdKey(householdId: string) {
 
 function inviteLookupKey(inviteCodeHash: string) {
   return { pk: `INVITE#${inviteCodeHash}`, sk: 'LOOKUP' };
+}
+
+function inviteCodeSecretKey(householdId: string) {
+  return { pk: `HOUSEHOLD#${householdId}`, sk: 'INVITE_CODE_SECRET' };
 }
 
 function fromHouseholdItem(item: StoredHouseholdItem): Household {

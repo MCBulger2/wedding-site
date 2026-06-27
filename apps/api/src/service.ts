@@ -2,10 +2,14 @@ import {
   CreateHouseholdInputSchema,
   formatValidationIssues,
   type AdminHouseholdRecord,
+  type BulkInvitationEmailResponse,
   GenericInviteError,
   HouseholdImportRowSchema,
   InviteLifecycleUpdateSchema,
+  type InvitationDetails,
+  type InvitationEmailResult,
   RsvpUpdateSchema,
+  type SendInvitationEmailResponse,
   SendHouseholdNotificationInputSchema,
   type SendHouseholdNotificationResponse,
   UpdateHouseholdInputSchema,
@@ -19,6 +23,7 @@ import { randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
 import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
 import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
+import type { InviteCodeProtector } from './inviteCodeProtector.js';
 import type { HouseholdMessenger, RsvpNotifier } from './notifications.js';
 import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
 
@@ -38,6 +43,7 @@ export class WeddingService {
     private readonly inviteCodePepper: string,
     private readonly rsvpNotifier?: RsvpNotifier,
     private readonly householdMessenger?: HouseholdMessenger,
+    private readonly inviteCodeProtector?: InviteCodeProtector,
   ) {}
 
   async getRsvp(inviteCode: string): Promise<{ household: Household; rsvp?: StoredRsvp }> {
@@ -84,6 +90,9 @@ export class WeddingService {
           household,
           rsvp,
           attendance: summarizeAttendance(household, rsvp),
+          hasRecoverableInviteCode: Boolean(
+            await this.repository.getInviteCodeSecret(household.householdId),
+          ),
         };
       }),
     );
@@ -295,11 +304,7 @@ export class WeddingService {
     const rotatedAt = new Date().toISOString();
     const inviteCode = generateInviteCode();
     const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
-    await this.repository.saveInviteCodeLookup({
-      householdId,
-      inviteCodeHash,
-      createdAt: rotatedAt,
-    });
+    await this.saveInviteCodeArtifacts(householdId, inviteCode, inviteCodeHash, rotatedAt);
     await this.repository.saveHousehold({
       ...household,
       inviteLifecycleStatus: 'generated',
@@ -310,6 +315,80 @@ export class WeddingService {
     });
 
     return { inviteCode, inviteCodeHash };
+  }
+
+  async revealInvitation(householdId: string, baseUrl: string): Promise<InvitationDetails> {
+    const household = await this.requireHousehold(householdId);
+    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+      throw new PublicError('Archived household invitations cannot be revealed', 409);
+    }
+
+    const inviteCode = await this.getRecoverableInviteCode(household);
+    if (!inviteCode || !household.inviteCodeHash) {
+      throw new PublicError('This invitation does not have a recoverable invite code', 404);
+    }
+
+    return this.buildInvitationDetails(household, inviteCode, baseUrl);
+  }
+
+  async sendInvitationEmail(
+    householdId: string,
+    baseUrl: string,
+  ): Promise<SendInvitationEmailResponse> {
+    const household = await this.requireHousehold(householdId);
+    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+      return {
+        result: invitationEmailResult(household, 'skipped', 'Archived households cannot receive invitation emails'),
+      };
+    }
+    if (!household.email) {
+      return {
+        result: invitationEmailResult(household, 'skipped', 'Household does not have a contact email address'),
+      };
+    }
+    if (!this.householdMessenger) {
+      throw new PublicError('Outbound household notifications are not available', 503);
+    }
+
+    const invitation = await this.ensureRecoverableInvitation(household, baseUrl);
+    try {
+      const result = await this.householdMessenger.sendInvitationEmail({
+        household,
+        invitation,
+      });
+      await this.markInvitationSent(household);
+      return { result, invitation };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send invitation email';
+      return {
+        invitation,
+        result: invitationEmailResult(household, 'failed', message),
+      };
+    }
+  }
+
+  async sendInvitationEmails(baseUrl: string): Promise<BulkInvitationEmailResponse> {
+    const households = (await this.repository.listHouseholds()).filter(
+      (household) => !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
+    );
+    const results: InvitationEmailResult[] = [];
+
+    for (const household of households) {
+      try {
+        const response = await this.sendInvitationEmail(household.householdId, baseUrl);
+        results.push(response.result);
+      } catch (error) {
+        results.push(
+          invitationEmailResult(
+            household,
+            'failed',
+            error instanceof Error ? error.message : 'Unable to send invitation email',
+          ),
+        );
+      }
+    }
+
+    return { results };
   }
 
   async sendHouseholdNotification(
@@ -372,7 +451,11 @@ export class WeddingService {
     const now = new Date().toISOString();
 
     for (const household of households) {
-      if (household.inviteLifecycleStatus === 'sent') {
+      const inviteCode =
+        (await this.getRecoverableInviteCode(household)) ??
+        (!household.inviteCodeHash ? generateInviteCode() : undefined);
+
+      if (!inviteCode) {
         rows.push({
           household,
           rsvpUrl: '',
@@ -381,24 +464,26 @@ export class WeddingService {
         continue;
       }
 
-      const inviteCode = generateInviteCode();
       const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
-      await this.repository.saveInviteCodeLookup({
-        householdId: household.householdId,
-        inviteCodeHash,
-        createdAt: now,
-      });
+      if (!household.inviteCodeHash) {
+        await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
+      }
 
-      const updated: Household = {
-        ...household,
-        inviteLifecycleStatus: 'exported',
-        inviteCodeHash,
-        inviteCodeGeneratedAt: household.inviteCodeGeneratedAt ?? now,
-        inviteExportedAt: household.inviteExportedAt ?? now,
-        inviteCodeLastRotatedAt: now,
-        updatedAt: now,
-      };
-      await this.repository.saveHousehold(updated);
+      const updated: Household =
+        household.inviteLifecycleStatus === 'sent'
+          ? household
+          : {
+              ...household,
+              inviteLifecycleStatus: 'exported',
+              inviteCodeHash,
+              inviteCodeGeneratedAt: household.inviteCodeGeneratedAt ?? now,
+              inviteExportedAt: household.inviteExportedAt ?? now,
+              inviteCodeLastRotatedAt: household.inviteCodeLastRotatedAt ?? now,
+              updatedAt: now,
+            };
+      if (updated !== household) {
+        await this.repository.saveHousehold(updated);
+      }
 
       const rsvpUrl = `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`;
       rows.push({
@@ -409,6 +494,99 @@ export class WeddingService {
     }
 
     return invitationExportToCsv(rows);
+  }
+
+  private async ensureRecoverableInvitation(
+    household: Household,
+    baseUrl: string,
+  ): Promise<InvitationDetails> {
+    const existingInviteCode = await this.getRecoverableInviteCode(household);
+    if (existingInviteCode && household.inviteCodeHash) {
+      return this.buildInvitationDetails(household, existingInviteCode, baseUrl);
+    }
+
+    if (household.inviteCodeHash) {
+      throw new PublicError('This invitation code exists but is not recoverable. Rotate it before emailing.', 409);
+    }
+
+    const now = new Date().toISOString();
+    const inviteCode = generateInviteCode();
+    const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
+    await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
+    const updated: Household = {
+      ...household,
+      inviteLifecycleStatus: 'generated',
+      inviteCodeHash,
+      inviteCodeGeneratedAt: household.inviteCodeGeneratedAt ?? now,
+      inviteCodeLastRotatedAt: now,
+      updatedAt: now,
+    };
+    await this.repository.saveHousehold(updated);
+    return this.buildInvitationDetails(updated, inviteCode, baseUrl);
+  }
+
+  private async saveInviteCodeArtifacts(
+    householdId: string,
+    inviteCode: string,
+    inviteCodeHash: string,
+    timestamp: string,
+  ): Promise<void> {
+    if (!this.inviteCodeProtector) {
+      throw new PublicError('Recoverable invite-code storage is not configured', 503);
+    }
+
+    await this.repository.saveInviteCodeLookup({
+      householdId,
+      inviteCodeHash,
+      createdAt: timestamp,
+    });
+    await this.repository.saveInviteCodeSecret({
+      householdId,
+      inviteCodeHash,
+      inviteCodeCiphertext: await this.inviteCodeProtector.encryptInviteCode(inviteCode),
+      updatedAt: timestamp,
+    });
+  }
+
+  private async getRecoverableInviteCode(household: Household): Promise<string | undefined> {
+    if (!household.inviteCodeHash || !this.inviteCodeProtector) {
+      return undefined;
+    }
+
+    const secret = await this.repository.getInviteCodeSecret(household.householdId);
+    if (!secret || secret.inviteCodeHash !== household.inviteCodeHash) {
+      return undefined;
+    }
+
+    const inviteCode = await this.inviteCodeProtector.decryptInviteCode(secret.inviteCodeCiphertext);
+    if (hashInviteCode(inviteCode, this.inviteCodePepper) !== household.inviteCodeHash) {
+      throw new PublicError('Stored invite code does not match the current household invite hash', 409);
+    }
+
+    return inviteCode;
+  }
+
+  private buildInvitationDetails(
+    household: Household,
+    inviteCode: string,
+    baseUrl: string,
+  ): InvitationDetails {
+    return {
+      householdId: household.householdId,
+      inviteCode,
+      inviteCodeHash: household.inviteCodeHash ?? hashInviteCode(inviteCode, this.inviteCodePepper),
+      rsvpUrl: `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`,
+    };
+  }
+
+  private async markInvitationSent(household: Household): Promise<void> {
+    const now = new Date().toISOString();
+    await this.repository.saveHousehold({
+      ...household,
+      inviteLifecycleStatus: 'sent',
+      inviteSentAt: household.inviteSentAt ?? now,
+      updatedAt: now,
+    });
   }
 
   private async findHouseholdByInviteCode(inviteCode: string): Promise<Household> {
@@ -564,5 +742,19 @@ function summarizeAttendance(
     declinedGuests,
     pendingGuests: 0,
     plusOneGuests: rsvp.plusOnes.length,
+  };
+}
+
+function invitationEmailResult(
+  household: Household,
+  status: InvitationEmailResult['status'],
+  message: string,
+): InvitationEmailResult {
+  return {
+    householdId: household.householdId,
+    displayName: household.displayName,
+    status,
+    deliveredTo: status === 'sent' ? household.email : undefined,
+    message,
   };
 }
