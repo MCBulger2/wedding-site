@@ -198,7 +198,7 @@ test('homepage map link opens Apple Maps on Apple devices', async ({ page }) => 
   ).toHaveAttribute('href', /maps\.apple\/p/);
 });
 
-test('photo carousel advances on horizontal wheel event', async ({ page }) => {
+test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
   await page.goto('/');
 
   await expect(
@@ -211,15 +211,27 @@ test('photo carousel advances on horizontal wheel event', async ({ page }) => {
   if (!box) throw new Error('Carousel bounding box not found');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-  // Horizontal scroll to the right should advance to the next photo
+  await page.mouse.wheel(20, 0);
+  await expect(carousel.getByText('Mesa, Arizona')).toBeVisible();
+
   await page.mouse.wheel(300, 0);
 
-  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  for (let i = 0; i < 3; i += 1) {
+    await page.waitForTimeout(50);
+    await page.mouse.wheel(300, 0);
+  }
+
+  await expect(carousel.getByText('Ceremony preview')).toBeVisible();
   await expect(
     page.getByRole('img', {
       name: 'Temporary test photo of a desert garden ceremony aisle',
     }),
   ).toBeVisible();
+  await expect(carousel.getByText('Cocktail hour preview')).not.toBeVisible();
+
+  await page.waitForTimeout(500);
+  await page.mouse.wheel(300, 0);
+  await expect(carousel.getByText('Cocktail hour preview')).toBeVisible();
 });
 
 test('registry page renders configured links', async ({ page }) => {
