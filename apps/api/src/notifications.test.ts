@@ -1,6 +1,10 @@
 import { SNSClient } from '@aws-sdk/client-sns';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
-import { siteContent, type Household, type StoredRsvp } from '@matt-alison-wedding/shared';
+import {
+  siteContent,
+  type Household,
+  type StoredRsvp,
+} from '@matt-alison-wedding/shared';
 import { describe, expect, it } from 'vitest';
 import {
   AwsWeddingNotificationsClient,
@@ -18,7 +22,8 @@ describe('notifications', () => {
         channel: 'email',
         household: createHousehold(),
         subject: 'Your wedding invitation',
-        message: 'We would love to celebrate with you.\nPlease RSVP when you can.',
+        message:
+          'We would love to celebrate with you.\nPlease RSVP when you can.',
       },
       'https://wedding.example.com',
     );
@@ -41,7 +46,9 @@ describe('notifications', () => {
     });
 
     expect(email.text).toContain('<script>alert("x")</script>');
-    expect(email.html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+    expect(email.html).toContain(
+      '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;',
+    );
     expect(email.html).not.toContain('<script>');
   });
 
@@ -78,8 +85,18 @@ describe('notifications', () => {
     });
     const rsvp: StoredRsvp = {
       members: [
-        { memberId: 'h1-1', attending: true, mealChoice: 'chicken', dietaryNotes: '' },
-        { memberId: 'h1-2', attending: false, mealChoice: 'none', dietaryNotes: '' },
+        {
+          memberId: 'h1-1',
+          attending: true,
+          mealChoice: 'chicken',
+          dietaryNotes: '',
+        },
+        {
+          memberId: 'h1-2',
+          attending: false,
+          mealChoice: 'none',
+          dietaryNotes: '',
+        },
       ],
       plusOnes: [],
       notes: '',
@@ -105,19 +122,19 @@ describe('notifications', () => {
       household: createHousehold(),
       invitation: {
         householdId: 'h1',
-        inviteCode: 'invite-code-123',
+        inviteCode: 'A2B3C4D5E6',
         inviteCodeHash: 'hash-value',
-        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+        rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
       },
     });
 
     expect(email.subject).toBe("You're invited to Matt and Alison's wedding");
-    expect(email.text).toContain('https://wedding.example.com/rsvp/invite-code-123');
-    expect(email.text).toContain('Invitation code: invite-code-123');
+    expect(email.text).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
+    expect(email.text).toContain('Invitation code: A2B3C4D5E6');
     expect(email.html).toContain('Open your RSVP');
-    expect(email.html).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(email.html).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.html).toContain('Invitation code');
-    expect(email.html).toContain('invite-code-123');
+    expect(email.html).toContain('A2B3C4D5E6');
     expect(email.html).toContain(siteContent.venueName);
     expect(email.html).toContain(siteContent.rsvpDeadline);
   });
@@ -137,9 +154,9 @@ describe('notifications', () => {
       household: createHousehold(),
       invitation: {
         householdId: 'h1',
-        inviteCode: 'invite-code-123',
+        inviteCode: 'A2B3C4D5E6',
         inviteCodeHash: 'hash-value',
-        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+        rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
       },
     });
 
@@ -148,7 +165,7 @@ describe('notifications', () => {
     expect(body?.Text).toBeUndefined();
     expect(body?.Html?.Data).toContain('Matt &amp; Alison');
     expect(body?.Html?.Data).toContain('Open your RSVP');
-    expect(body?.Html?.Data).toContain('invite-code-123');
+    expect(body?.Html?.Data).toContain('A2B3C4D5E6');
   });
 
   it('builds recovery email content with the private RSVP link and no separate invite code field', () => {
@@ -156,13 +173,13 @@ describe('notifications', () => {
       household: createHousehold(),
       invitation: {
         householdId: 'h1',
-        inviteCode: 'invite-code-123',
+        inviteCode: 'A2B3C4D5E6',
         inviteCodeHash: 'hash-value',
-        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+        rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
       },
     });
 
-    expect(email.text).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(email.text).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.text).not.toContain('Invitation code:');
     expect(email.html).toContain('Open your RSVP');
     expect(email.html).not.toContain('Invitation code');
@@ -173,13 +190,13 @@ describe('notifications', () => {
       household: createHousehold({ phone: '+14805550100' }),
       invitation: {
         householdId: 'h1',
-        inviteCode: 'invite-code-123',
+        inviteCode: 'A2B3C4D5E6',
         inviteCodeHash: 'hash-value',
-        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+        rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
       },
     });
 
-    expect(message).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(message).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(message).not.toContain('Invitation code');
   });
 });
@@ -199,8 +216,18 @@ function createHousehold(overrides: Partial<Household> = {}): Household {
     displayName: 'The Example Household',
     email: 'guest@example.com',
     members: [
-      { id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true },
-      { id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false },
+      {
+        id: 'h1-1',
+        firstName: 'Sam',
+        lastName: 'Example',
+        canBringPlusOne: true,
+      },
+      {
+        id: 'h1-2',
+        firstName: 'Taylor',
+        lastName: 'Example',
+        canBringPlusOne: false,
+      },
     ],
     maxPlusOnes: 1,
     rsvpStatus: 'not_started',

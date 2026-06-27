@@ -126,9 +126,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Where to stay' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'TBD Hotel' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TBD Hotel' })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
@@ -177,7 +175,9 @@ test('homepage details render on mobile', async ({ page }) => {
   ).toHaveAttribute('href', /^data:text\/calendar/);
 });
 
-test('homepage map link opens Apple Maps on Apple devices', async ({ page }) => {
+test('homepage map link opens Apple Maps on Apple devices', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Object.defineProperty(window.navigator, 'platform', {
       configurable: true,
@@ -202,7 +202,9 @@ test('photo carousel advances on horizontal wheel event', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByRole('img', { name: 'Candlelit garden reception table at sunset' }),
+    page.getByRole('img', {
+      name: 'Candlelit garden reception table at sunset',
+    }),
   ).toBeVisible();
 
   const carousel = page.getByLabel('Matt and Alison photos');
@@ -228,9 +230,7 @@ test('registry page renders configured links', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
-  await expect(
-    page.getByText('Your presence is the best gift.'),
-  ).toBeVisible();
+  await expect(page.getByText('Your presence is the best gift.')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
@@ -363,7 +363,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
   let savedBody: any;
   let savedRsvp: any;
 
-  await page.route('**/api/rsvp/test-invite-code-123', async (route) => {
+  await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -397,10 +397,10 @@ test('guest can look up an invite code and submit an RSVP', async ({
   });
 
   await page.goto('/rsvp');
-  await page.getByLabel('Invitation code').fill('test-invite-code-123');
+  await page.getByLabel('Invitation code').fill('a2b3c4d5e6');
   await page.getByRole('button', { name: 'View RSVP' }).click();
 
-  await expect(page).toHaveURL(/\/rsvp\/test-invite-code-123$/);
+  await expect(page).toHaveURL(/\/rsvp\/A2B3C4D5E6$/);
   await expect(
     page.getByRole('heading', { name: 'The Example Household' }),
   ).toBeVisible();
@@ -442,7 +442,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
     notes: 'Excited to celebrate.',
   });
 
-  await expect(page).toHaveURL(/\/rsvp\/test-invite-code-123\/success$/);
+  await expect(page).toHaveURL(/\/rsvp\/A2B3C4D5E6\/success$/);
   await expect(
     page.getByRole('heading', { name: 'RSVP received' }),
   ).toBeVisible();
@@ -577,43 +577,47 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
-  await page.route('**/api/admin/households/h1/notifications', async (route) => {
-    const payload = route.request().postDataJSON() as {
-      channel: 'email' | 'sms';
-      subject?: string;
-      message: string;
-    };
-    const deliveredTo =
-      payload.channel === 'email'
-        ? String(
-            households.find((record) => record.household.householdId === 'h1')
-              ?.household.email ?? '',
-          )
-        : String(
-            households.find((record) => record.household.householdId === 'h1')
-              ?.household.phone ?? '',
-          );
-    deliveredNotifications.push({ ...payload, deliveredTo });
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        channel: payload.channel,
-        deliveredTo,
-      }),
-    });
-  });
+  await page.route(
+    '**/api/admin/households/h1/notifications',
+    async (route) => {
+      const payload = route.request().postDataJSON() as {
+        channel: 'email' | 'sms';
+        subject?: string;
+        message: string;
+      };
+      const deliveredTo =
+        payload.channel === 'email'
+          ? String(
+              households.find((record) => record.household.householdId === 'h1')
+                ?.household.email ?? '',
+            )
+          : String(
+              households.find((record) => record.household.householdId === 'h1')
+                ?.household.phone ?? '',
+            );
+      deliveredNotifications.push({ ...payload, deliveredTo });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          channel: payload.channel,
+          deliveredTo,
+        }),
+      });
+    },
+  );
 
   await page.route('**/api/admin/households/*/invitation', async (route) => {
     const requestOrigin = new URL(route.request().url()).origin;
     const householdId =
-      route.request().url().match(/households\/([^/]+)\/invitation/)?.[1] ??
-      '';
+      route
+        .request()
+        .url()
+        .match(/households\/([^/]+)\/invitation/)?.[1] ?? '';
     const record = households.find(
       (entry) => entry.household.householdId === householdId,
     );
-    const inviteCode =
-      householdId === 'h2' ? 'fresh-invite-code-456' : 'test-invite-code-123';
+    const inviteCode = householdId === 'h2' ? 'FRESH22456' : 'A2B3C4D5E6';
 
     await route.fulfill({
       status: record ? 200 : 404,
@@ -631,63 +635,67 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
-  await page.route('**/api/admin/households/*/invitation-email', async (route) => {
-    const requestOrigin = new URL(route.request().url()).origin;
-    const householdId =
-      route.request().url().match(/households\/([^/]+)\/invitation-email/)?.[1] ??
-      '';
-    const record = households.find(
-      (entry) => entry.household.householdId === householdId,
-    );
-    const inviteCode =
-      householdId === 'h2' ? 'fresh-invite-code-456' : 'test-invite-code-123';
+  await page.route(
+    '**/api/admin/households/*/invitation-email',
+    async (route) => {
+      const requestOrigin = new URL(route.request().url()).origin;
+      const householdId =
+        route
+          .request()
+          .url()
+          .match(/households\/([^/]+)\/invitation-email/)?.[1] ?? '';
+      const record = households.find(
+        (entry) => entry.household.householdId === householdId,
+      );
+      const inviteCode = householdId === 'h2' ? 'FRESH22456' : 'A2B3C4D5E6';
 
-    if (!record) {
-      await route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Household not found' }),
+      if (!record) {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Household not found' }),
+        });
+        return;
+      }
+
+      households = households.map((entry) =>
+        entry.household.householdId === householdId
+          ? {
+              ...entry,
+              household: {
+                ...entry.household,
+                inviteLifecycleStatus: 'sent',
+                inviteSentAt: '2026-06-15T22:30:00.000Z',
+              },
+            }
+          : entry,
+      );
+      deliveredInvitationEmails.push({
+        householdId,
+        deliveredTo: String(record.household.email ?? ''),
       });
-      return;
-    }
 
-    households = households.map((entry) =>
-      entry.household.householdId === householdId
-        ? {
-            ...entry,
-            household: {
-              ...entry.household,
-              inviteLifecycleStatus: 'sent',
-              inviteSentAt: '2026-06-15T22:30:00.000Z',
-            },
-          }
-        : entry,
-    );
-    deliveredInvitationEmails.push({
-      householdId,
-      deliveredTo: String(record.household.email ?? ''),
-    });
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        invitation: {
-          householdId,
-          inviteCode,
-          inviteCodeHash: record.household.inviteCodeHash,
-          rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
-        },
-        result: {
-          householdId,
-          displayName: record.household.displayName,
-          status: 'sent',
-          deliveredTo: record.household.email,
-          message: `Sent invitation email to ${record.household.email}`,
-        },
-      }),
-    });
-  });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          invitation: {
+            householdId,
+            inviteCode,
+            inviteCodeHash: record.household.inviteCodeHash,
+            rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
+          },
+          result: {
+            householdId,
+            displayName: record.household.displayName,
+            status: 'sent',
+            deliveredTo: record.household.email,
+            message: `Sent invitation email to ${record.household.email}`,
+          },
+        }),
+      });
+    },
+  );
 
   await page.route('**/api/admin/households/h2/invite-code', async (route) => {
     households = households.map((record) =>
@@ -707,7 +715,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        inviteCode: 'fresh-invite-code-456',
+        inviteCode: 'FRESH22456',
         inviteCodeHash: 'hash-value',
       }),
     });
@@ -937,9 +945,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .fill('The shuttle now departs at 4:15 PM.');
   await page.getByRole('button', { name: 'Send update' }).click();
   await expect(
-    page.getByText(
-      'Sent EMAIL to The Example Household at sam@example.com.',
-    ),
+    page.getByText('Sent EMAIL to The Example Household at sam@example.com.'),
   ).toBeVisible();
   expect(deliveredNotifications[0]).toMatchObject({
     channel: 'email',
@@ -955,9 +961,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .fill('Ceremony starts at 3:00 PM.');
   await page.getByRole('button', { name: 'Send update' }).click();
   await expect(
-    page.getByText(
-      'Sent SMS to The Example Household at +14805550100.',
-    ),
+    page.getByText('Sent SMS to The Example Household at +14805550100.'),
   ).toBeVisible();
   expect(deliveredNotifications[1]).toMatchObject({
     channel: 'sms',
@@ -984,12 +988,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await clickHouseholdAction(exampleCard, 'View invitation');
   await expect(
     exampleCard.getByRole('link', {
-      name: new URL('/rsvp/test-invite-code-123', page.url()).toString(),
+      name: new URL('/rsvp/A2B3C4D5E6', page.url()).toString(),
     }),
   ).toBeVisible();
   await exampleCard.getByRole('button', { name: 'Email invitation' }).click();
   await expect(
-    page.getByText('The Example Household: Sent invitation email to sam@example.com'),
+    page.getByText(
+      'The Example Household: Sent invitation email to sam@example.com',
+    ),
   ).toBeVisible();
   expect(deliveredInvitationEmails[0]).toMatchObject({
     householdId: 'h1',
@@ -997,8 +1003,12 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   });
 
   await page.getByRole('button', { name: 'Email invitations' }).click();
-  await expect(page.getByRole('dialog', { name: 'Invitation email results' })).toBeVisible();
-  await expect(page.getByText('Sent invitation email to sam@example.com').first()).toBeVisible();
+  await expect(
+    page.getByRole('dialog', { name: 'Invitation email results' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Sent invitation email to sam@example.com').first(),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
   await clickHouseholdAction(exampleCard, 'Edit');
@@ -1052,11 +1062,11 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
   await expect(newCard.locator('.invite-code-block strong').first()).toHaveText(
-    'fresh-invite-code-456',
+    'FRESH22456',
   );
   await expect(
     newCard.getByRole('link', {
-      name: new URL('/rsvp/fresh-invite-code-456', page.url()).toString(),
+      name: new URL('/rsvp/FRESH22456', page.url()).toString(),
     }),
   ).toBeVisible();
   await newCard.getByRole('button', { name: 'QR code' }).click();
@@ -1074,9 +1084,9 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
   await clickHouseholdAction(reloadedCard, 'View invitation');
-  await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
-    'fresh-invite-code-456',
-  );
+  await expect(
+    reloadedCard.locator('.invite-code-block strong').first(),
+  ).toHaveText('FRESH22456');
 });
 
 test('admin route clears malformed stored sessions instead of crashing', async ({

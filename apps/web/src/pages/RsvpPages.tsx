@@ -6,9 +6,23 @@ import {
   type Household,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
-import { CalendarDays, Heart, LifeBuoy, Plus, Search, Send, Trash2 } from 'lucide-react';
+import {
+  CalendarDays,
+  Heart,
+  LifeBuoy,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+} from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, fetchRsvp, recoverRsvpLink, saveRsvp, type RsvpPayload } from '../api.js';
+import {
+  ApiError,
+  fetchRsvp,
+  recoverRsvpLink,
+  saveRsvp,
+  type RsvpPayload,
+} from '../api.js';
 import { siteContent } from '../siteContent.js';
 
 type RsvpFieldErrorMap = Record<string, string>;
@@ -35,7 +49,7 @@ export function RsvpLookupPage() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const normalized = inviteCode.trim();
+    const normalized = inviteCode.trim().toUpperCase();
     if (!normalized) {
       return;
     }
@@ -91,12 +105,14 @@ export function RsvpLookupPage() {
             Invitation code
             <input
               aria-label="Invitation code"
-              autoCapitalize="off"
+              autoCapitalize="characters"
               autoCorrect="off"
               autoFocus
+              inputMode="text"
+              maxLength={128}
               value={inviteCode}
               onChange={(event) => {
-                setInviteCode(event.target.value);
+                setInviteCode(event.target.value.toUpperCase());
               }}
             />
           </label>

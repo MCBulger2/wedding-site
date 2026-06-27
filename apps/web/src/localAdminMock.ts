@@ -244,7 +244,10 @@ export async function mockEmailInvitations(): Promise<BulkEmailInvitationsRespon
 
     results.push(invitationEmailResult(record));
     if (record.household.email) {
-      await mockUpdateInviteLifecycleStatus(record.household.householdId, 'sent');
+      await mockUpdateInviteLifecycleStatus(
+        record.household.householdId,
+        'sent',
+      );
     }
   }
 
@@ -261,7 +264,9 @@ export async function mockSendHouseholdNotification(
       ? record.household.email
       : record.household.phone;
   if (!deliveredTo) {
-    throw new Error(`No ${payload.channel} contact is available for this household.`);
+    throw new Error(
+      `No ${payload.channel} contact is available for this household.`,
+    );
   }
 
   return { channel: payload.channel, deliveredTo };
@@ -541,7 +546,9 @@ function attendanceFor(
   };
 }
 
-function invitationEmailResult(record: AdminHouseholdRecord): InvitationEmailResult {
+function invitationEmailResult(
+  record: AdminHouseholdRecord,
+): InvitationEmailResult {
   if (!record.household.email) {
     return {
       householdId: record.household.householdId,
@@ -571,15 +578,19 @@ function invitationFor(household: Household): InvitationDetails {
 }
 
 function codeForHousehold(household: Household): string {
-  if (household.householdId === 'h1') return 'test-invite-code-123';
-  if (household.householdId === 'h2') return 'rivera-invite-code-234';
-  if (household.householdId === 'h3') return 'chen-invite-code-345';
-  return `local-invite-code-${household.householdId.replace(/[^a-z0-9]/gi, '')}`;
+  if (household.householdId === 'h1') return 'A2B3C4D5E6';
+  if (household.householdId === 'h2') return 'R2V3R4A5B6';
+  if (household.householdId === 'h3') return 'C2H3E4N5A6';
+  return `LCL${household.householdId
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase()
+    .padEnd(7, '2')
+    .slice(0, 7)}`;
 }
 
 function nextInviteCode(household: Household): string {
   if (household.householdId.startsWith('local-')) {
-    return `fresh-invite-code-${nextInviteNumber++}`;
+    return `FRESH${String(nextInviteNumber++).padStart(5, '2')}`;
   }
 
   return codeForHousehold(household);
@@ -640,5 +651,8 @@ function emptyToUndefined(value: string | undefined): string | undefined {
 }
 
 function isArchived(household: Household): boolean {
-  return household.inviteLifecycleStatus === 'archived' || Boolean(household.archivedAt);
+  return (
+    household.inviteLifecycleStatus === 'archived' ||
+    Boolean(household.archivedAt)
+  );
 }

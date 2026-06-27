@@ -74,7 +74,10 @@ export async function beginAdminLogin(config: AdminAuthConfig): Promise<void> {
   window.location.assign(authorizeUrl.toString());
 }
 
-export async function completeAdminLogin(config: AdminAuthConfig, location: Location): Promise<AdminSession | undefined> {
+export async function completeAdminLogin(
+  config: AdminAuthConfig,
+  location: Location,
+): Promise<AdminSession | undefined> {
   const url = new URL(location.href);
   const error = url.searchParams.get('error');
   if (error) {
@@ -90,10 +93,14 @@ export async function completeAdminLogin(config: AdminAuthConfig, location: Loca
   }
 
   const expectedState = window.sessionStorage.getItem(sessionStorageKeys.state);
-  const codeVerifier = window.sessionStorage.getItem(sessionStorageKeys.codeVerifier);
+  const codeVerifier = window.sessionStorage.getItem(
+    sessionStorageKeys.codeVerifier,
+  );
   if (!expectedState || !codeVerifier || expectedState !== state) {
     cleanupCallbackParams(url);
-    throw new Error('The admin sign-in session could not be verified. Please try again.');
+    throw new Error(
+      'The admin sign-in session could not be verified. Please try again.',
+    );
   }
 
   const tokenUrl = new URL('/oauth2/token', config.userPoolDomain);
@@ -143,7 +150,9 @@ export function beginAdminLogout(config: AdminAuthConfig): void {
   window.location.assign(logoutUrl.toString());
 }
 
-export function getAdminProfileName(session: AdminSession | undefined): string | undefined {
+export function getAdminProfileName(
+  session: AdminSession | undefined,
+): string | undefined {
   if (!session) {
     return undefined;
   }
@@ -153,7 +162,11 @@ export function getAdminProfileName(session: AdminSession | undefined): string |
     return undefined;
   }
 
-  return optionalString(payload.email) ?? optionalString(payload.name) ?? optionalString(payload['cognito:username']);
+  return (
+    optionalString(payload.email) ??
+    optionalString(payload.name) ??
+    optionalString(payload['cognito:username'])
+  );
 }
 
 function isAdminSession(value: unknown): value is AdminSession {
@@ -185,7 +198,11 @@ function cleanupCallbackParams(url: URL): void {
   url.searchParams.delete('state');
   url.searchParams.delete('error');
   url.searchParams.delete('error_description');
-  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  window.history.replaceState(
+    {},
+    document.title,
+    `${url.pathname}${url.search}${url.hash}`,
+  );
 }
 
 function getAdminRedirectUri(): string {
@@ -197,13 +214,36 @@ function createPkceVerifier(): string {
 }
 
 function createRandomString(length: number): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  const values = crypto.getRandomValues(new Uint8Array(length));
-  return [...values].map((value) => alphabet[value % alphabet.length]).join('');
+  const alphabet =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const maxUnbiasedByte = Math.floor(256 / alphabet.length) * alphabet.length;
+  let value = '';
+
+  while (value.length < length) {
+    const remaining = length - value.length;
+    const bytes = crypto.getRandomValues(new Uint8Array(remaining));
+    for (const byte of bytes) {
+      if (byte >= maxUnbiasedByte) {
+        continue;
+      }
+
+      const alphabetIndex =
+        byte - Math.floor(byte / alphabet.length) * alphabet.length;
+      value += alphabet[alphabetIndex];
+      if (value.length === length) {
+        break;
+      }
+    }
+  }
+
+  return value;
 }
 
 async function createCodeChallenge(codeVerifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(codeVerifier),
+  );
   return base64UrlEncode(new Uint8Array(digest));
 }
 
