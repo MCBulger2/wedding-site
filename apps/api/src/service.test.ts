@@ -509,6 +509,152 @@ describe('WeddingService', () => {
 
     expect(householdMessenger.calls).toHaveLength(0);
   });
+
+  it('returns a generic recovery response when no household matches the contact', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService({}, undefined, householdMessenger);
+
+    const response = await service.requestRsvpRecovery(
+      { contact: 'missing@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(response).toEqual({
+      accepted: true,
+      message: "If that matches our guest list, we'll send your private RSVP link.",
+    });
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(0);
+  });
+
+  it('sends recovery emails for matching eligible households', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService({}, undefined, householdMessenger);
+
+    const response = await service.requestRsvpRecovery(
+      { contact: 'SAM@EXAMPLE.COM ' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(response.accepted).toBe(true);
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(1);
+    expect(householdMessenger.recoveryEmailCalls[0].invitation.rsvpUrl).toBe(
+      `https://wedding.example.com/rsvp/${inviteCode}`,
+    );
+  });
+
+  it('sends recovery SMS messages for matching saved mobile numbers', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      { phone: '+14805550100' },
+      undefined,
+      householdMessenger,
+    );
+
+    await service.requestRsvpRecovery(
+      { contact: '(480) 555-0100' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(householdMessenger.recoverySmsCalls).toHaveLength(1);
+    expect(householdMessenger.recoverySmsCalls[0].household.phone).toBe(
+      '+14805550100',
+    );
+  });
+
+  it('skips archived or non-recoverable households while keeping the public recovery response generic', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {
+        archivedAt: '2026-06-26T00:00:00.000Z',
+        inviteLifecycleStatus: 'archived',
+      },
+      undefined,
+      householdMessenger,
+      { saveRecoverableInviteCode: false },
+    );
+
+    const response = await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(response.accepted).toBe(true);
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(0);
+  });
+
+  it('sends separate recovery messages for multiple households sharing one email address', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service, repository } = await createSeededService({}, undefined, householdMessenger);
+    const secondHouseholdInviteCode = 'other-invite-code-456';
+
+    const secondHousehold: Household = {
+      householdId: 'h2',
+      displayName: 'Second Household',
+      email: 'sam@example.com',
+      members: [
+        { id: 'h2-1', firstName: 'Alex', lastName: 'Example', canBringPlusOne: false },
+      ],
+      maxPlusOnes: 0,
+      rsvpStatus: 'not_started',
+      inviteLifecycleStatus: 'generated',
+      inviteCodeHash: hashInviteCode(secondHouseholdInviteCode, pepper),
+      inviteCodeGeneratedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const inviteCodeProtector = new Base64InviteCodeProtector();
+    await repository.saveHousehold(secondHousehold);
+    await repository.saveInviteCodeLookup({
+      householdId: secondHousehold.householdId,
+      inviteCodeHash: secondHousehold.inviteCodeHash!,
+      createdAt: new Date().toISOString(),
+    });
+    await repository.saveInviteCodeSecret({
+      householdId: secondHousehold.householdId,
+      inviteCodeHash: secondHousehold.inviteCodeHash!,
+      inviteCodeCiphertext: await inviteCodeProtector.encryptInviteCode(secondHouseholdInviteCode),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(2);
+  });
+
+  it('keeps recovery generic after the contact rate limit is exceeded', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService({}, undefined, householdMessenger);
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await service.requestRsvpRecovery(
+        { contact: 'sam@example.com' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+    }
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
+  });
 });
 
 class RecordingNotifier implements RsvpNotifier {
@@ -528,6 +674,10 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly calls: Parameters<HouseholdMessenger['sendHouseholdNotification']>[0][] =
     [];
   readonly invitationCalls: Parameters<HouseholdMessenger['sendInvitationEmail']>[0][] =
+    [];
+  readonly recoveryEmailCalls: Parameters<HouseholdMessenger['sendRecoveryEmail']>[0][] =
+    [];
+  readonly recoverySmsCalls: Parameters<HouseholdMessenger['sendRecoverySms']>[0][] =
     [];
 
   constructor(private readonly failure?: Error) {}
@@ -564,6 +714,24 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
       deliveredTo: input.household.email ?? '',
       message: `Sent invitation email to ${input.household.email ?? ''}`,
     };
+  }
+
+  async sendRecoveryEmail(
+    input: Parameters<HouseholdMessenger['sendRecoveryEmail']>[0],
+  ): Promise<void> {
+    this.recoveryEmailCalls.push(input);
+    if (this.failure) {
+      throw this.failure;
+    }
+  }
+
+  async sendRecoverySms(
+    input: Parameters<HouseholdMessenger['sendRecoverySms']>[0],
+  ): Promise<void> {
+    this.recoverySmsCalls.push(input);
+    if (this.failure) {
+      throw this.failure;
+    }
   }
 }
 

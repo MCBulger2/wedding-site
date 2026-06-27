@@ -166,6 +166,7 @@ export class WeddingSiteStack extends Stack {
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      timeToLiveAttribute: 'ttl',
       removalPolicy,
     });
 
@@ -267,6 +268,12 @@ export class WeddingSiteStack extends Stack {
     api.addRoutes({
       path: '/api/rsvp/{inviteCode}',
       methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
+      integration: apiIntegration,
+    });
+
+    api.addRoutes({
+      path: '/api/rsvp/recovery',
+      methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration,
     });
 

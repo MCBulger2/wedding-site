@@ -35,6 +35,9 @@ export const HouseholdPhoneInputSchema = z
   );
 export type HouseholdPhoneInput = z.infer<typeof HouseholdPhoneInputSchema>;
 
+export const RecoveryContactInputSchema = z.string().trim().min(3).max(320);
+export type RecoveryContactInput = z.infer<typeof RecoveryContactInputSchema>;
+
 export const MailingAddressSchema = z.object({
   line1: z.string().trim().max(160).optional().default(''),
   line2: z.string().trim().max(160).optional().default(''),
@@ -304,7 +307,26 @@ export type SendHouseholdNotificationResponse = z.infer<
   typeof SendHouseholdNotificationResponseSchema
 >;
 
+export const RsvpRecoveryRequestSchema = z.object({
+  contact: RecoveryContactInputSchema,
+});
+export type RsvpRecoveryRequest = z.infer<typeof RsvpRecoveryRequestSchema>;
+
+export const RsvpRecoveryAcceptedResponseSchema = z.object({
+  accepted: z.literal(true),
+  message: z
+    .string()
+    .trim()
+    .min(1)
+    .default("If that matches our guest list, we'll send your private RSVP link."),
+});
+export type RsvpRecoveryAcceptedResponse = z.infer<
+  typeof RsvpRecoveryAcceptedResponseSchema
+>;
+
 export const GenericInviteError = 'We could not find that RSVP. Please check your invitation link.';
+export const GenericRecoverySuccessMessage =
+  "If that matches our guest list, we'll send your private RSVP link.";
 
 export function formatValidationIssues(error: z.ZodError): string[] {
   return error.issues.map((issue) => `${issue.path.join('.') || 'value'}: ${issue.message}`);

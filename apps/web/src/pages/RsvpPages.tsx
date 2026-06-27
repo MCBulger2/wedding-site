@@ -1,7 +1,14 @@
-import { generateIcs, RsvpUpdateSchema, type Household, type StoredRsvp } from '@matt-alison-wedding/shared';
-import { CalendarDays, Heart, Plus, Search, Trash2 } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { ApiError, fetchRsvp, saveRsvp, type RsvpPayload } from '../api.js';
+import {
+  GenericRecoverySuccessMessage,
+  RecoveryContactInputSchema,
+  RsvpUpdateSchema,
+  generateIcs,
+  type Household,
+  type StoredRsvp,
+} from '@matt-alison-wedding/shared';
+import { CalendarDays, Heart, LifeBuoy, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ApiError, fetchRsvp, recoverRsvpLink, saveRsvp, type RsvpPayload } from '../api.js';
 import { siteContent } from '../siteContent.js';
 
 type RsvpFieldErrorMap = Record<string, string>;
@@ -9,6 +16,22 @@ type RsvpFieldErrorMap = Record<string, string>;
 export function RsvpLookupPage() {
   const [inviteCode, setInviteCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
+  const [recoveryExpanded, setRecoveryExpanded] = useState(false);
+  const [recoveryContact, setRecoveryContact] = useState('');
+  const [recoveryStatus, setRecoveryStatus] = useState<
+    'idle' | 'submitting' | 'success'
+  >('idle');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoveryMessage, setRecoveryMessage] = useState('');
+  const recoveryInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!recoveryExpanded) {
+      return;
+    }
+
+    recoveryInputRef.current?.focus();
+  }, [recoveryExpanded]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -18,6 +41,40 @@ export function RsvpLookupPage() {
     }
     setStatus('submitting');
     window.location.assign(`/rsvp/${encodeURIComponent(normalized)}`);
+  };
+
+  const submitRecovery = async (event: FormEvent) => {
+    event.preventDefault();
+    const normalized = recoveryContact.trim();
+    const validation = validateRecoveryContact(normalized);
+    if (validation) {
+      setRecoveryError(validation);
+      setRecoveryMessage('');
+      setRecoveryStatus('idle');
+      return;
+    }
+
+    setRecoveryStatus('submitting');
+    setRecoveryError('');
+    setRecoveryMessage('');
+
+    try {
+      const response = await recoverRsvpLink({ contact: normalized });
+      setRecoveryStatus('success');
+      setRecoveryMessage(response.message || GenericRecoverySuccessMessage);
+    } catch (error) {
+      setRecoveryStatus('idle');
+      if (error instanceof ApiError && error.statusCode === 422) {
+        setRecoveryError(
+          error.details[0]?.replace(/^contact:\s*/i, '') ||
+            'Enter a valid email address or mobile number.',
+        );
+        return;
+      }
+
+      setRecoveryMessage(GenericRecoverySuccessMessage);
+      setRecoveryStatus('success');
+    }
   };
 
   return (
@@ -38,7 +95,9 @@ export function RsvpLookupPage() {
               autoCorrect="off"
               autoFocus
               value={inviteCode}
-              onChange={(event) => setInviteCode(event.target.value)}
+              onChange={(event) => {
+                setInviteCode(event.target.value);
+              }}
             />
           </label>
           <button type="submit" disabled={status === 'submitting'}>
@@ -54,6 +113,85 @@ export function RsvpLookupPage() {
               compact
             />
           </div>
+        )}
+        <div className="lookup-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className="text-button recovery-toggle"
+          aria-expanded={recoveryExpanded}
+          aria-controls="rsvp-recovery-form"
+          onClick={() => {
+            setRecoveryExpanded((current) => !current);
+            setRecoveryError('');
+            setRecoveryMessage('');
+            setRecoveryStatus('idle');
+          }}
+        >
+          <LifeBuoy aria-hidden="true" />
+          Don&apos;t have a code?
+        </button>
+        {recoveryExpanded && (
+          <form
+            id="rsvp-recovery-form"
+            className="lookup-form recovery-form"
+            onSubmit={submitRecovery}
+          >
+            <label className={recoveryError ? 'field-error' : undefined}>
+              Email or mobile number
+              <input
+                ref={recoveryInputRef}
+                aria-describedby={
+                  recoveryError ? 'rsvp-recovery-contact-error' : undefined
+                }
+                aria-invalid={recoveryError ? 'true' : 'false'}
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="email"
+                value={recoveryContact}
+                onChange={(event) => {
+                  setRecoveryContact(event.target.value);
+                  setRecoveryError('');
+                  if (recoveryStatus !== 'submitting') {
+                    setRecoveryMessage('');
+                    setRecoveryStatus('idle');
+                  }
+                }}
+              />
+              {recoveryError && (
+                <span
+                  id="rsvp-recovery-contact-error"
+                  className="field-error-message"
+                  role="alert"
+                >
+                  {recoveryError}
+                </span>
+              )}
+            </label>
+            <p className="form-message recovery-helper">
+              Enter the email address or mobile number already saved with your
+              household.
+            </p>
+            <button type="submit" disabled={recoveryStatus === 'submitting'}>
+              <Send aria-hidden="true" />
+              {recoveryStatus === 'submitting'
+                ? 'Sending link...'
+                : 'Send private RSVP link'}
+            </button>
+            {recoveryStatus === 'submitting' && (
+              <div className="inline-loading-shell">
+                <LoadingPulse
+                  label="Sending your RSVP link"
+                  message="Checking for a saved household contact and sending the private link if one matches."
+                  compact
+                />
+              </div>
+            )}
+            {recoveryMessage && (
+              <p className="form-message" aria-live="polite">
+                {recoveryMessage}
+              </p>
+            )}
+          </form>
         )}
       </section>
     </main>
@@ -904,6 +1042,27 @@ function normalizeValidationMessage(message: string): string {
   }
 
   return message;
+}
+
+function validateRecoveryContact(value: string): string | undefined {
+  const parsed = RecoveryContactInputSchema.safeParse(value);
+  if (!parsed.success) {
+    return 'Enter a valid email address or mobile number.';
+  }
+
+  const trimmed = value.trim();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const digits = trimmed.replace(/\D/g, '');
+  const validPhone =
+    (trimmed.startsWith('+') && /^\+[1-9]\d{7,14}$/.test(`+${digits}`)) ||
+    digits.length === 10 ||
+    (digits.length === 11 && digits.startsWith('1'));
+
+  if (!emailPattern.test(trimmed) && !validPhone) {
+    return 'Enter a valid email address or mobile number.';
+  }
+
+  return undefined;
 }
 
 function buildFieldErrorId(path: string): string {

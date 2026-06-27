@@ -5,6 +5,8 @@ import type {
   Household,
   InvitationDetails,
   InviteLifecycleStatus,
+  RsvpRecoveryAcceptedResponse,
+  RsvpRecoveryRequest,
   RsvpUpdate,
   SendInvitationEmailResponse,
   SendHouseholdNotificationInput,
@@ -46,6 +48,8 @@ export interface AdminAuthConfigResponse {
   scopes: string[];
 }
 
+export type RsvpRecoveryResponse = RsvpRecoveryAcceptedResponse;
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -65,6 +69,15 @@ export async function fetchRsvp(inviteCode: string): Promise<RsvpResponse> {
 export async function saveRsvp(inviteCode: string, payload: RsvpPayload): Promise<RsvpResponse> {
   return request<RsvpResponse>(`/rsvp/${encodeURIComponent(inviteCode)}`, {
     method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recoverRsvpLink(
+  payload: RsvpRecoveryRequest,
+): Promise<RsvpRecoveryResponse> {
+  return request<RsvpRecoveryResponse>('/rsvp/recovery', {
+    method: 'POST',
     body: JSON.stringify(payload),
   });
 }
