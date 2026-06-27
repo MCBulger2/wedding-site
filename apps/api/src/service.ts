@@ -24,8 +24,18 @@ import {
 } from '@matt-alison-wedding/shared';
 import { createHash, randomUUID } from 'node:crypto';
 import QRCode from 'qrcode';
-import { buildHouseholdsFromRows, invitationExportToCsv, parseCsv, rsvpsToCsv } from './csv.js';
-import { generateInviteCode, hashInviteCode } from './inviteCodes.js';
+import {
+  buildHouseholdsFromRows,
+  invitationExportToCsv,
+  parseCsv,
+  rsvpsToCsv,
+} from './csv.js';
+import {
+  generateInviteCode,
+  getInviteCodeHashes,
+  hashInviteCode,
+  inviteCodeMatchesHash,
+} from './inviteCodes.js';
 import type { InviteCodeProtector } from './inviteCodeProtector.js';
 import type { HouseholdMessenger, RsvpNotifier } from './notifications.js';
 import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
@@ -71,7 +81,9 @@ export class WeddingService {
     private readonly inviteCodeProtector?: InviteCodeProtector,
   ) {}
 
-  async getRsvp(inviteCode: string): Promise<{ household: Household; rsvp?: StoredRsvp }> {
+  async getRsvp(
+    inviteCode: string,
+  ): Promise<{ household: Household; rsvp?: StoredRsvp }> {
     const household = await this.findHouseholdByInviteCode(inviteCode);
     return {
       household,
@@ -79,11 +91,18 @@ export class WeddingService {
     };
   }
 
-  async updateRsvp(inviteCode: string, input: unknown): Promise<{ household: Household; rsvp: StoredRsvp }> {
+  async updateRsvp(
+    inviteCode: string,
+    input: unknown,
+  ): Promise<{ household: Household; rsvp: StoredRsvp }> {
     const household = await this.findHouseholdByInviteCode(inviteCode);
     const parsed = RsvpUpdateSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('RSVP validation failed', 422, formatValidationIssues(parsed.error));
+      throw new PublicError(
+        'RSVP validation failed',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     this.validateRsvpAgainstHousehold(household, parsed.data);
@@ -118,12 +137,18 @@ export class WeddingService {
     }
 
     const contact = normalizeRecoveryContact(parsed.data.contact);
-    const contactHash = stableHash(`recovery-contact:${contact.kind}:${contact.value}`, this.inviteCodePepper);
+    const contactHash = stableHash(
+      `recovery-contact:${contact.kind}:${contact.value}`,
+      this.inviteCodePepper,
+    );
     const sourceIpHash = stableHash(
       `recovery-ip:${requestContext.sourceIp?.trim() || 'unknown'}`,
       this.inviteCodePepper,
     );
-    const rateLimited = await this.isRsvpRecoveryRateLimited(contactHash, sourceIpHash);
+    const rateLimited = await this.isRsvpRecoveryRateLimited(
+      contactHash,
+      sourceIpHash,
+    );
     if (rateLimited) {
       return acceptedRecoveryResponse();
     }
@@ -138,7 +163,10 @@ export class WeddingService {
     }
 
     for (const household of households) {
-      if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+      if (
+        household.archivedAt ||
+        household.inviteLifecycleStatus === 'archived'
+      ) {
         continue;
       }
 
@@ -148,11 +176,21 @@ export class WeddingService {
           continue;
         }
 
-        const invitation = this.buildInvitationDetails(household, inviteCode, requestContext.baseUrl);
+        const invitation = this.buildInvitationDetails(
+          household,
+          inviteCode,
+          requestContext.baseUrl,
+        );
         if (contact.kind === 'email') {
-          await this.householdMessenger.sendRecoveryEmail({ household, invitation });
+          await this.householdMessenger.sendRecoveryEmail({
+            household,
+            invitation,
+          });
         } else {
-          await this.householdMessenger.sendRecoverySms({ household, invitation });
+          await this.householdMessenger.sendRecoverySms({
+            household,
+            invitation,
+          });
         }
       } catch (error) {
         console.error('RSVP recovery delivery failed', {
@@ -186,7 +224,11 @@ export class WeddingService {
   async createHousehold(input: unknown): Promise<Household> {
     const parsed = CreateHouseholdInputSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('Household validation failed', 422, formatValidationIssues(parsed.error));
+      throw new PublicError(
+        'Household validation failed',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     const now = new Date().toISOString();
@@ -216,7 +258,9 @@ export class WeddingService {
     return household;
   }
 
-  async importHouseholds(csv: string): Promise<{ imported: number; households: Household[] }> {
+  async importHouseholds(
+    csv: string,
+  ): Promise<{ imported: number; households: Household[] }> {
     const rawRows = parseCsv(csv);
     const parsedRows = rawRows.map((row, index) => {
       const parsed = HouseholdImportRowSchema.safeParse(row);
@@ -248,11 +292,18 @@ export class WeddingService {
     return { imported: ids.size, households };
   }
 
-  async updateHousehold(householdId: string, input: unknown): Promise<Household> {
+  async updateHousehold(
+    householdId: string,
+    input: unknown,
+  ): Promise<Household> {
     const household = await this.requireHousehold(householdId);
     const parsed = UpdateHouseholdInputSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('Household validation failed', 422, formatValidationIssues(parsed.error));
+      throw new PublicError(
+        'Household validation failed',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     const now = new Date().toISOString();
@@ -270,11 +321,19 @@ export class WeddingService {
     return updated;
   }
 
-  async updateHouseholdMember(householdId: string, memberId: string, input: unknown): Promise<Household> {
+  async updateHouseholdMember(
+    householdId: string,
+    memberId: string,
+    input: unknown,
+  ): Promise<Household> {
     const household = await this.requireHousehold(householdId);
     const parsed = UpdateHouseholdMemberInputSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('Household member validation failed', 422, formatValidationIssues(parsed.error));
+      throw new PublicError(
+        'Household member validation failed',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     if (!household.members.some((member) => member.id === memberId)) {
@@ -294,7 +353,10 @@ export class WeddingService {
     return updated;
   }
 
-  async removeHouseholdMember(householdId: string, memberId: string): Promise<Household> {
+  async removeHouseholdMember(
+    householdId: string,
+    memberId: string,
+  ): Promise<Household> {
     const household = await this.requireHousehold(householdId);
     const member = household.members.find((entry) => entry.id === memberId);
     if (!member) {
@@ -308,7 +370,9 @@ export class WeddingService {
       const updated = {
         ...household,
         members: household.members.map((entry) =>
-          entry.id === memberId ? { ...entry, archivedAt: entry.archivedAt ?? now } : entry,
+          entry.id === memberId
+            ? { ...entry, archivedAt: entry.archivedAt ?? now }
+            : entry,
         ),
         updatedAt: now,
       };
@@ -317,7 +381,10 @@ export class WeddingService {
     }
 
     if (household.members.filter((entry) => !entry.archivedAt).length <= 1) {
-      throw new PublicError('Households must keep at least one active member', 422);
+      throw new PublicError(
+        'Households must keep at least one active member',
+        422,
+      );
     }
 
     const updated = {
@@ -331,7 +398,10 @@ export class WeddingService {
 
   async archiveHousehold(householdId: string): Promise<Household> {
     const household = await this.requireHousehold(householdId);
-    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+    if (
+      household.archivedAt ||
+      household.inviteLifecycleStatus === 'archived'
+    ) {
       throw new PublicError('Household is already archived', 409);
     }
     const now = new Date().toISOString();
@@ -345,21 +415,43 @@ export class WeddingService {
     return updated;
   }
 
-  async updateInviteLifecycle(householdId: string, input: unknown): Promise<Household> {
+  async updateInviteLifecycle(
+    householdId: string,
+    input: unknown,
+  ): Promise<Household> {
     const household = await this.requireHousehold(householdId);
     const parsed = InviteLifecycleUpdateSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('Invite lifecycle update is invalid', 422, formatValidationIssues(parsed.error));
+      throw new PublicError(
+        'Invite lifecycle update is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     if (parsed.data.status === 'not_generated') {
-      throw new PublicError('Invite lifecycle cannot move back to not generated', 422);
+      throw new PublicError(
+        'Invite lifecycle cannot move back to not generated',
+        422,
+      );
     }
-    if (parsed.data.status === 'generated' && household.inviteLifecycleStatus !== 'not_generated') {
-      throw new PublicError('Invite lifecycle cannot move back to generated', 422);
+    if (
+      parsed.data.status === 'generated' &&
+      household.inviteLifecycleStatus !== 'not_generated'
+    ) {
+      throw new PublicError(
+        'Invite lifecycle cannot move back to generated',
+        422,
+      );
     }
-    if (parsed.data.status === 'sent' && household.inviteLifecycleStatus !== 'exported') {
-      throw new PublicError('Invitations must be exported before they are marked sent', 422);
+    if (
+      parsed.data.status === 'sent' &&
+      household.inviteLifecycleStatus !== 'exported'
+    ) {
+      throw new PublicError(
+        'Invitations must be exported before they are marked sent',
+        422,
+      );
     }
 
     const now = new Date().toISOString();
@@ -367,9 +459,17 @@ export class WeddingService {
       ...household,
       inviteLifecycleStatus: parsed.data.status,
       inviteExportedAt:
-        parsed.data.status === 'exported' ? household.inviteExportedAt ?? now : household.inviteExportedAt,
-      inviteSentAt: parsed.data.status === 'sent' ? household.inviteSentAt ?? now : household.inviteSentAt,
-      archivedAt: parsed.data.status === 'archived' ? household.archivedAt ?? now : household.archivedAt,
+        parsed.data.status === 'exported'
+          ? (household.inviteExportedAt ?? now)
+          : household.inviteExportedAt,
+      inviteSentAt:
+        parsed.data.status === 'sent'
+          ? (household.inviteSentAt ?? now)
+          : household.inviteSentAt,
+      archivedAt:
+        parsed.data.status === 'archived'
+          ? (household.archivedAt ?? now)
+          : household.archivedAt,
       updatedAt: now,
     };
     await this.repository.saveHousehold(updated);
@@ -384,12 +484,20 @@ export class WeddingService {
     if (!household) {
       throw new PublicError('Household not found', 404);
     }
-    this.validateInviteRotationAllowed(household, options.confirmRotation === true);
+    this.validateInviteRotationAllowed(
+      household,
+      options.confirmRotation === true,
+    );
 
     const rotatedAt = new Date().toISOString();
     const inviteCode = generateInviteCode();
     const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
-    await this.saveInviteCodeArtifacts(householdId, inviteCode, inviteCodeHash, rotatedAt);
+    await this.saveInviteCodeArtifacts(
+      householdId,
+      inviteCode,
+      inviteCodeHash,
+      rotatedAt,
+    );
     await this.repository.saveHousehold({
       ...household,
       inviteLifecycleStatus: 'generated',
@@ -402,15 +510,27 @@ export class WeddingService {
     return { inviteCode, inviteCodeHash };
   }
 
-  async revealInvitation(householdId: string, baseUrl: string): Promise<InvitationDetails> {
+  async revealInvitation(
+    householdId: string,
+    baseUrl: string,
+  ): Promise<InvitationDetails> {
     const household = await this.requireHousehold(householdId);
-    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
-      throw new PublicError('Archived household invitations cannot be revealed', 409);
+    if (
+      household.archivedAt ||
+      household.inviteLifecycleStatus === 'archived'
+    ) {
+      throw new PublicError(
+        'Archived household invitations cannot be revealed',
+        409,
+      );
     }
 
     const inviteCode = await this.getRecoverableInviteCode(household);
     if (!inviteCode || !household.inviteCodeHash) {
-      throw new PublicError('This invitation does not have a recoverable invite code', 404);
+      throw new PublicError(
+        'This invitation does not have a recoverable invite code',
+        404,
+      );
     }
 
     return this.buildInvitationDetails(household, inviteCode, baseUrl);
@@ -421,21 +541,38 @@ export class WeddingService {
     baseUrl: string,
   ): Promise<SendInvitationEmailResponse> {
     const household = await this.requireHousehold(householdId);
-    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
+    if (
+      household.archivedAt ||
+      household.inviteLifecycleStatus === 'archived'
+    ) {
       return {
-        result: invitationEmailResult(household, 'skipped', 'Archived households cannot receive invitation emails'),
+        result: invitationEmailResult(
+          household,
+          'skipped',
+          'Archived households cannot receive invitation emails',
+        ),
       };
     }
     if (!household.email) {
       return {
-        result: invitationEmailResult(household, 'skipped', 'Household does not have a contact email address'),
+        result: invitationEmailResult(
+          household,
+          'skipped',
+          'Household does not have a contact email address',
+        ),
       };
     }
     if (!this.householdMessenger) {
-      throw new PublicError('Outbound household notifications are not available', 503);
+      throw new PublicError(
+        'Outbound household notifications are not available',
+        503,
+      );
     }
 
-    const invitation = await this.ensureRecoverableInvitation(household, baseUrl);
+    const invitation = await this.ensureRecoverableInvitation(
+      household,
+      baseUrl,
+    );
     try {
       const result = await this.householdMessenger.sendInvitationEmail({
         household,
@@ -444,7 +581,10 @@ export class WeddingService {
       await this.markInvitationSent(household);
       return { result, invitation };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to send invitation email';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to send invitation email';
       return {
         invitation,
         result: invitationEmailResult(household, 'failed', message),
@@ -452,22 +592,30 @@ export class WeddingService {
     }
   }
 
-  async sendInvitationEmails(baseUrl: string): Promise<BulkInvitationEmailResponse> {
+  async sendInvitationEmails(
+    baseUrl: string,
+  ): Promise<BulkInvitationEmailResponse> {
     const households = (await this.repository.listHouseholds()).filter(
-      (household) => !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
+      (household) =>
+        !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
     );
     const results: InvitationEmailResult[] = [];
 
     for (const household of households) {
       try {
-        const response = await this.sendInvitationEmail(household.householdId, baseUrl);
+        const response = await this.sendInvitationEmail(
+          household.householdId,
+          baseUrl,
+        );
         results.push(response.result);
       } catch (error) {
         results.push(
           invitationEmailResult(
             household,
             'failed',
-            error instanceof Error ? error.message : 'Unable to send invitation email',
+            error instanceof Error
+              ? error.message
+              : 'Unable to send invitation email',
           ),
         );
       }
@@ -481,8 +629,14 @@ export class WeddingService {
     input: unknown,
   ): Promise<SendHouseholdNotificationResponse> {
     const household = await this.requireHousehold(householdId);
-    if (household.archivedAt || household.inviteLifecycleStatus === 'archived') {
-      throw new PublicError('Archived households cannot receive guest notifications', 409);
+    if (
+      household.archivedAt ||
+      household.inviteLifecycleStatus === 'archived'
+    ) {
+      throw new PublicError(
+        'Archived households cannot receive guest notifications',
+        409,
+      );
     }
 
     const parsed = SendHouseholdNotificationInputSchema.safeParse(input);
@@ -495,15 +649,24 @@ export class WeddingService {
     }
 
     if (!this.householdMessenger) {
-      throw new PublicError('Outbound household notifications are not available', 503);
+      throw new PublicError(
+        'Outbound household notifications are not available',
+        503,
+      );
     }
 
     const payload = parsed.data;
     if (payload.channel === 'email' && !household.email) {
-      throw new PublicError('This household does not have a contact email address', 422);
+      throw new PublicError(
+        'This household does not have a contact email address',
+        422,
+      );
     }
     if (payload.channel === 'sms' && !household.phone) {
-      throw new PublicError('This household does not have a mobile number for SMS', 422);
+      throw new PublicError(
+        'This household does not have a mobile number for SMS',
+        422,
+      );
     }
 
     try {
@@ -513,7 +676,9 @@ export class WeddingService {
       });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Unable to send household notification';
+        error instanceof Error
+          ? error.message
+          : 'Unable to send household notification';
       throw new PublicError(message, 502);
     }
   }
@@ -536,7 +701,9 @@ export class WeddingService {
       rows.map(async ({ household, rsvpUrl }) => ({
         household,
         rsvpUrl,
-        qrCodeDataUrl: rsvpUrl ? await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 }) : '',
+        qrCodeDataUrl: rsvpUrl
+          ? await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 })
+          : '',
       })),
     );
 
@@ -554,17 +721,29 @@ export class WeddingService {
   ): Promise<InvitationDetails> {
     const existingInviteCode = await this.getRecoverableInviteCode(household);
     if (existingInviteCode && household.inviteCodeHash) {
-      return this.buildInvitationDetails(household, existingInviteCode, baseUrl);
+      return this.buildInvitationDetails(
+        household,
+        existingInviteCode,
+        baseUrl,
+      );
     }
 
     if (household.inviteCodeHash) {
-      throw new PublicError('This invitation code exists but is not recoverable. Rotate it before emailing.', 409);
+      throw new PublicError(
+        'This invitation code exists but is not recoverable. Rotate it before emailing.',
+        409,
+      );
     }
 
     const now = new Date().toISOString();
     const inviteCode = generateInviteCode();
     const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
-    await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
+    await this.saveInviteCodeArtifacts(
+      household.householdId,
+      inviteCode,
+      inviteCodeHash,
+      now,
+    );
     const updated: Household = {
       ...household,
       inviteLifecycleStatus: 'generated',
@@ -584,7 +763,10 @@ export class WeddingService {
     timestamp: string,
   ): Promise<void> {
     if (!this.inviteCodeProtector) {
-      throw new PublicError('Recoverable invite-code storage is not configured', 503);
+      throw new PublicError(
+        'Recoverable invite-code storage is not configured',
+        503,
+      );
     }
 
     await this.repository.saveInviteCodeLookup({
@@ -595,32 +777,51 @@ export class WeddingService {
     await this.repository.saveInviteCodeSecret({
       householdId,
       inviteCodeHash,
-      inviteCodeCiphertext: await this.inviteCodeProtector.encryptInviteCode(inviteCode),
+      inviteCodeCiphertext:
+        await this.inviteCodeProtector.encryptInviteCode(inviteCode),
       updatedAt: timestamp,
     });
   }
 
-  private async getRecoverableInviteCode(household: Household): Promise<string | undefined> {
+  private async getRecoverableInviteCode(
+    household: Household,
+  ): Promise<string | undefined> {
     if (!household.inviteCodeHash || !this.inviteCodeProtector) {
       return undefined;
     }
 
-    const secret = await this.repository.getInviteCodeSecret(household.householdId);
+    const secret = await this.repository.getInviteCodeSecret(
+      household.householdId,
+    );
     if (!secret || secret.inviteCodeHash !== household.inviteCodeHash) {
       return undefined;
     }
 
-    const inviteCode = await this.inviteCodeProtector.decryptInviteCode(secret.inviteCodeCiphertext);
-    if (hashInviteCode(inviteCode, this.inviteCodePepper) !== household.inviteCodeHash) {
-      throw new PublicError('Stored invite code does not match the current household invite hash', 409);
+    const inviteCode = await this.inviteCodeProtector.decryptInviteCode(
+      secret.inviteCodeCiphertext,
+    );
+    if (
+      !inviteCodeMatchesHash(
+        inviteCode,
+        household.inviteCodeHash,
+        this.inviteCodePepper,
+      )
+    ) {
+      throw new PublicError(
+        'Stored invite code does not match the current household invite hash',
+        409,
+      );
     }
 
     return inviteCode;
   }
 
-  private async prepareInvitationExportRows(baseUrl: string): Promise<PreparedInvitationExportRow[]> {
+  private async prepareInvitationExportRows(
+    baseUrl: string,
+  ): Promise<PreparedInvitationExportRow[]> {
     const households = (await this.repository.listHouseholds()).filter(
-      (household) => !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
+      (household) =>
+        !household.archivedAt && household.inviteLifecycleStatus !== 'archived',
     );
     const rows: PreparedInvitationExportRow[] = [];
     const now = new Date().toISOString();
@@ -640,7 +841,12 @@ export class WeddingService {
 
       const inviteCodeHash = hashInviteCode(inviteCode, this.inviteCodePepper);
       if (!household.inviteCodeHash) {
-        await this.saveInviteCodeArtifacts(household.householdId, inviteCode, inviteCodeHash, now);
+        await this.saveInviteCodeArtifacts(
+          household.householdId,
+          inviteCode,
+          inviteCodeHash,
+          now,
+        );
       }
 
       const updated: Household =
@@ -676,7 +882,9 @@ export class WeddingService {
     return {
       householdId: household.householdId,
       inviteCode,
-      inviteCodeHash: household.inviteCodeHash ?? hashInviteCode(inviteCode, this.inviteCodePepper),
+      inviteCodeHash:
+        household.inviteCodeHash ??
+        hashInviteCode(inviteCode, this.inviteCodePepper),
       rsvpUrl: `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`,
     };
   }
@@ -691,16 +899,33 @@ export class WeddingService {
     });
   }
 
-  private async findHouseholdByInviteCode(inviteCode: string): Promise<Household> {
-    const hash = hashInviteCode(inviteCode, this.inviteCodePepper);
-    const household = await this.repository.getHouseholdByInviteHash(hash);
-    if (!household || household.archivedAt || household.inviteLifecycleStatus === 'archived') {
-      throw new PublicError(GenericInviteError, 404);
+  private async findHouseholdByInviteCode(
+    inviteCode: string,
+  ): Promise<Household> {
+    for (const hash of getInviteCodeHashes(inviteCode, this.inviteCodePepper)) {
+      const household = await this.repository.getHouseholdByInviteHash(hash);
+      if (!household) {
+        continue;
+      }
+      if (
+        household.archivedAt ||
+        household.inviteLifecycleStatus === 'archived'
+      ) {
+        break;
+      }
+      if (
+        household.inviteCodeHash &&
+        inviteCodeMatchesHash(
+          inviteCode,
+          household.inviteCodeHash,
+          this.inviteCodePepper,
+        )
+      ) {
+        return household;
+      }
     }
-    if (household.inviteCodeHash !== hash) {
-      throw new PublicError(GenericInviteError, 404);
-    }
-    return household;
+
+    throw new PublicError(GenericInviteError, 404);
   }
 
   private async requireHousehold(householdId: string): Promise<Household> {
@@ -711,7 +936,9 @@ export class WeddingService {
     return household;
   }
 
-  private async getStoredRsvp(householdId: string): Promise<StoredRsvp | undefined> {
+  private async getStoredRsvp(
+    householdId: string,
+  ): Promise<StoredRsvp | undefined> {
     return this.repository.getRsvp(householdId);
   }
 
@@ -720,9 +947,20 @@ export class WeddingService {
     sourceIpHash: string,
   ): Promise<boolean> {
     const now = Date.now();
-    const contactAttempts = await this.recordRsvpRecoveryAttempt('contact', contactHash, now);
-    const ipAttempts = await this.recordRsvpRecoveryAttempt('ip', sourceIpHash, now);
-    return contactAttempts > RSVP_RECOVERY_CONTACT_LIMIT || ipAttempts > RSVP_RECOVERY_IP_LIMIT;
+    const contactAttempts = await this.recordRsvpRecoveryAttempt(
+      'contact',
+      contactHash,
+      now,
+    );
+    const ipAttempts = await this.recordRsvpRecoveryAttempt(
+      'ip',
+      sourceIpHash,
+      now,
+    );
+    return (
+      contactAttempts > RSVP_RECOVERY_CONTACT_LIMIT ||
+      ipAttempts > RSVP_RECOVERY_IP_LIMIT
+    );
   }
 
   private async recordRsvpRecoveryAttempt(
@@ -730,7 +968,10 @@ export class WeddingService {
     keyHash: string,
     now: number,
   ): Promise<number> {
-    const existing = await this.repository.getRecoveryRateLimitRecord(scope, keyHash);
+    const existing = await this.repository.getRecoveryRateLimitRecord(
+      scope,
+      keyHash,
+    );
     const withinWindow = existing && existing.windowExpiresAt > now;
     const attempts = withinWindow ? existing.attempts + 1 : 1;
 
@@ -745,12 +986,21 @@ export class WeddingService {
     return attempts;
   }
 
-  private validateRsvpAgainstHousehold(household: Household, rsvp: RsvpUpdate): void {
-    const activeMembers = household.members.filter((member) => !member.archivedAt);
+  private validateRsvpAgainstHousehold(
+    household: Household,
+    rsvp: RsvpUpdate,
+  ): void {
+    const activeMembers = household.members.filter(
+      (member) => !member.archivedAt,
+    );
     const allowedMemberIds = new Set(activeMembers.map((member) => member.id));
-    const submittedMemberIds = new Set(rsvp.members.map((member) => member.memberId));
+    const submittedMemberIds = new Set(
+      rsvp.members.map((member) => member.memberId),
+    );
     const attendingMemberIds = new Set(
-      rsvp.members.filter((member) => member.attending).map((member) => member.memberId),
+      rsvp.members
+        .filter((member) => member.attending)
+        .map((member) => member.memberId),
     );
 
     if (allowedMemberIds.size !== submittedMemberIds.size) {
@@ -764,7 +1014,9 @@ export class WeddingService {
     }
 
     const plusOneAllowedMemberIds = new Set(
-      activeMembers.filter((member) => member.canBringPlusOne).map((member) => member.id),
+      activeMembers
+        .filter((member) => member.canBringPlusOne)
+        .map((member) => member.id),
     );
     if (rsvp.plusOnes.length > household.maxPlusOnes) {
       throw new PublicError('RSVP includes too many plus-ones', 422);
@@ -772,7 +1024,10 @@ export class WeddingService {
 
     for (const plusOne of rsvp.plusOnes) {
       if (!plusOneAllowedMemberIds.has(plusOne.sponsorMemberId)) {
-        throw new PublicError('This household is not allowed to add that plus-one', 422);
+        throw new PublicError(
+          'This household is not allowed to add that plus-one',
+          422,
+        );
       }
       if (!attendingMemberIds.has(plusOne.sponsorMemberId)) {
         throw new PublicError('A plus-one sponsor must be attending', 422);
@@ -780,19 +1035,34 @@ export class WeddingService {
     }
   }
 
-  private validateInviteRotationAllowed(household: Household, confirmed: boolean): void {
+  private validateInviteRotationAllowed(
+    household: Household,
+    confirmed: boolean,
+  ): void {
     if (household.inviteLifecycleStatus === 'sent') {
-      throw new PublicError('Sent invitations cannot be rotated. Archive the household or contact guests directly.', 409);
+      throw new PublicError(
+        'Sent invitations cannot be rotated. Archive the household or contact guests directly.',
+        409,
+      );
     }
     if (household.inviteLifecycleStatus === 'archived') {
-      throw new PublicError('Archived household invite codes cannot be rotated', 409);
+      throw new PublicError(
+        'Archived household invite codes cannot be rotated',
+        409,
+      );
     }
     if (household.inviteLifecycleStatus === 'exported' && !confirmed) {
-      throw new PublicError('Rotating an exported invite requires explicit confirmation', 409);
+      throw new PublicError(
+        'Rotating an exported invite requires explicit confirmation',
+        409,
+      );
     }
   }
 
-  private async notifyRsvpChanged(household: Household, rsvp: StoredRsvp): Promise<void> {
+  private async notifyRsvpChanged(
+    household: Household,
+    rsvp: StoredRsvp,
+  ): Promise<void> {
     if (!this.rsvpNotifier) {
       return;
     }
@@ -809,12 +1079,19 @@ export class WeddingService {
   }
 }
 
-function createInvitationLabelsPdf(rows: PreparedInvitationExportRow[]): Promise<Buffer> {
+function createInvitationLabelsPdf(
+  rows: PreparedInvitationExportRow[],
+): Promise<Buffer> {
   const labelsPerPage = AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows;
   const pageCount = Math.max(1, Math.ceil(rows.length / labelsPerPage));
   const pageStreams = Array.from({ length: pageCount }, (_, pageIndex) => {
-    const pageRows = rows.slice(pageIndex * labelsPerPage, (pageIndex + 1) * labelsPerPage);
-    return pageRows.map((row, index) => drawInvitationLabel(row, index)).join('\n');
+    const pageRows = rows.slice(
+      pageIndex * labelsPerPage,
+      (pageIndex + 1) * labelsPerPage,
+    );
+    return pageRows
+      .map((row, index) => drawInvitationLabel(row, index))
+      .join('\n');
   });
 
   return Promise.resolve(buildPdf(pageStreams));
@@ -826,14 +1103,19 @@ function drawInvitationLabel(
 ): string {
   const column = pageLabelIndex % AVERY_5160_LABEL.columns;
   const labelRow = Math.floor(pageLabelIndex / AVERY_5160_LABEL.columns);
-  const x = AVERY_5160_LABEL.marginLeft + column * AVERY_5160_LABEL.horizontalPitch;
-  const y = AVERY_5160_LABEL.marginTop + labelRow * AVERY_5160_LABEL.verticalPitch;
+  const x =
+    AVERY_5160_LABEL.marginLeft + column * AVERY_5160_LABEL.horizontalPitch;
+  const y =
+    AVERY_5160_LABEL.marginTop + labelRow * AVERY_5160_LABEL.verticalPitch;
   const qrSize = 54;
   const qrX = x + 8;
   const qrY = y + 9;
   const textX = qrX + qrSize + 8;
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
-  const householdText = truncatePdfText(row.household.displayName, Math.floor(textWidth / 4.8));
+  const householdText = truncatePdfText(
+    row.household.displayName,
+    Math.floor(textWidth / 4.8),
+  );
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
@@ -842,12 +1124,7 @@ function drawInvitationLabel(
   ].join('\n');
 }
 
-function drawQrCode(
-  value: string,
-  x: number,
-  y: number,
-  size: number,
-): string {
+function drawQrCode(value: string, x: number, y: number, size: number): string {
   const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
   const quietModules = 2;
   const totalModules = qr.modules.size + quietModules * 2;
@@ -885,7 +1162,8 @@ function buildPdf(pageStreams: string[]): Buffer {
 
   for (const stream of pageStreams) {
     const contentObjectId = objects.length;
-    objects[contentObjectId] = `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`;
+    objects[contentObjectId] =
+      `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`;
 
     const pageObjectId = objects.length;
     pageObjectIds.push(pageObjectId);
@@ -903,7 +1181,9 @@ function buildPdf(pageStreams: string[]): Buffer {
   const offsets = [0];
   for (let objectId = 1; objectId < objects.length; objectId += 1) {
     offsets[objectId] = Buffer.concat(chunks).length;
-    chunks.push(Buffer.from(`${objectId} 0 obj\n${objects[objectId]}\nendobj\n`, 'ascii'));
+    chunks.push(
+      Buffer.from(`${objectId} 0 obj\n${objects[objectId]}\nendobj\n`, 'ascii'),
+    );
   }
 
   const xrefOffset = Buffer.concat(chunks).length;
@@ -949,7 +1229,10 @@ function truncatePdfText(value: string, maxLength: number): string {
 }
 
 function escapePdfString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
 }
 
 function toPdfY(y: number): number {
@@ -957,10 +1240,15 @@ function toPdfY(y: number): number {
 }
 
 function formatPdfNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-function normalizeImportedHouseholdRow(row: HouseholdImportRow, rowNumber: number): HouseholdImportRow {
+function normalizeImportedHouseholdRow(
+  row: HouseholdImportRow,
+  rowNumber: number,
+): HouseholdImportRow {
   try {
     return {
       ...row,
@@ -983,7 +1271,9 @@ function normalizeOptionalEmail(value: string | undefined): string | undefined {
   return trimmed ? trimmed.toLowerCase() : undefined;
 }
 
-function normalizeOptionalPhoneNumber(value: string | undefined): string | undefined {
+function normalizeOptionalPhoneNumber(
+  value: string | undefined,
+): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
@@ -1008,7 +1298,9 @@ function normalizeOptionalPhoneNumber(value: string | undefined): string | undef
   return normalized;
 }
 
-type RecoveryContact = { kind: 'email'; value: string } | { kind: 'phone'; value: string };
+type RecoveryContact =
+  | { kind: 'email'; value: string }
+  | { kind: 'phone'; value: string };
 
 function normalizeRecoveryContact(value: string): RecoveryContact {
   const email = normalizeOptionalEmail(value);
@@ -1047,16 +1339,23 @@ function summarizeAttendance(
 ): AdminHouseholdRecord['attendance'] {
   if (!rsvp) {
     return {
-      invitedGuests: household.members.filter((member) => !member.archivedAt).length + household.maxPlusOnes,
+      invitedGuests:
+        household.members.filter((member) => !member.archivedAt).length +
+        household.maxPlusOnes,
       attendingGuests: 0,
       declinedGuests: 0,
-      pendingGuests: household.members.filter((member) => !member.archivedAt).length,
+      pendingGuests: household.members.filter((member) => !member.archivedAt)
+        .length,
       plusOneGuests: 0,
     };
   }
 
-  const attendingGuests = rsvp.members.filter((member) => member.attending).length + rsvp.plusOnes.length;
-  const declinedGuests = rsvp.members.filter((member) => !member.attending).length;
+  const attendingGuests =
+    rsvp.members.filter((member) => member.attending).length +
+    rsvp.plusOnes.length;
+  const declinedGuests = rsvp.members.filter(
+    (member) => !member.attending,
+  ).length;
 
   return {
     invitedGuests: household.members.length + household.maxPlusOnes,

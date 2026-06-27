@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Household } from '@matt-alison-wedding/shared';
-import { hashInviteCode } from './inviteCodes.js';
+import { hashInviteCode, hashLegacyInviteCode } from './inviteCodes.js';
 import { Base64InviteCodeProtector } from './inviteCodeProtector.js';
 import { InMemoryWeddingRepository } from './repository.js';
 import { PublicError, WeddingService } from './service.js';
@@ -21,15 +21,47 @@ describe('WeddingService', () => {
     const result = await service.getRsvp(inviteCode);
 
     expect(result.household.displayName).toBe('The Example Household');
-    expect(JSON.stringify(result)).not.toContain(repository.inviteCodeSecrets.get('h1')?.inviteCodeCiphertext ?? '');
+    expect(JSON.stringify(result)).not.toContain(
+      repository.inviteCodeSecrets.get('h1')?.inviteCodeCiphertext ?? '',
+    );
     expect(JSON.stringify(result)).not.toContain(inviteCode);
+  });
+
+  it('looks up newly generated invite codes case-insensitively', async () => {
+    const { service } = await createSeededService();
+
+    const rotated = await service.rotateInviteCode('h1');
+    const result = await service.getRsvp(rotated.inviteCode.toLowerCase());
+
+    expect(rotated.inviteCode).toMatch(
+      /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/,
+    );
+    expect(result.household.displayName).toBe('The Example Household');
+  });
+
+  it('continues to resolve and reveal legacy invite-code hashes', async () => {
+    const { service } = await createSeededService({}, undefined, undefined, {
+      legacyInviteCodeHash: true,
+    });
+
+    await expect(service.getRsvp(inviteCode)).resolves.toHaveProperty(
+      'household.displayName',
+      'The Example Household',
+    );
+    await expect(
+      service.revealInvitation('h1', 'https://wedding.example.com'),
+    ).resolves.toMatchObject({
+      inviteCode,
+      rsvpUrl: `https://wedding.example.com/rsvp/${inviteCode}`,
+    });
   });
 
   it('returns a generic error for invalid invite codes', async () => {
     const { service } = await createSeededService();
 
     await expect(service.getRsvp('wrong-invite-code')).rejects.toMatchObject({
-      message: 'We could not find that RSVP. Please check your invitation link.',
+      message:
+        'We could not find that RSVP. Please check your invitation link.',
       statusCode: 404,
     });
   });
@@ -90,7 +122,9 @@ describe('WeddingService', () => {
 
     expect(repository.rsvps.get('h1')).toBeTruthy();
     expect(notifier.calls).toHaveLength(1);
-    expect(notifier.calls[0].household.displayName).toBe('The Example Household');
+    expect(notifier.calls[0].household.displayName).toBe(
+      'The Example Household',
+    );
   });
 
   it('keeps guest RSVP saves successful when notification delivery fails', async () => {
@@ -131,7 +165,9 @@ describe('WeddingService', () => {
     expect(household.householdId).toBeTruthy();
     expect(household.members[0].id).toContain(household.householdId);
     expect(household.phone).toBe('+14805550100');
-    expect((await repository.getHousehold(household.householdId))?.displayName).toBe('Jordan and Casey');
+    expect(
+      (await repository.getHousehold(household.householdId))?.displayName,
+    ).toBe('Jordan and Casey');
   });
 
   it('normalizes household phone numbers when admins edit them', async () => {
@@ -216,24 +252,33 @@ describe('WeddingService', () => {
     await service.rotateInviteCode('h1');
 
     expect(repository.rsvps.get('h1')?.notes).toBe('See you there');
-    expect((await repository.getHousehold('h1'))?.inviteCodeLastRotatedAt).toBeTruthy();
+    expect(
+      (await repository.getHousehold('h1'))?.inviteCodeLastRotatedAt,
+    ).toBeTruthy();
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
   it('requires confirmation before rotating an exported invite and blocks sent invite rotation', async () => {
-    const { service } = await createSeededService({ inviteLifecycleStatus: 'exported' });
+    const { service } = await createSeededService({
+      inviteLifecycleStatus: 'exported',
+    });
 
     await expect(service.rotateInviteCode('h1')).rejects.toMatchObject({
       message: 'Rotating an exported invite requires explicit confirmation',
       statusCode: 409,
     });
 
-    await expect(service.rotateInviteCode('h1', { confirmRotation: true })).resolves.toHaveProperty('inviteCode');
+    await expect(
+      service.rotateInviteCode('h1', { confirmRotation: true }),
+    ).resolves.toHaveProperty('inviteCode');
     await service.updateInviteLifecycle('h1', { status: 'exported' });
     await service.updateInviteLifecycle('h1', { status: 'sent' });
 
-    await expect(service.rotateInviteCode('h1', { confirmRotation: true })).rejects.toMatchObject({
-      message: 'Sent invitations cannot be rotated. Archive the household or contact guests directly.',
+    await expect(
+      service.rotateInviteCode('h1', { confirmRotation: true }),
+    ).rejects.toMatchObject({
+      message:
+        'Sent invitations cannot be rotated. Archive the household or contact guests directly.',
       statusCode: 409,
     });
   });
@@ -244,7 +289,8 @@ describe('WeddingService', () => {
     await service.rotateInviteCode('h1');
 
     await expect(service.getRsvp(inviteCode)).rejects.toMatchObject({
-      message: 'We could not find that RSVP. Please check your invitation link.',
+      message:
+        'We could not find that RSVP. Please check your invitation link.',
       statusCode: 404,
     });
   });
@@ -296,7 +342,9 @@ describe('WeddingService', () => {
     });
 
     await service.removeHouseholdMember('h1', 'h1-1');
-    expect((await repository.getHousehold('h1'))?.members[0].archivedAt).toBeTruthy();
+    expect(
+      (await repository.getHousehold('h1'))?.members[0].archivedAt,
+    ).toBeTruthy();
 
     await service.archiveHousehold('h1');
     await expect(service.archiveHousehold('h1')).rejects.toMatchObject({
@@ -304,7 +352,8 @@ describe('WeddingService', () => {
       statusCode: 409,
     });
     await expect(service.getRsvp(inviteCode)).rejects.toMatchObject({
-      message: 'We could not find that RSVP. Please check your invitation link.',
+      message:
+        'We could not find that RSVP. Please check your invitation link.',
     });
   });
 
@@ -326,8 +375,13 @@ describe('WeddingService', () => {
 
     expect(csv).toContain('householdId,household,email,phone,addressLine1');
     expect(csv).toContain('https://wedding.example.com/rsvp/');
+    expect(csv).toMatch(
+      /https:\/\/wedding\.example\.com\/rsvp\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}/,
+    );
     expect(csv).toContain('data:image/png;base64');
-    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('exported');
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
+      'exported',
+    );
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
@@ -337,21 +391,30 @@ describe('WeddingService', () => {
       inviteCodeHash: undefined,
     });
 
-    const pdf = await service.exportInvitationLabels('https://wedding.example.com');
+    const pdf = await service.exportInvitationLabels(
+      'https://wedding.example.com',
+    );
     const pdfText = pdf.toString('utf8');
 
     expect(pdf.subarray(0, 4).toString('utf8')).toBe('%PDF');
     expect(pdfText).toContain('The Example Household');
     expect(pdfText).not.toContain(inviteCode);
-    expect(pdfText).not.toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
-    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('exported');
+    expect(pdfText).not.toContain(
+      `https://wedding.example.com/rsvp/${inviteCode}`,
+    );
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
+      'exported',
+    );
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
   it('reveals an existing recoverable invitation without exposing it in household lists', async () => {
     const { service } = await createSeededService();
 
-    const invitation = await service.revealInvitation('h1', 'https://wedding.example.com');
+    const invitation = await service.revealInvitation(
+      'h1',
+      'https://wedding.example.com',
+    );
     const list = await service.listHouseholds();
 
     expect(invitation).toMatchObject({
@@ -365,9 +428,16 @@ describe('WeddingService', () => {
 
   it('sends invitation emails using the stored recoverable code and marks sent after delivery', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service, repository } = await createSeededService({}, undefined, householdMessenger);
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
-    const response = await service.sendInvitationEmail('h1', 'https://wedding.example.com');
+    const response = await service.sendInvitationEmail(
+      'h1',
+      'https://wedding.example.com',
+    );
 
     expect(response.result).toMatchObject({
       status: 'sent',
@@ -378,34 +448,84 @@ describe('WeddingService', () => {
     expect(householdMessenger.invitationCalls[0].invitation.rsvpUrl).toBe(
       `https://wedding.example.com/rsvp/${inviteCode}`,
     );
-    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('sent');
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
+      'sent',
+    );
+  });
+
+  it('generates a short invite code before emailing households without an existing invitation', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {
+        inviteLifecycleStatus: 'not_generated',
+        inviteCodeHash: undefined,
+      },
+      undefined,
+      householdMessenger,
+    );
+
+    const response = await service.sendInvitationEmail(
+      'h1',
+      'https://wedding.example.com',
+    );
+
+    expect(response.invitation?.inviteCode).toMatch(
+      /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/,
+    );
+    expect(response.invitation?.rsvpUrl).toMatch(
+      /^https:\/\/wedding\.example\.com\/rsvp\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/,
+    );
+    expect(householdMessenger.invitationCalls[0].invitation.inviteCode).toBe(
+      response.invitation?.inviteCode,
+    );
   });
 
   it('does not mark an invitation sent when SES delivery fails', async () => {
-    const householdMessenger = new RecordingHouseholdMessenger(new Error('SES unavailable'));
-    const { service, repository } = await createSeededService({}, undefined, householdMessenger);
+    const householdMessenger = new RecordingHouseholdMessenger(
+      new Error('SES unavailable'),
+    );
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
-    const response = await service.sendInvitationEmail('h1', 'https://wedding.example.com');
+    const response = await service.sendInvitationEmail(
+      'h1',
+      'https://wedding.example.com',
+    );
 
     expect(response.result).toMatchObject({
       status: 'failed',
       message: 'SES unavailable',
     });
-    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe('generated');
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
+      'generated',
+    );
   });
 
   it('skips hash-only invitations that cannot be recovered for email', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service, repository } = await createSeededService({}, undefined, householdMessenger, {
-      saveRecoverableInviteCode: false,
-    });
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+      {
+        saveRecoverableInviteCode: false,
+      },
+    );
 
-    await expect(service.revealInvitation('h1', 'https://wedding.example.com')).rejects.toMatchObject({
+    await expect(
+      service.revealInvitation('h1', 'https://wedding.example.com'),
+    ).rejects.toMatchObject({
       message: 'This invitation does not have a recoverable invite code',
       statusCode: 404,
     });
-    await expect(service.sendInvitationEmail('h1', 'https://wedding.example.com')).rejects.toMatchObject({
-      message: 'This invitation code exists but is not recoverable. Rotate it before emailing.',
+    await expect(
+      service.sendInvitationEmail('h1', 'https://wedding.example.com'),
+    ).rejects.toMatchObject({
+      message:
+        'This invitation code exists but is not recoverable. Rotate it before emailing.',
       statusCode: 409,
     });
     expect(repository.inviteCodeSecrets.get('h1')).toBeUndefined();
@@ -423,11 +543,16 @@ describe('WeddingService', () => {
       accessibilityNotes: '',
     });
 
-    const email = buildRsvpNotificationEmail({ household, rsvp }, 'https://wedding.example.com/admin');
+    const email = buildRsvpNotificationEmail(
+      { household, rsvp },
+      'https://wedding.example.com/admin',
+    );
 
     expect(email.subject).toBe('RSVP updated: The Example Household');
     expect(email.text).toContain('Attending guests: 1');
-    expect(email.text).toContain('Admin dashboard: https://wedding.example.com/admin');
+    expect(email.text).toContain(
+      'Admin dashboard: https://wedding.example.com/admin',
+    );
     expect(email.text).not.toContain(inviteCode);
     expect(email.text).not.toContain(household.inviteCodeHash ?? '');
   });
@@ -438,7 +563,14 @@ describe('WeddingService', () => {
         householdId: 'h1',
         displayName: 'The Example Household',
         email: 'sam@example.com',
-        members: [{ id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: false }],
+        members: [
+          {
+            id: 'h1-1',
+            firstName: 'Sam',
+            lastName: 'Example',
+            canBringPlusOne: false,
+          },
+        ],
         maxPlusOnes: 0,
         rsvpStatus: 'not_started',
         inviteLifecycleStatus: 'generated',
@@ -455,17 +587,25 @@ describe('WeddingService', () => {
     });
 
     expect(email.subject).toBe("You're invited to Matt and Alison's wedding");
-    expect(email.text).toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
+    expect(email.text).toContain(
+      `https://wedding.example.com/rsvp/${inviteCode}`,
+    );
     expect(email.text).toContain(`Invitation code: ${inviteCode}`);
     expect(email.text).toContain('paper invitation');
     expect(email.html).toContain('Open your RSVP');
-    expect(email.html).toContain(`https://wedding.example.com/rsvp/${inviteCode}`);
+    expect(email.html).toContain(
+      `https://wedding.example.com/rsvp/${inviteCode}`,
+    );
     expect(email.html).toContain(`>${inviteCode}<`);
   });
 
   it('sends household email notifications to the saved contact email', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService({}, undefined, householdMessenger);
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
     const response = await service.sendHouseholdNotification('h1', {
       channel: 'email',
@@ -511,7 +651,11 @@ describe('WeddingService', () => {
 
   it('rejects household notifications when the requested contact channel is missing', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService({ email: undefined }, undefined, householdMessenger);
+    const { service } = await createSeededService(
+      { email: undefined },
+      undefined,
+      householdMessenger,
+    );
 
     await expect(
       service.sendHouseholdNotification('h1', {
@@ -529,7 +673,11 @@ describe('WeddingService', () => {
 
   it('returns a generic recovery response when no household matches the contact', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService({}, undefined, householdMessenger);
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
     const response = await service.requestRsvpRecovery(
       { contact: 'missing@example.com' },
@@ -541,14 +689,19 @@ describe('WeddingService', () => {
 
     expect(response).toEqual({
       accepted: true,
-      message: "If that matches our guest list, we'll send your private RSVP link.",
+      message:
+        "If that matches our guest list, we'll send your private RSVP link.",
     });
     expect(householdMessenger.recoveryEmailCalls).toHaveLength(0);
   });
 
   it('sends recovery emails for matching eligible households', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService({}, undefined, householdMessenger);
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
     const response = await service.requestRsvpRecovery(
       { contact: 'SAM@EXAMPLE.COM ' },
@@ -613,7 +766,11 @@ describe('WeddingService', () => {
 
   it('sends separate recovery messages for multiple households sharing one email address', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service, repository } = await createSeededService({}, undefined, householdMessenger);
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
     const secondHouseholdInviteCode = 'other-invite-code-456';
 
     const secondHousehold: Household = {
@@ -621,7 +778,12 @@ describe('WeddingService', () => {
       displayName: 'Second Household',
       email: 'sam@example.com',
       members: [
-        { id: 'h2-1', firstName: 'Alex', lastName: 'Example', canBringPlusOne: false },
+        {
+          id: 'h2-1',
+          firstName: 'Alex',
+          lastName: 'Example',
+          canBringPlusOne: false,
+        },
       ],
       maxPlusOnes: 0,
       rsvpStatus: 'not_started',
@@ -641,7 +803,9 @@ describe('WeddingService', () => {
     await repository.saveInviteCodeSecret({
       householdId: secondHousehold.householdId,
       inviteCodeHash: secondHousehold.inviteCodeHash!,
-      inviteCodeCiphertext: await inviteCodeProtector.encryptInviteCode(secondHouseholdInviteCode),
+      inviteCodeCiphertext: await inviteCodeProtector.encryptInviteCode(
+        secondHouseholdInviteCode,
+      ),
       updatedAt: new Date().toISOString(),
     });
 
@@ -658,7 +822,11 @@ describe('WeddingService', () => {
 
   it('keeps recovery generic after the contact rate limit is exceeded', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService({}, undefined, householdMessenger);
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await service.requestRsvpRecovery(
@@ -679,7 +847,9 @@ class RecordingNotifier implements RsvpNotifier {
 
   constructor(private readonly failure?: Error) {}
 
-  async notifyRsvpChanged(input: Parameters<RsvpNotifier['notifyRsvpChanged']>[0]): Promise<void> {
+  async notifyRsvpChanged(
+    input: Parameters<RsvpNotifier['notifyRsvpChanged']>[0],
+  ): Promise<void> {
     this.calls.push(input);
     if (this.failure) {
       throw this.failure;
@@ -688,14 +858,18 @@ class RecordingNotifier implements RsvpNotifier {
 }
 
 class RecordingHouseholdMessenger implements HouseholdMessenger {
-  readonly calls: Parameters<HouseholdMessenger['sendHouseholdNotification']>[0][] =
-    [];
-  readonly invitationCalls: Parameters<HouseholdMessenger['sendInvitationEmail']>[0][] =
-    [];
-  readonly recoveryEmailCalls: Parameters<HouseholdMessenger['sendRecoveryEmail']>[0][] =
-    [];
-  readonly recoverySmsCalls: Parameters<HouseholdMessenger['sendRecoverySms']>[0][] =
-    [];
+  readonly calls: Parameters<
+    HouseholdMessenger['sendHouseholdNotification']
+  >[0][] = [];
+  readonly invitationCalls: Parameters<
+    HouseholdMessenger['sendInvitationEmail']
+  >[0][] = [];
+  readonly recoveryEmailCalls: Parameters<
+    HouseholdMessenger['sendRecoveryEmail']
+  >[0][] = [];
+  readonly recoverySmsCalls: Parameters<
+    HouseholdMessenger['sendRecoverySms']
+  >[0][] = [];
 
   constructor(private readonly failure?: Error) {}
 
@@ -711,8 +885,8 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
       channel: input.channel,
       deliveredTo:
         input.channel === 'email'
-          ? input.household.email ?? ''
-          : input.household.phone ?? '',
+          ? (input.household.email ?? '')
+          : (input.household.phone ?? ''),
     };
   }
 
@@ -756,18 +930,33 @@ async function createSeededService(
   overrides: Partial<Household> = {},
   notifier?: RsvpNotifier,
   householdMessenger?: HouseholdMessenger,
-  options: { saveRecoverableInviteCode?: boolean } = {},
+  options: {
+    saveRecoverableInviteCode?: boolean;
+    legacyInviteCodeHash?: boolean;
+  } = {},
 ) {
   const repository = new InMemoryWeddingRepository();
   const inviteCodeProtector = new Base64InviteCodeProtector();
-  const inviteCodeHash = hashInviteCode(inviteCode, pepper);
+  const inviteCodeHash = options.legacyInviteCodeHash
+    ? hashLegacyInviteCode(inviteCode, pepper)
+    : hashInviteCode(inviteCode, pepper);
   const household: Household = {
     householdId: 'h1',
     displayName: 'The Example Household',
     email: 'sam@example.com',
     members: [
-      { id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true },
-      { id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false },
+      {
+        id: 'h1-1',
+        firstName: 'Sam',
+        lastName: 'Example',
+        canBringPlusOne: true,
+      },
+      {
+        id: 'h1-2',
+        firstName: 'Taylor',
+        lastName: 'Example',
+        canBringPlusOne: false,
+      },
     ],
     maxPlusOnes: 1,
     rsvpStatus: 'not_started',
@@ -776,7 +965,9 @@ async function createSeededService(
     updatedAt: new Date().toISOString(),
     ...overrides,
     inviteLifecycleStatus: overrides.inviteLifecycleStatus ?? 'generated',
-    inviteCodeHash: Object.hasOwn(overrides, 'inviteCodeHash') ? overrides.inviteCodeHash : inviteCodeHash,
+    inviteCodeHash: Object.hasOwn(overrides, 'inviteCodeHash')
+      ? overrides.inviteCodeHash
+      : inviteCodeHash,
   };
 
   await repository.saveHousehold(household);
@@ -789,13 +980,20 @@ async function createSeededService(
     await repository.saveInviteCodeSecret({
       householdId: household.householdId,
       inviteCodeHash: household.inviteCodeHash,
-      inviteCodeCiphertext: await inviteCodeProtector.encryptInviteCode(inviteCode),
+      inviteCodeCiphertext:
+        await inviteCodeProtector.encryptInviteCode(inviteCode),
       updatedAt: new Date().toISOString(),
     });
   }
 
   return {
     repository,
-    service: new WeddingService(repository, pepper, notifier, householdMessenger, inviteCodeProtector),
+    service: new WeddingService(
+      repository,
+      pepper,
+      notifier,
+      householdMessenger,
+      inviteCodeProtector,
+    ),
   };
 }

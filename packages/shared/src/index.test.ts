@@ -160,9 +160,9 @@ describe('invitation admin schemas', () => {
   it('validates revealed invitation details and email send results', () => {
     const invitation = InvitationDetailsSchema.safeParse({
       householdId: 'h1',
-      inviteCode: 'invite-code-123',
+      inviteCode: 'A2B3C4D5E6',
       inviteCodeHash: 'hash',
-      rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+      rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
     });
 
     expect(invitation.success).toBe(true);
@@ -202,9 +202,7 @@ describe('structured public planning data', () => {
     expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
     expect(embedUrl.hostname).toBe('www.openstreetmap.org');
     expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
-    expect(embedUrl.searchParams.get('marker')).toBe(
-      '33.4374400,-111.5989000',
-    );
+    expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
   });
 
   it('validates hotel block data', () => {
@@ -216,7 +214,8 @@ describe('structured public planning data', () => {
       groupCode: 'MATTALISON',
       cutoffDate: 'January 15, 2027',
       nightlyRateNotes: 'Wedding block rate available while rooms last.',
-      transportationNotes: 'Shuttle details will be posted closer to the wedding.',
+      transportationNotes:
+        'Shuttle details will be posted closer to the wedding.',
     });
 
     expect(result.success).toBe(true);

@@ -3,11 +3,18 @@ import { z } from 'zod';
 export const InviteCodeSchema = z
   .string()
   .trim()
-  .min(12)
+  .min(10)
   .max(128)
   .regex(/^[A-Za-z0-9_-]+$/, 'Invite code contains unsupported characters');
 
-export const MealChoiceSchema = z.enum(['buffet', 'chicken', 'fish', 'vegetarian', 'child', 'none']);
+export const MealChoiceSchema = z.enum([
+  'buffet',
+  'chicken',
+  'fish',
+  'vegetarian',
+  'child',
+  'none',
+]);
 export type MealChoice = z.infer<typeof MealChoiceSchema>;
 
 export const InviteLifecycleStatusSchema = z.enum([
@@ -29,10 +36,7 @@ export const HouseholdPhoneInputSchema = z
   .trim()
   .min(7)
   .max(32)
-  .regex(
-    /^[0-9+(). -]+$/,
-    'Phone number contains unsupported characters',
-  );
+  .regex(/^[0-9+(). -]+$/, 'Phone number contains unsupported characters');
 export type HouseholdPhoneInput = z.infer<typeof HouseholdPhoneInputSchema>;
 
 export const RecoveryContactInputSchema = z.string().trim().min(3).max(320);
@@ -67,7 +71,9 @@ export const HouseholdSchema = z.object({
   mailingAddress: MailingAddressSchema.optional(),
   members: z.array(HouseholdMemberSchema).min(1),
   maxPlusOnes: z.number().int().min(0).max(10).default(0),
-  rsvpStatus: z.enum(['not_started', 'attending', 'declined', 'partial']).default('not_started'),
+  rsvpStatus: z
+    .enum(['not_started', 'attending', 'declined', 'partial'])
+    .default('not_started'),
   inviteLifecycleStatus: InviteLifecycleStatusSchema.default('not_generated'),
   inviteCodeHash: z.string().optional(),
   inviteCodeGeneratedAt: z.string().datetime().optional(),
@@ -104,7 +110,10 @@ const RsvpUpdateBaseSchema = z.object({
   accessibilityNotes: z.string().trim().max(1000).optional().default(''),
 });
 
-function validateMealChoices(rsvp: z.infer<typeof RsvpUpdateBaseSchema>, ctx: z.RefinementCtx) {
+function validateMealChoices(
+  rsvp: z.infer<typeof RsvpUpdateBaseSchema>,
+  ctx: z.RefinementCtx,
+) {
   for (const [index, member] of rsvp.members.entries()) {
     if (member.attending && member.mealChoice === 'none') {
       ctx.addIssue({
@@ -133,7 +142,8 @@ function validateMealChoices(rsvp: z.infer<typeof RsvpUpdateBaseSchema>, ctx: z.
   }
 }
 
-export const RsvpUpdateSchema = RsvpUpdateBaseSchema.superRefine(validateMealChoices);
+export const RsvpUpdateSchema =
+  RsvpUpdateBaseSchema.superRefine(validateMealChoices);
 export type RsvpUpdate = z.infer<typeof RsvpUpdateSchema>;
 
 export const StoredRsvpSchema = RsvpUpdateBaseSchema.extend({
@@ -225,7 +235,9 @@ export const UpdateHouseholdMemberInputSchema = z.object({
   weddingPartyRole: z.string().trim().max(80).optional().default(''),
   rehearsalDinnerInvited: z.boolean().default(false),
 });
-export type UpdateHouseholdMemberInput = z.infer<typeof UpdateHouseholdMemberInputSchema>;
+export type UpdateHouseholdMemberInput = z.infer<
+  typeof UpdateHouseholdMemberInputSchema
+>;
 
 export const InviteLifecycleUpdateSchema = z.object({
   status: InviteLifecycleStatusSchema,
@@ -257,8 +269,14 @@ export const InvitationDetailsSchema = z.object({
 });
 export type InvitationDetails = z.infer<typeof InvitationDetailsSchema>;
 
-export const InvitationEmailResultStatusSchema = z.enum(['sent', 'skipped', 'failed']);
-export type InvitationEmailResultStatus = z.infer<typeof InvitationEmailResultStatusSchema>;
+export const InvitationEmailResultStatusSchema = z.enum([
+  'sent',
+  'skipped',
+  'failed',
+]);
+export type InvitationEmailResultStatus = z.infer<
+  typeof InvitationEmailResultStatusSchema
+>;
 
 export const InvitationEmailResultSchema = z.object({
   householdId: z.string().min(1),
@@ -273,12 +291,16 @@ export const SendInvitationEmailResponseSchema = z.object({
   result: InvitationEmailResultSchema,
   invitation: InvitationDetailsSchema.optional(),
 });
-export type SendInvitationEmailResponse = z.infer<typeof SendInvitationEmailResponseSchema>;
+export type SendInvitationEmailResponse = z.infer<
+  typeof SendInvitationEmailResponseSchema
+>;
 
 export const BulkInvitationEmailResponseSchema = z.object({
   results: z.array(InvitationEmailResultSchema),
 });
-export type BulkInvitationEmailResponse = z.infer<typeof BulkInvitationEmailResponseSchema>;
+export type BulkInvitationEmailResponse = z.infer<
+  typeof BulkInvitationEmailResponseSchema
+>;
 
 export const EmailHouseholdNotificationInputSchema = z.object({
   channel: z.literal('email'),
@@ -318,18 +340,23 @@ export const RsvpRecoveryAcceptedResponseSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("If that matches our guest list, we'll send your private RSVP link."),
+    .default(
+      "If that matches our guest list, we'll send your private RSVP link.",
+    ),
 });
 export type RsvpRecoveryAcceptedResponse = z.infer<
   typeof RsvpRecoveryAcceptedResponseSchema
 >;
 
-export const GenericInviteError = 'We could not find that RSVP. Please check your invitation link.';
+export const GenericInviteError =
+  'We could not find that RSVP. Please check your invitation link.';
 export const GenericRecoverySuccessMessage =
   "If that matches our guest list, we'll send your private RSVP link.";
 
 export function formatValidationIssues(error: z.ZodError): string[] {
-  return error.issues.map((issue) => `${issue.path.join('.') || 'value'}: ${issue.message}`);
+  return error.issues.map(
+    (issue) => `${issue.path.join('.') || 'value'}: ${issue.message}`,
+  );
 }
 
 export function generateIcs(event: CalendarEvent): string {
@@ -364,7 +391,11 @@ function formatIcsLocalDate(value: string): string {
 }
 
 function escapeIcsText(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\r?\n/g, '\\n');
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .replace(/\r?\n/g, '\\n');
 }
 
 export { siteContent } from './siteContent.js';
