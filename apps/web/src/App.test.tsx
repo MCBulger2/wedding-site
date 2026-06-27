@@ -42,6 +42,7 @@ describe('HouseholdCardActions', () => {
         onEdit={() => {}}
         onRotateInviteCode={() => {}}
         onManageInvitation={() => {}}
+        onArchive={() => {}}
       />,
     );
 

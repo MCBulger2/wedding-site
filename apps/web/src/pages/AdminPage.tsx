@@ -70,7 +70,11 @@ export function HouseholdCardActions({
   return (
     <DropdownMenu.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
       <DropdownMenu.Trigger asChild>
-        <button type="button" className="secondary-button button-inline">
+        <button
+          type="button"
+          className="secondary-button button-inline"
+          aria-label="Actions"
+        >
           <MoreHorizontal aria-hidden="true" />
         </button>
       </DropdownMenu.Trigger>
