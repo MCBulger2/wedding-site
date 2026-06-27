@@ -146,7 +146,7 @@ The deploy workflow expects these GitHub environment settings:
 - Keep all infrastructure private by default.
 - Do not expose S3 buckets publicly.
 - Require HTTPS everywhere.
-- Use high-entropy RSVP invite codes and store only hashed invite codes.
+- Use high-entropy RSVP invite codes. Store hashes for guest lookup and only KMS-encrypted ciphertext for admin recoverability.
 - Protect admin routes with Cognito and MFA.
 - Use least-privilege IAM policies.
 - Avoid long-lived AWS credentials in GitHub.

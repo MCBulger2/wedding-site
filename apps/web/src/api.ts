@@ -1,9 +1,12 @@
 import type {
   AdminHouseholdRecord,
+  BulkInvitationEmailResponse,
   CreateHouseholdInput,
   Household,
+  InvitationDetails,
   InviteLifecycleStatus,
   RsvpUpdate,
+  SendInvitationEmailResponse,
   SendHouseholdNotificationInput,
   SendHouseholdNotificationResponse,
   StoredRsvp,
@@ -30,6 +33,10 @@ export interface RotateInviteCodeResponse {
   inviteCode: string;
   inviteCodeHash: string;
 }
+
+export type RevealInvitationResponse = InvitationDetails;
+export type EmailInvitationResponse = SendInvitationEmailResponse;
+export type BulkEmailInvitationsResponse = BulkInvitationEmailResponse;
 
 export type NotifyHouseholdResponse = SendHouseholdNotificationResponse;
 
@@ -156,6 +163,37 @@ export async function rotateInviteCode(
     method: 'POST',
     headers: authHeaders(adminToken),
     body: JSON.stringify({ confirmRotation }),
+  });
+}
+
+export async function revealInvitation(
+  adminToken: string,
+  householdId: string,
+): Promise<RevealInvitationResponse> {
+  return request<RevealInvitationResponse>(`/admin/households/${encodeURIComponent(householdId)}/invitation`, {
+    headers: authHeaders(adminToken),
+  });
+}
+
+export async function emailHouseholdInvitation(
+  adminToken: string,
+  householdId: string,
+): Promise<EmailInvitationResponse> {
+  return request<EmailInvitationResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}/invitation-email`,
+    {
+      method: 'POST',
+      headers: authHeaders(adminToken),
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export async function emailInvitations(adminToken: string): Promise<BulkEmailInvitationsResponse> {
+  return request<BulkEmailInvitationsResponse>('/admin/invitations/email', {
+    method: 'POST',
+    headers: authHeaders(adminToken),
+    body: JSON.stringify({}),
   });
 }
 

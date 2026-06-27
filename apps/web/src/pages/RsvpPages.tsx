@@ -907,7 +907,7 @@ function normalizeValidationMessage(message: string): string {
 }
 
 function buildFieldErrorId(path: string): string {
-  return `field-error-${path.replace(/[^a-z0-9]+/gi, '-')}`;
+  return `${path.replace(/[^a-z0-9]+/gi, '-')}-error`;
 }
 
 function LoadingScreen({

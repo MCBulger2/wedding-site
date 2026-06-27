@@ -23,6 +23,7 @@ const household = {
   maxPlusOnes: 0,
   rsvpStatus: 'not_started',
   inviteLifecycleStatus: 'generated',
+  inviteCodeHash: 'hash',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 } as Household;
@@ -33,20 +34,14 @@ describe('HouseholdCardActions', () => {
     render(
       <HouseholdCardActions
         household={household}
-        revealedInvite={{
-          householdId: 'household-1',
-          displayName: 'The Example Family',
-          inviteCode: 'invite-code-123',
-          inviteCodeHash: 'hash',
-        }}
-        isInviteExpanded={false}
         initialMenuOpen={false}
         canNotify
+        canEmailInvitation
         onNotify={onNotify}
+        onEmailInvitation={() => {}}
         onEdit={() => {}}
         onRotateInviteCode={() => {}}
-        onToggleInvite={() => {}}
-        onOpenQrCode={() => {}}
+        onManageInvitation={() => {}}
       />,
     );
 
@@ -55,7 +50,8 @@ describe('HouseholdCardActions', () => {
       ctrlKey: false,
     });
     expect(screen.getByRole('menu')).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: /invitation qr/i })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: /email invitation/i })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: /view invitation/i })).not.toBeNull();
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();

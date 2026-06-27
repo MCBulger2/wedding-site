@@ -379,6 +379,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject?: string;
     message: string;
   }> = [];
+  const deliveredInvitationEmails: Array<{
+    householdId: string;
+    deliveredTo: string;
+  }> = [];
   let households: Array<{
     household: Record<string, unknown>;
     attendance: Record<string, number>;
@@ -513,6 +517,89 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       body: JSON.stringify({
         channel: payload.channel,
         deliveredTo,
+      }),
+    });
+  });
+
+  await page.route('**/api/admin/households/*/invitation', async (route) => {
+    const householdId =
+      route.request().url().match(/households\/([^/]+)\/invitation/)?.[1] ??
+      '';
+    const record = households.find(
+      (entry) => entry.household.householdId === householdId,
+    );
+    const inviteCode =
+      householdId === 'h2' ? 'fresh-invite-code-456' : 'test-invite-code-123';
+
+    await route.fulfill({
+      status: record ? 200 : 404,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        record
+          ? {
+              householdId,
+              inviteCode,
+              inviteCodeHash: record.household.inviteCodeHash,
+              rsvpUrl: `http://127.0.0.1:5173/rsvp/${inviteCode}`,
+            }
+          : { message: 'Household not found' },
+      ),
+    });
+  });
+
+  await page.route('**/api/admin/households/*/invitation-email', async (route) => {
+    const householdId =
+      route.request().url().match(/households\/([^/]+)\/invitation-email/)?.[1] ??
+      '';
+    const record = households.find(
+      (entry) => entry.household.householdId === householdId,
+    );
+    const inviteCode =
+      householdId === 'h2' ? 'fresh-invite-code-456' : 'test-invite-code-123';
+
+    if (!record) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Household not found' }),
+      });
+      return;
+    }
+
+    households = households.map((entry) =>
+      entry.household.householdId === householdId
+        ? {
+            ...entry,
+            household: {
+              ...entry.household,
+              inviteLifecycleStatus: 'sent',
+              inviteSentAt: '2026-06-15T22:30:00.000Z',
+            },
+          }
+        : entry,
+    );
+    deliveredInvitationEmails.push({
+      householdId,
+      deliveredTo: String(record.household.email ?? ''),
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        invitation: {
+          householdId,
+          inviteCode,
+          inviteCodeHash: record.household.inviteCodeHash,
+          rsvpUrl: `http://127.0.0.1:5173/rsvp/${inviteCode}`,
+        },
+        result: {
+          householdId,
+          displayName: record.household.displayName,
+          status: 'sent',
+          deliveredTo: record.household.email,
+          message: `Sent invitation email to ${record.household.email}`,
+        },
       }),
     });
   });
@@ -658,6 +745,37 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
+  await page.route('**/api/admin/invitations/email', async (route) => {
+    const results = households.map((record) => {
+      if (!record.household.email) {
+        return {
+          householdId: record.household.householdId,
+          displayName: record.household.displayName,
+          status: 'skipped',
+          message: 'Household does not have a contact email address',
+        };
+      }
+
+      deliveredInvitationEmails.push({
+        householdId: String(record.household.householdId),
+        deliveredTo: String(record.household.email),
+      });
+      return {
+        householdId: record.household.householdId,
+        displayName: record.household.displayName,
+        status: 'sent',
+        deliveredTo: record.household.email,
+        message: `Sent invitation email to ${record.household.email}`,
+      };
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results }),
+    });
+  });
+
   await page.route('**/api/admin/auth/config', async (route) => {
     await route.fulfill({
       status: 200,
@@ -757,14 +875,25 @@ test('admin route is reachable, can create households, and shows RSVP results', 
 
   await exampleCard.getByRole('button', { name: 'Actions' }).click();
   await expect(
-    exampleCard.getByRole('menuitem', { name: 'Show invitation' }),
+    exampleCard.getByRole('menuitem', { name: 'View invitation' }),
   ).toBeVisible();
-  await exampleCard.getByRole('menuitem', { name: 'Show invitation' }).click();
+  await exampleCard.getByRole('menuitem', { name: 'View invitation' }).click();
   await expect(
-    exampleCard.getByRole('link', { name: 'http://127.0.0.1:5173/rsvp/code' }),
+    exampleCard.getByRole('link', { name: 'http://127.0.0.1:5173/rsvp/test-invite-code-123' }),
   ).toBeVisible();
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Hide invitation' }).click();
+  await exampleCard.getByRole('button', { name: 'Email invitation' }).click();
+  await expect(
+    page.getByText('The Example Household: Sent invitation email to sam@example.com'),
+  ).toBeVisible();
+  expect(deliveredInvitationEmails[0]).toMatchObject({
+    householdId: 'h1',
+    deliveredTo: 'sam@example.com',
+  });
+
+  await page.getByRole('button', { name: 'Email invitations' }).click();
+  await expect(page.getByRole('dialog', { name: 'Invitation email results' })).toBeVisible();
+  await expect(page.getByText('Sent invitation email to sam@example.com').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
 
   await exampleCard.getByRole('button', { name: 'Actions' }).click();
   await exampleCard.getByRole('menuitem', { name: 'Edit' }).click();
@@ -828,11 +957,11 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       name: 'http://127.0.0.1:5173/rsvp/fresh-invite-code-456',
     }),
   ).toBeVisible();
-  await newCard.getByRole('button', { name: 'Actions' }).click();
-  await newCard.getByRole('menuitem', { name: 'Invitation QR' }).click();
+  await newCard.getByRole('button', { name: 'QR code' }).click();
   await expect(
     page.getByRole('dialog', { name: 'The Harper Household invitation QR' }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
 
   await page.reload();
   await expect(
@@ -844,10 +973,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .filter({ hasText: 'The Harper Household' });
   await reloadedCard.getByRole('button', { name: 'Actions' }).click();
   await expect(
-    reloadedCard.getByRole('menuitem', { name: 'Show invitation' }),
+    reloadedCard.getByRole('menuitem', { name: 'View invitation' }),
   ).toBeVisible();
   await reloadedCard
-    .getByRole('menuitem', { name: 'Show invitation' })
+    .getByRole('menuitem', { name: 'View invitation' })
     .click();
   await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
     'fresh-invite-code-456',

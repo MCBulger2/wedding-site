@@ -1,10 +1,10 @@
-import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
+import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Archive, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
-import { archiveHousehold, createHousehold, downloadInvitationsCsv, downloadRsvpsCsv, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
+import { archiveHousehold, createHousehold, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
 
 interface HouseholdFormState {
   displayName: string;
@@ -29,37 +29,30 @@ interface HouseholdFormState {
   }>;
 }
 
-interface RevealedInvite {
-  householdId: string;
-  displayName: string;
-  inviteCode: string;
-  inviteCodeHash: string;
-}
+type AdminInvitationDetails = InvitationDetails & { displayName: string };
 
 interface HouseholdCardActionsProps {
   household: Household;
-  revealedInvite?: RevealedInvite;
-  isInviteExpanded: boolean;
   initialMenuOpen?: boolean;
   canNotify: boolean;
+  canEmailInvitation: boolean;
   onNotify: () => void;
+  onEmailInvitation: () => void;
   onEdit: () => void;
   onRotateInviteCode: () => void;
-  onToggleInvite: () => void;
-  onOpenQrCode: () => void;
+  onManageInvitation: () => void;
 }
 
 export function HouseholdCardActions({
   household,
-  revealedInvite,
-  isInviteExpanded,
   initialMenuOpen = false,
   canNotify,
+  canEmailInvitation,
   onNotify,
+  onEmailInvitation,
   onEdit,
   onRotateInviteCode,
-  onToggleInvite,
-  onOpenQrCode,
+  onManageInvitation,
 }: HouseholdCardActionsProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(initialMenuOpen);
 
@@ -83,52 +76,40 @@ export function HouseholdCardActions({
         <DropdownMenu.Item
           className="household-action-menu-item"
           disabled={!canNotify}
-          onClick={() => {
-            onNotify();
-          }}
+          onClick={onNotify}
         >
           <MessageSquare aria-hidden="true" />
           Notify
         </DropdownMenu.Item>
         <DropdownMenu.Item
           className="household-action-menu-item"
-          onClick={() => {
-            onEdit();
-          }}
+          disabled={!canEmailInvitation}
+          onClick={onEmailInvitation}
         >
+          <Mail aria-hidden="true" />
+          {household.inviteSentAt
+            ? 'Resend invitation email'
+            : 'Email invitation'}
+        </DropdownMenu.Item>
+        <DropdownMenu.Item className="household-action-menu-item" onClick={onEdit}>
           <Edit3 aria-hidden="true" />
           Edit
         </DropdownMenu.Item>
         <DropdownMenu.Item
           className="household-action-menu-item"
-          onClick={() => {
-            onRotateInviteCode();
-          }}
+          onClick={onManageInvitation}
         >
           <KeyRound aria-hidden="true" />
-          {household.inviteCodeLastRotatedAt ? 'Rotate code' : 'Generate code'}
+          {household.inviteCodeHash ? 'View invitation' : 'Generate invitation'}
         </DropdownMenu.Item>
-        {revealedInvite && (
-          <>
-            <DropdownMenu.Item
-              className="household-action-menu-item"
-              onClick={() => {
-                onToggleInvite();
-              }}
-            >
-              <KeyRound aria-hidden="true" />
-              {isInviteExpanded ? 'Hide invitation' : 'Show invitation'}
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              className="household-action-menu-item"
-              onClick={() => {
-                onOpenQrCode();
-              }}
-            >
-              <Image aria-hidden="true" />
-              Invitation QR
-            </DropdownMenu.Item>
-          </>
+        {household.inviteCodeHash && (
+          <DropdownMenu.Item
+            className="household-action-menu-item"
+            onClick={onRotateInviteCode}
+          >
+            <KeyRound aria-hidden="true" />
+            Rotate code
+          </DropdownMenu.Item>
         )}
       </DropdownMenu.Content>
     </DropdownMenu.Root>
@@ -159,10 +140,10 @@ export function AdminPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<HouseholdFormState>(emptyHouseholdForm());
-  const [revealedInvites, setRevealedInvites] = useState<
-    Record<string, RevealedInvite>
-  >(() => loadRevealedInvites());
-  const [expandedInviteHouseholdId, setExpandedInviteHouseholdId] = useState<
+  const [invitationDetails, setInvitationDetails] = useState<
+    Record<string, AdminInvitationDetails>
+  >({});
+  const [expandedInvitationHouseholdId, setExpandedInvitationHouseholdId] = useState<
     string | undefined
   >();
   const [editingHouseholdId, setEditingHouseholdId] = useState<
@@ -183,7 +164,10 @@ export function AdminPage() {
     });
   const [sendingNotification, setSendingNotification] = useState(false);
   const [qrModalInvite, setQrModalInvite] = useState<
-    RevealedInvite | undefined
+    AdminInvitationDetails | undefined
+  >();
+  const [bulkEmailResults, setBulkEmailResults] = useState<
+    InvitationEmailResult[] | undefined
   >();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [qrCodeStatus, setQrCodeStatus] = useState<
@@ -205,11 +189,6 @@ export function AdminPage() {
     try {
       const response = await fetchHouseholds(token);
       setHouseholds(response.households);
-      setRevealedInvites((current) => {
-        const next = syncRevealedInvites(response.households, current);
-        saveRevealedInvites(next);
-        return next;
-      });
       setAuthStatus('ready');
       setHouseholdLoadStatus('ready');
       setMessage(`${response.households.length} households loaded.`);
@@ -234,12 +213,12 @@ export function AdminPage() {
 
   useEffect(() => {
     if (
-      expandedInviteHouseholdId &&
-      !revealedInvites[expandedInviteHouseholdId]
+      expandedInvitationHouseholdId &&
+      !invitationDetails[expandedInvitationHouseholdId]
     ) {
-      setExpandedInviteHouseholdId(undefined);
+      setExpandedInvitationHouseholdId(undefined);
     }
-  }, [expandedInviteHouseholdId, revealedInvites]);
+  }, [expandedInvitationHouseholdId, invitationDetails]);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,14 +290,14 @@ export function AdminPage() {
         session.accessToken,
         createResponse.household.householdId,
       );
-      const revealedInvite = {
-        householdId: createResponse.household.householdId,
-        displayName: createResponse.household.displayName,
-        inviteCode: inviteResponse.inviteCode,
-        inviteCodeHash: inviteResponse.inviteCodeHash,
-      };
-      persistRevealedInvite(revealedInvite, setRevealedInvites);
-      setExpandedInviteHouseholdId(revealedInvite.householdId);
+      setInvitationDetails((current) => ({
+        ...current,
+        [createResponse.household.householdId]: toAdminInvitationDetails(
+          createResponse.household,
+          inviteResponse,
+        ),
+      }));
+      setExpandedInvitationHouseholdId(createResponse.household.householdId);
       setForm(emptyHouseholdForm());
       setShowCreateHouseholdModal(false);
       await load();
@@ -375,14 +354,14 @@ export function AdminPage() {
         record.household.householdId,
         confirmRotation,
       );
-      const revealedInvite = {
-        householdId: record.household.householdId,
-        displayName: record.household.displayName,
-        inviteCode: response.inviteCode,
-        inviteCodeHash: response.inviteCodeHash,
-      };
-      persistRevealedInvite(revealedInvite, setRevealedInvites);
-      setExpandedInviteHouseholdId(revealedInvite.householdId);
+      setInvitationDetails((current) => ({
+        ...current,
+        [record.household.householdId]: toAdminInvitationDetails(
+          record.household,
+          response,
+        ),
+      }));
+      setExpandedInvitationHouseholdId(record.household.householdId);
       await load();
       setMessage(
         `Generated a new invite code for ${record.household.displayName}.`,
@@ -404,7 +383,6 @@ export function AdminPage() {
         kind === 'rsvps'
           ? await downloadRsvpsCsv(session.accessToken)
           : await downloadInvitationsCsv(session.accessToken);
-      const csvText = kind === 'invitations' ? await blob.text() : undefined;
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -412,14 +390,7 @@ export function AdminPage() {
       anchor.click();
       window.URL.revokeObjectURL(url);
       if (kind === 'invitations') {
-        const refreshedHouseholds = await load();
-        if (csvText && refreshedHouseholds) {
-          persistRevealedInvitesFromExport(
-            csvText,
-            refreshedHouseholds,
-            setRevealedInvites,
-          );
-        }
+        await load();
         setMessage(
           'Exported invitation mailing data. Review the CSV before printing.',
         );
@@ -427,6 +398,97 @@ export function AdminPage() {
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : 'Unable to export data',
+      );
+    }
+  };
+
+  const handleManageInvitation = async (record: AdminHouseholdRecord) => {
+    try {
+      if (!session) {
+        throw new Error('Sign in before managing invitations.');
+      }
+
+      if (!record.household.inviteCodeHash) {
+        await handleRotateInviteCode(record);
+        return;
+      }
+
+      const invitation = await revealInvitation(
+        session.accessToken,
+        record.household.householdId,
+      );
+      setInvitationDetails((current) => ({
+        ...current,
+        [record.household.householdId]: {
+          ...invitation,
+          displayName: record.household.displayName,
+        },
+      }));
+      setExpandedInvitationHouseholdId((current) =>
+        current === record.household.householdId
+          ? undefined
+          : record.household.householdId,
+      );
+      setMessage(`Revealed invitation for ${record.household.displayName}.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Unable to reveal invitation',
+      );
+    }
+  };
+
+  const handleEmailInvitation = async (record: AdminHouseholdRecord) => {
+    try {
+      if (!session) {
+        throw new Error('Sign in before emailing invitations.');
+      }
+
+      const response = await emailHouseholdInvitation(
+        session.accessToken,
+        record.household.householdId,
+      );
+      const invitation = response.invitation;
+      if (invitation) {
+        setInvitationDetails((current) => ({
+          ...current,
+          [record.household.householdId]: {
+            ...invitation,
+            displayName: record.household.displayName,
+          },
+        }));
+        setExpandedInvitationHouseholdId(record.household.householdId);
+      }
+      await load();
+      setMessage(
+        `${response.result.displayName}: ${response.result.message}`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to email invitation',
+      );
+    }
+  };
+
+  const handleEmailInvitations = async () => {
+    try {
+      if (!session) {
+        throw new Error('Sign in before emailing invitations.');
+      }
+
+      const response = await emailInvitations(session.accessToken);
+      setBulkEmailResults(response.results);
+      await load();
+      const sent = response.results.filter((result) => result.status === 'sent').length;
+      const skipped = response.results.filter((result) => result.status === 'skipped').length;
+      const failed = response.results.filter((result) => result.status === 'failed').length;
+      setMessage(`Invitation email summary: ${sent} sent, ${skipped} skipped, ${failed} failed.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to email invitations',
       );
     }
   };
@@ -600,7 +662,7 @@ export function AdminPage() {
     }
   };
 
-  const openQrCodeModal = async (invite: RevealedInvite) => {
+  const openQrCodeModal = async (invite: AdminInvitationDetails) => {
     const requestId = qrCodeRequestId.current + 1;
     qrCodeRequestId.current = requestId;
     await openQrCodeModalForInvite(
@@ -742,6 +804,14 @@ export function AdminPage() {
           <button
             type="button"
             className="icon-button"
+            onClick={() => void handleEmailInvitations()}
+          >
+            <Mail aria-hidden="true" />
+            Email invitations
+          </button>
+          <button
+            type="button"
+            className="icon-button"
             onClick={() => void handleExport('invitations')}
           >
             <Download aria-hidden="true" />
@@ -839,13 +909,29 @@ export function AdminPage() {
             )}
             <a
               className="secondary-button button-inline"
-              href={buildGuestRsvpUrl(qrModalInvite.inviteCode)}
+              href={qrModalInvite.rsvpUrl}
               target="_blank"
               rel="noreferrer"
             >
               <ExternalLink aria-hidden="true" />
               Open RSVP
             </a>
+          </div>
+        </Modal>
+      )}
+
+      {bulkEmailResults && (
+        <Modal
+          title="Invitation email results"
+          onClose={() => setBulkEmailResults(undefined)}
+        >
+          <div className="result-list" aria-label="Invitation email results">
+            {bulkEmailResults.map((result) => (
+              <p className={`status-result ${result.status}`} key={result.householdId}>
+                <strong>{result.displayName}</strong>
+                <span>{result.message}</span>
+              </p>
+            ))}
           </div>
         </Modal>
       )}
@@ -943,10 +1029,10 @@ export function AdminPage() {
               </p>
             )}
             {visibleHouseholds.map((record) => {
-              const revealedInvite =
-                revealedInvites[record.household.householdId];
-              const isInviteExpanded =
-                expandedInviteHouseholdId === record.household.householdId;
+              const invitation =
+                invitationDetails[record.household.householdId];
+              const isInvitationExpanded =
+                expandedInvitationHouseholdId === record.household.householdId;
 
               return (
                 <article
@@ -1010,29 +1096,18 @@ export function AdminPage() {
                     <div className="toolbar-actions">
                       <HouseholdCardActions
                         household={record.household}
-                        revealedInvite={revealedInvite}
-                        isInviteExpanded={isInviteExpanded}
                         canNotify={
                           Boolean(record.household.email) ||
                           Boolean(record.household.phone)
                         }
+                        canEmailInvitation={Boolean(record.household.email) && !isHouseholdArchived(record.household)}
                         onNotify={() => openNotificationModal(record.household)}
+                        onEmailInvitation={() => void handleEmailInvitation(record)}
                         onEdit={() => beginEditHousehold(record.household)}
                         onRotateInviteCode={() =>
                           void handleRotateInviteCode(record)
                         }
-                        onToggleInvite={() =>
-                          setExpandedInviteHouseholdId((current) =>
-                            current === record.household.householdId
-                              ? undefined
-                              : record.household.householdId,
-                          )
-                        }
-                        onOpenQrCode={() => {
-                          if (revealedInvite) {
-                            void openQrCodeModal(revealedInvite);
-                          }
-                        }}
+                        onManageInvitation={() => void handleManageInvitation(record)}
                       />
                     </div>
                   </div>
@@ -1043,7 +1118,7 @@ export function AdminPage() {
                     </p>
                   )}
 
-                  {revealedInvite && isInviteExpanded && (
+                  {invitation && isInvitationExpanded && (
                     <section
                       className="invite-preview-card"
                       aria-label={`${record.household.displayName} invitation details`}
@@ -1054,8 +1129,7 @@ export function AdminPage() {
                           Share this code, link, or QR with the household.
                         </h4>
                         <p className="form-message compact-message">
-                          Saved in this browser until the invite code changes
-                          again.
+                          Revealed for this admin session only.
                         </p>
                       </div>
                       <div className="invite-code-box">
@@ -1063,19 +1137,54 @@ export function AdminPage() {
                           <span className="invite-detail-label">
                             Invite code
                           </span>
-                          <strong>{revealedInvite.inviteCode}</strong>
+                          <strong>{invitation.inviteCode}</strong>
                         </div>
                         <div className="invite-code-block">
                           <span className="invite-detail-label">RSVP link</span>
                           <a
                             className="invite-link"
-                            href={buildGuestRsvpUrl(revealedInvite.inviteCode)}
+                            href={invitation.rsvpUrl}
                             target="_blank"
                             rel="noreferrer"
                           >
-                            {buildGuestRsvpUrl(revealedInvite.inviteCode)}
+                            {invitation.rsvpUrl}
                           </a>
                         </div>
+                      </div>
+                      <div className="toolbar-actions">
+                        <button
+                          type="button"
+                          className="secondary-button button-inline"
+                          onClick={() => void navigator.clipboard.writeText(invitation.inviteCode)}
+                        >
+                          <KeyRound aria-hidden="true" />
+                          Copy code
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button button-inline"
+                          onClick={() => void navigator.clipboard.writeText(invitation.rsvpUrl)}
+                        >
+                          <ExternalLink aria-hidden="true" />
+                          Copy link
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button button-inline"
+                          onClick={() => void openQrCodeModal(invitation)}
+                        >
+                          <Image aria-hidden="true" />
+                          QR code
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button button-inline"
+                          onClick={() => void handleEmailInvitation(record)}
+                          disabled={!record.household.email}
+                        >
+                          <Mail aria-hidden="true" />
+                          {record.household.inviteSentAt ? 'Resend email' : 'Email invitation'}
+                        </button>
                       </div>
                     </section>
                   )}
@@ -1657,9 +1766,9 @@ function summarizeMemberRsvp(attending: boolean): string {
 }
 
 async function openQrCodeModalForInvite(
-  invite: RevealedInvite,
+  invite: AdminInvitationDetails,
   isCurrentRequest: () => boolean,
-  setInvite: (invite: RevealedInvite | undefined) => void,
+  setInvite: (invite: AdminInvitationDetails | undefined) => void,
   setQrCodeDataUrl: (value: string | undefined) => void,
   setQrCodeStatus: (value: 'idle' | 'loading' | 'ready' | 'error') => void,
 ) {
@@ -1669,10 +1778,10 @@ async function openQrCodeModalForInvite(
 
   try {
     const { default: QRCode } = await import('qrcode');
-    const dataUrl = await QRCode.toDataURL(
-      buildGuestRsvpUrl(invite.inviteCode),
-      { margin: 1, width: 256 },
-    );
+    const dataUrl = await QRCode.toDataURL(invite.rsvpUrl, {
+      margin: 1,
+      width: 256,
+    });
     if (!isCurrentRequest()) {
       return;
     }
@@ -2131,197 +2240,15 @@ function buildGuestRsvpUrl(inviteCode: string): string {
   return `${window.location.origin}${buildGuestRsvpPath(inviteCode)}`;
 }
 
-const revealedInvitesStorageKey = 'admin.revealedInvites.v2';
-
-function loadRevealedInvites(): Record<string, RevealedInvite> {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const stored =
-      window.localStorage.getItem(revealedInvitesStorageKey) ??
-      window.sessionStorage.getItem('admin.revealedInvites');
-    return stored ? (JSON.parse(stored) as Record<string, RevealedInvite>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function persistRevealedInvite(
-  invite: RevealedInvite,
-  setState: Dispatch<SetStateAction<Record<string, RevealedInvite>>>,
-) {
-  setState((current) => {
-    const next = { ...current, [invite.householdId]: invite };
-    saveRevealedInvites(next);
-    return next;
-  });
-}
-
-function persistRevealedInvitesFromExport(
-  csv: string,
-  households: AdminHouseholdRecord[],
-  setState: Dispatch<SetStateAction<Record<string, RevealedInvite>>>,
-) {
-  const exportedInvites = extractRevealedInvitesFromExport(csv, households);
-  if (Object.keys(exportedInvites).length === 0) {
-    return;
-  }
-
-  setState((current) => {
-    const next = syncRevealedInvites(households, {
-      ...current,
-      ...exportedInvites,
-    });
-    saveRevealedInvites(next);
-    return next;
-  });
-}
-
-function syncRevealedInvites(
-  households: AdminHouseholdRecord[],
-  current: Record<string, RevealedInvite>,
-): Record<string, RevealedInvite> {
-  const householdsById = new Map(
-    households.map((record) => [
-      record.household.householdId,
-      record.household,
-    ]),
-  );
-  const next: Record<string, RevealedInvite> = {};
-
-  for (const [householdId, invite] of Object.entries(current)) {
-    const household = householdsById.get(householdId);
-    if (
-      !household ||
-      !household.inviteCodeHash ||
-      household.inviteCodeHash !== invite.inviteCodeHash
-    ) {
-      continue;
-    }
-
-    next[householdId] = {
-      ...invite,
-      displayName: household.displayName,
-    };
-  }
-
-  return next;
-}
-
-function extractRevealedInvitesFromExport(
-  csv: string,
-  households: AdminHouseholdRecord[],
-): Record<string, RevealedInvite> {
-  const householdsById = new Map(
-    households.map((record) => [
-      record.household.householdId,
-      record.household,
-    ]),
-  );
-  const rows = parseCsvRows(csv);
-  if (rows.length < 2) {
-    return {};
-  }
-
-  const headers = rows[0];
-  const householdIdIndex = headers.indexOf('householdId');
-  const rsvpUrlIndex = headers.indexOf('rsvpUrl');
-  if (householdIdIndex < 0 || rsvpUrlIndex < 0) {
-    return {};
-  }
-
-  const next: Record<string, RevealedInvite> = {};
-  for (const row of rows.slice(1)) {
-    const householdId = row[householdIdIndex]?.trim();
-    const rsvpUrl = row[rsvpUrlIndex]?.trim();
-    if (!householdId || !rsvpUrl) {
-      continue;
-    }
-
-    const household = householdsById.get(householdId);
-    const inviteCode = inviteCodeFromUrl(rsvpUrl);
-    if (!household || !household.inviteCodeHash || !inviteCode) {
-      continue;
-    }
-
-    next[householdId] = {
-      householdId,
-      displayName: household.displayName,
-      inviteCode,
-      inviteCodeHash: household.inviteCodeHash,
-    };
-  }
-
-  return next;
-}
-
-function parseCsvRows(input: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let value = '';
-  let inQuotes = false;
-
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
-    const next = input[index + 1];
-
-    if (char === '"' && inQuotes && next === '"') {
-      value += '"';
-      index += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === ',' && !inQuotes) {
-      row.push(value);
-      value = '';
-      continue;
-    }
-
-    if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') {
-        index += 1;
-      }
-      row.push(value);
-      rows.push(row);
-      row = [];
-      value = '';
-      continue;
-    }
-
-    value += char;
-  }
-
-  if (value.length > 0 || row.length > 0) {
-    row.push(value);
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-function inviteCodeFromUrl(value: string): string | undefined {
-  try {
-    const url = new URL(value);
-    if (!url.pathname.startsWith('/rsvp/')) {
-      return undefined;
-    }
-
-    return decodeURIComponent(url.pathname.slice('/rsvp/'.length));
-  } catch {
-    return undefined;
-  }
-}
-
-function saveRevealedInvites(invites: Record<string, RevealedInvite>) {
-  window.localStorage.setItem(
-    revealedInvitesStorageKey,
-    JSON.stringify(invites),
-  );
+function toAdminInvitationDetails(
+  household: Household,
+  response: { inviteCode: string; inviteCodeHash: string },
+): AdminInvitationDetails {
+  return {
+    householdId: household.householdId,
+    displayName: household.displayName,
+    inviteCode: response.inviteCode,
+    inviteCodeHash: response.inviteCodeHash,
+    rsvpUrl: buildGuestRsvpUrl(response.inviteCode),
+  };
 }

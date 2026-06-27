@@ -1,5 +1,5 @@
 import { generateIcs } from '@matt-alison-wedding/shared';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Hotel, KeyRound, MapPin, Heart } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { siteContent } from '../siteContent.js';

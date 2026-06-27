@@ -51,7 +51,7 @@ Mailed invites should include a short URL or QR code like `/rsvp/{inviteCode}`.
 Guest RSVP behavior:
 
 - Each household receives one high-entropy invite code.
-- The backend stores only a hash of the invite code, not the plaintext code.
+- The backend stores a hash of the invite code for guest lookup and may store a KMS-encrypted ciphertext copy for admin-only recovery, exports, and invitation emails.
 - Guests can view and edit the household RSVP using the same invite code.
 - The RSVP form should support household members, attendance, meal choice, plus-one rules, notes, accessibility or dietary notes, and timestamped edits.
 - Invalid codes should return a generic message that does not reveal whether a household exists.
@@ -65,6 +65,7 @@ Admin functionality should include:
 - Invite-code generation.
 - Invitation lifecycle tracking from generation through export, mailing, and archive.
 - Invitation mailing CSV export with RSVP URLs and QR-code data URLs.
+- Admin-only reveal, email, and re-send actions for household invitations.
 - RSVP search and filtering.
 - CSV import for guest data.
 - CSV export for RSVP data.
@@ -89,6 +90,7 @@ Admin API routes must require Cognito JWT authorization. Guest RSVP routes shoul
 - Node.js and TypeScript Lambda handlers.
 - DynamoDB on-demand table with point-in-time recovery enabled.
 - Secrets Manager secret for invite-code hashing pepper.
+- KMS key for encrypted recoverable invite codes.
 - CloudWatch logs with explicit retention.
 - AWS WAF on CloudFront for managed rules and rate limiting.
 
@@ -98,6 +100,7 @@ Use DynamoDB with a small number of access patterns:
 
 - `Household` items keyed by `householdId`.
 - `InviteCodeLookup` items keyed by `inviteCodeHash`, pointing to `householdId`.
+- `InviteCodeSecret` items keyed by `householdId`, containing only encrypted invite-code ciphertext plus the matching hash.
 - RSVP data stored with household member responses, edit metadata, and audit timestamps.
 - Optional GSI for admin views by RSVP status.
 
@@ -108,7 +111,7 @@ Use DynamoDB with a small number of access patterns:
 - Least-privilege roles for deploy, Lambda runtime, and CI.
 - S3 public access blocked.
 - DynamoDB access restricted to required Lambda actions.
-- Environment variables contain resource names only; secrets stay in Secrets Manager.
+- Environment variables contain resource names only; secrets stay in Secrets Manager and invite-code plaintext is never stored in env vars.
 
 ## Implementation Steps
 
@@ -120,7 +123,7 @@ Use DynamoDB with a small number of access patterns:
 6. Add guest CSV import format and deterministic validation errors before any data is written.
 7. Add CI workflow for typecheck, lint, unit tests, API tests, frontend build, CDK synth, and Playwright smoke tests.
 8. Add deploy workflow for staging and production with manual approval for production.
-9. Run security review before launch: WAF and rate limits, IAM review, no plaintext invite codes, HTTPS-only, admin MFA, and DynamoDB point-in-time recovery.
+9. Run security review before launch: WAF and rate limits, IAM/KMS review, no logged or raw-stored plaintext invite codes, HTTPS-only, admin MFA, and DynamoDB point-in-time recovery.
 10. Do final launch rehearsal with test households before printing mailed invite URLs and QR codes.
 
 ## API Surface
@@ -136,21 +139,24 @@ Initial backend endpoints:
 - `DELETE /admin/households/{id}/members/{memberId}`: remove or archive a member depending on RSVP history.
 - `POST /admin/households/import`: import household data from CSV for authenticated admins.
 - `POST /admin/households/{id}/invite-code`: generate or rotate an invite code for authenticated admins.
+- `GET /admin/households/{id}/invitation`: reveal the current recoverable invite code and RSVP URL for authenticated admins.
+- `POST /admin/households/{id}/invitation-email`: send or re-send a household invitation email for authenticated admins.
 - `PUT /admin/households/{id}/invite-lifecycle`: mark invitations exported, sent, or archived.
 - `GET /admin/invitations/export`: export invitation mailing CSV for authenticated admins.
+- `POST /admin/invitations/email`: send invitation emails in bulk for authenticated admins.
 - `GET /admin/rsvps/export`: export RSVP data as CSV for authenticated admins.
 
 ## Invitation Export Format
 
 The first invitation mailing export is CSV. Each row includes household display name, admin-only mailing address fields, invite lifecycle status and timestamps, a direct RSVP URL, and a QR-code PNG data URL.
 
-Production invite codes are never persisted in plaintext. Exporting invitations generates fresh codes for non-archived, non-sent households, stores only the hash, and marks the household `exported`. Once a household is marked `sent`, dashboard invite-code rotation is blocked to protect mailed RSVP URLs.
+Production invite codes are never persisted as raw plaintext. Generation stores the hash for RSVP lookup and a KMS-encrypted ciphertext copy for authenticated admin reveal/export/email workflows. Exports and email re-sends reuse the recoverable code instead of rotating URLs. Once a household is marked `sent`, dashboard invite-code rotation is blocked to protect mailed RSVP URLs.
 
 ## Testing Plan
 
 Unit tests should cover:
 
-- Invite-code generation and hashing.
+- Invite-code generation, hashing, encrypted recovery, and plaintext non-leakage in normal household responses.
 - RSVP validation rules.
 - Household import validation.
 - Admin authorization checks.
