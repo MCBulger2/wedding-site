@@ -4,6 +4,7 @@ import { siteContent, type Household, type StoredRsvp } from '@matt-alison-weddi
 import { describe, expect, it } from 'vitest';
 import {
   AwsWeddingNotificationsClient,
+  buildInvitationEmail,
   buildHouseholdNotificationEmail,
   buildRsvpNotificationEmail,
 } from './notifications.js';
@@ -95,6 +96,57 @@ describe('notifications', () => {
     expect(email.html).toContain('Attending guests');
     expect(email.html).not.toContain('secret-hash-value');
     expect(email.text).not.toContain('secret-hash-value');
+  });
+
+  it('builds styled invitation emails with the private RSVP URL and shared wedding content', () => {
+    const email = buildInvitationEmail({
+      household: createHousehold(),
+      invitation: {
+        householdId: 'h1',
+        inviteCode: 'invite-code-123',
+        inviteCodeHash: 'hash-value',
+        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+      },
+    });
+
+    expect(email.subject).toBe("You're invited to Matt and Alison's wedding");
+    expect(email.text).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(email.text).toContain('Invitation code: invite-code-123');
+    expect(email.html).toContain('Open your RSVP');
+    expect(email.html).toContain('https://wedding.example.com/rsvp/invite-code-123');
+    expect(email.html).toContain('Invitation code');
+    expect(email.html).toContain('invite-code-123');
+    expect(email.html).toContain(siteContent.venueName);
+    expect(email.html).toContain(siteContent.rsvpDeadline);
+  });
+
+  it('sends invitation emails as styled HTML instead of text-only email', async () => {
+    const sesClient = new RecordingSesClient();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        senderEmail: 'rsvp@example.com',
+        recipientEmails: [],
+      },
+      sesClient as unknown as SESv2Client,
+      new SNSClient({}),
+    );
+
+    await client.sendInvitationEmail({
+      household: createHousehold(),
+      invitation: {
+        householdId: 'h1',
+        inviteCode: 'invite-code-123',
+        inviteCodeHash: 'hash-value',
+        rsvpUrl: 'https://wedding.example.com/rsvp/invite-code-123',
+      },
+    });
+
+    expect(sesClient.commands).toHaveLength(1);
+    const body = sesClient.commands[0].input.Content?.Simple?.Body;
+    expect(body?.Text).toBeUndefined();
+    expect(body?.Html?.Data).toContain('Matt &amp; Alison');
+    expect(body?.Html?.Data).toContain('Open your RSVP');
+    expect(body?.Html?.Data).toContain('invite-code-123');
   });
 });
 
