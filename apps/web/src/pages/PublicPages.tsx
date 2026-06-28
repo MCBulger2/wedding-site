@@ -255,26 +255,50 @@ export function RegistryPage() {
         <p className="eyebrow">Registry</p>
         <h1>{registry.title}</h1>
         <p className="page-lede">{registry.intro}</p>
-        <p className="form-message"><i>{registry.note}</i></p>
+        <p className="form-message">
+          <i>{registry.note}</i>
+        </p>
       </section>
 
       {hasRegistryLinks ? (
-        <section className={scoped(styles, 'registry-list')} aria-label="Registry links">
+        <section
+          className={scoped(styles, 'registry-list')}
+          aria-label="Registry links"
+        >
           {registry.links.map((link) => (
-            <article className={scoped(styles, 'registry-card')} key={link.name}>
-              <div>
+            <article
+              className={cx(
+                scoped(styles, 'registry-card'),
+                link.image && scoped(styles, 'registry-card-with-image'),
+              )}
+              key={link.name}
+            >
+              {link.image && (
+                <div className={scoped(styles, 'registry-card-media')}>
+                  <img
+                    src={link.image.src}
+                    alt={link.image.alt}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ objectPosition: link.image.objectPosition }}
+                  />
+                </div>
+              )}
+              <div className={scoped(styles, 'registry-card-body')}>
                 <h2>{link.name}</h2>
                 <p>{link.description}</p>
               </div>
-              <a
-                className="icon-button button-inline"
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink aria-hidden="true" />
-                {link.linkLabel}
-              </a>
+              <div className={scoped(styles, 'registry-card-action')}>
+                <a
+                  className="icon-button button-inline"
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink aria-hidden="true" />
+                  {link.linkLabel}
+                </a>
+              </div>
             </article>
           ))}
         </section>

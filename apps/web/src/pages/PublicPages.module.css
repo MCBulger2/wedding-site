@@ -409,6 +409,45 @@
   padding: 1.5rem;
 }
 
+.registry-card-with-image {
+  align-items: stretch;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding: 0;
+}
+
+.registry-card-body {
+  min-width: 0;
+}
+
+.registry-card-with-image .registry-card-body {
+  align-self: center;
+  padding: 1.5rem;
+}
+
+.registry-card-action {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.registry-card-with-image .registry-card-action {
+  padding: 1.5rem 1.5rem 1.5rem 0;
+}
+
+.registry-card-media {
+  background: var(--photo-frame-bg);
+  min-height: 180px;
+}
+
+.registry-card-media img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .registry-card h2,
 .registry-empty-card h2 {
   font-size: clamp(1.8rem, 3vw, 2.4rem);
@@ -586,4 +625,27 @@
   text-decoration-color: var(--accent-border);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
+}
+
+@media (max-width: 980px) {
+  .registry-card-with-image {
+    grid-template-columns: 1fr;
+  }
+
+  .registry-card-with-image .registry-card-action {
+    padding: 0 1.5rem 1.5rem;
+  }
+
+  .registry-card-media {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .registry-card-with-image .registry-card-body,
+  .registry-card-with-image .registry-card-action {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
 }

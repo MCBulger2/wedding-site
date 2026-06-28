@@ -5,6 +5,11 @@ interface RegistryLink {
   description: string;
   url: string;
   linkLabel: string;
+  image?: {
+    src: string;
+    alt: string;
+    objectPosition?: string;
+  };
 }
 
 interface RegistryContent {
@@ -89,15 +94,23 @@ const registry: RegistryContent = {
       name: 'Honeymoon Fund',
       description:
         'Help us make our honeymoon unforgettable with a contribution to our travel fund.',
-      url: 'https://www.example.com/honeymoon-fund',
+      url: 'https://withjoy.com/matthew-and-alison-jan-2027/registry?pid=86869e07-24e0-4107-9e8a-dd6a571d2f86',
       linkLabel: 'Contribute',
+      image: {
+        src: '/registry-honeymoon-fund.jpg',
+        alt: 'Travel journals, sunglasses, and a camera overlooking a coastal honeymoon destination',
+      },
     },
     {
       name: 'Down Payment Fund',
       description:
         'Support our future home by contributing to our down payment fund.',
-      url: 'https://www.example.com/down-payment-fund',
+      url: 'https://withjoy.com/matthew-and-alison-jan-2027/registry?pid=f1fb6734-a2e9-4244-bea4-19b7646448a2',
       linkLabel: 'Contribute',
+      image: {
+        src: '/registry-down-payment-fund.jpg',
+        alt: 'Ceramic house, keys, and greenery on a warm tabletop',
+      },
     },
   ],
 };
