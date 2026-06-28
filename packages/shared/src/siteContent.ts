@@ -115,6 +115,16 @@ const registry: RegistryContent = {
   ],
 };
 
+const contactEmail = resolveRuntimeValue(
+  'CONTACT_EMAIL_ADDRESS',
+  'VITE_CONTACT_EMAIL_ADDRESS',
+) ?? 'contact@matt-alison.com';
+
+const contact = {
+  email: contactEmail,
+  href: `mailto:${contactEmail}`,
+};
+
 const ourStory: OurStoryContent = {
   title: 'Our Story',
   intro:
@@ -193,6 +203,7 @@ export const siteContent = {
     'Guests will receive RSVP links by mailed invitation.',
   ],
   hotels,
+  contact,
   registry,
   ourStory,
   weddingEvent,
@@ -231,5 +242,31 @@ export const siteContent = {
       question: 'Where should I find updates?',
       answer: 'This site will stay current as wedding details are finalized.',
     },
+    {
+      question: 'Who should I contact with questions?',
+      answer:
+        'Have a question about the wedding weekend or your RSVP? Email us at',
+      link: {
+        label: contact.email,
+        href: contact.href,
+      },
+    },
   ],
 };
+
+type RuntimeEnv = Record<string, string | undefined>;
+
+function resolveRuntimeValue(...names: string[]): string | undefined {
+  const runtimeEnv =
+    (globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } })
+      .process?.env;
+
+  for (const name of names) {
+    const value = runtimeEnv?.[name]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}

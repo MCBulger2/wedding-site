@@ -155,6 +155,12 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Guest notes' }),
   ).toBeVisible();
   await expect(
+    page.getByRole('heading', { name: 'Who should I contact with questions?' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+  ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
+  await expect(
     page
       .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Admin' }),
@@ -199,6 +205,12 @@ test('homepage details render on mobile', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Who should I contact with questions?' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+  ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect
     .poll(() =>
       page.evaluate(() => ({

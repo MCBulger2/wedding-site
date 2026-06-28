@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CalendarEventSchema,
   BulkInvitationEmailResponseSchema,
@@ -196,6 +196,35 @@ describe('invitation admin schemas', () => {
 });
 
 describe('structured public planning data', () => {
+  it('publishes the public contact email address', () => {
+    expect(siteContent.contact).toEqual({
+      email: 'contact@matt-alison.com',
+      href: 'mailto:contact@matt-alison.com',
+    });
+  });
+
+  it('can publish the public contact email address from environment', async () => {
+    const originalContactEmailAddress = process.env.CONTACT_EMAIL_ADDRESS;
+
+    try {
+      vi.resetModules();
+      process.env.CONTACT_EMAIL_ADDRESS = 'questions@example.com';
+      const { siteContent: envSiteContent } = await import('./siteContent.js');
+
+      expect(envSiteContent.contact).toEqual({
+        email: 'questions@example.com',
+        href: 'mailto:questions@example.com',
+      });
+    } finally {
+      if (originalContactEmailAddress === undefined) {
+        delete process.env.CONTACT_EMAIL_ADDRESS;
+      } else {
+        process.env.CONTACT_EMAIL_ADDRESS = originalContactEmailAddress;
+      }
+      vi.resetModules();
+    }
+  });
+
   it('uses a parseable OpenStreetMap embed URL with a venue marker', () => {
     const embedUrl = new URL(siteContent.venueMapEmbedUrl);
 

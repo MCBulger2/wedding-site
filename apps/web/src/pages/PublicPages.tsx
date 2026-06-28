@@ -207,7 +207,18 @@ export function HomePage() {
           {siteContent.faqs.map((faq) => (
             <article key={faq.question}>
               <h3>{faq.question}</h3>
-              <p>{faq.answer}</p>
+              <p>
+                {faq.answer}
+                {faq.link && (
+                  <>
+                    {' '}
+                    <a className={scoped(styles, 'faq-link')} href={faq.link.href}>
+                      {faq.link.label}
+                    </a>
+                    .
+                  </>
+                )}
+              </p>
             </article>
           ))}
         </div>

@@ -7,6 +7,8 @@ export interface DeploymentConfig {
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
+  contactEmailAddress?: string;
+  contactForwardingRecipientEmail?: string;
   enablePasskeys: boolean;
 }
 

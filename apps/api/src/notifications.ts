@@ -182,6 +182,10 @@ export class AwsWeddingNotificationsClient
                 Data: email.subject,
               },
               Body: {
+                Text: {
+                  Charset: 'UTF-8',
+                  Data: email.text,
+                },
                 Html: {
                   Charset: 'UTF-8',
                   Data: email.html,
@@ -360,6 +364,7 @@ export function buildInvitationEmail({
     ['Dress code', siteContent.dressCode],
     ['RSVP by', siteContent.rsvpDeadline],
     ['Invitation code', invitation.inviteCode],
+    ['Questions', siteContent.contact.email],
   ];
 
   return {
@@ -380,6 +385,8 @@ export function buildInvitationEmail({
       invitation.rsvpUrl,
       '',
       `Invitation code: ${invitation.inviteCode}`,
+      '',
+      `Questions? Email us at ${siteContent.contact.email}.`,
       '',
       'We will still send a paper invitation as well, but this email gives you the same private RSVP access.',
       '',
