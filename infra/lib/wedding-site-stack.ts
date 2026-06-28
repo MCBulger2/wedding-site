@@ -181,6 +181,7 @@ export class WeddingSiteStack extends Stack {
         excludePunctuation: true,
         passwordLength: 48,
       },
+      removalPolicy,
     });
 
     const inviteCodeKey = new kms.Key(this, 'InviteCodeKey', {
