@@ -1,5 +1,5 @@
 import { generateIcs } from '@matt-alison-wedding/shared';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
+import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { siteContent } from '../siteContent.js';
@@ -278,6 +278,88 @@ export function RegistryPage() {
   );
 }
 
+export function OurStoryPage() {
+  const { ourStory } = siteContent;
+  const [meetSection, proposalSection, loveSection, futureSection] =
+    ourStory.sections;
+
+  return (
+    <main className="our-story-page">
+      <section className="our-story-hero" aria-labelledby="our-story-heading">
+        <div className="our-story-hero-copy">
+          <h1 id="our-story-heading">{ourStory.title}</h1>
+          <span className="story-rule" aria-hidden="true" />
+          <p className="page-lede">{ourStory.intro}</p>
+        </div>
+        <figure className="our-story-hero-image">
+          <img
+            src={ourStory.heroImage.src}
+            alt={ourStory.heroImage.alt}
+            style={{ objectPosition: ourStory.heroImage.objectPosition }}
+          />
+        </figure>
+      </section>
+
+      <section className="story-section story-section-meet">
+        {meetSection?.image && (
+          <figure className="story-thumbnail">
+            <img
+              src={meetSection.image.src}
+              alt={meetSection.image.alt}
+              decoding="async"
+              style={{ objectPosition: meetSection.image.objectPosition }}
+            />
+          </figure>
+        )}
+        <StoryText title={meetSection?.title} body={meetSection?.body} />
+      </section>
+
+      <section className="story-section story-section-proposal">
+        <StoryText title={proposalSection?.title} body={proposalSection?.body} />
+        {proposalSection?.image && (
+          <figure className="story-landscape">
+            <img
+              src={proposalSection.image.src}
+              alt={proposalSection.image.alt}
+              decoding="async"
+              style={{ objectPosition: proposalSection.image.objectPosition }}
+            />
+          </figure>
+        )}
+      </section>
+
+      <section className="story-section story-section-duo">
+        <StoryText title={loveSection?.title} body={loveSection?.body} />
+        <StoryText title={futureSection?.title} body={futureSection?.body} />
+      </section>
+
+      <section className="story-cta-band" aria-label="Our story next steps">
+        <a className="secondary-button button-inline" href="/#details">
+          {ourStory.ctas.detailsLabel}
+          <ArrowRight aria-hidden="true" />
+        </a>
+        <a className="icon-button button-inline" href="/rsvp">
+          {ourStory.ctas.rsvpLabel}
+          <ArrowRight aria-hidden="true" />
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function StoryText({ title, body }: { title?: string; body?: string }) {
+  if (!title || !body) {
+    return null;
+  }
+
+  return (
+    <article className="story-copy-block">
+      <h2>{title}</h2>
+      <p>{body}</p>
+    </article>
+  );
+}
+
 function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const hasMultiplePhotos = photos.length > 1;
@@ -385,6 +467,10 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
           A growing gallery for engagement and wedding-weekend photos, with more memories to add as the celebration gets
           closer.
         </p>
+        <a className="secondary-button button-inline" href="/our-story">
+          Read our story
+          <ArrowRight aria-hidden="true" />
+        </a>
       </div>
       <div ref={carouselRef} className="photo-carousel" aria-roledescription="carousel" aria-label="Matt and Alison photos">
         <div ref={emblaRef} className="photo-frame">

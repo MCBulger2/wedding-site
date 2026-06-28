@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { Header, SiteFooter } from './components/SiteLayout.js';
 import { AdminPage } from './pages/AdminPage.js';
-import { HomePage, RegistryPage } from './pages/PublicPages.js';
+import { HomePage, OurStoryPage, RegistryPage } from './pages/PublicPages.js';
 import { RsvpLookupPage, RsvpPage, RsvpSuccessPage } from './pages/RsvpPages.js';
 
 type Route =
   | { name: 'home' }
+  | { name: 'our_story' }
   | { name: 'registry' }
   | { name: 'rsvp_entry' }
   | { name: 'rsvp'; inviteCode: string }
@@ -19,6 +20,7 @@ export function App() {
     <div className="app-shell">
       <Header />
       {route.name === 'home' && <HomePage />}
+      {route.name === 'our_story' && <OurStoryPage />}
       {route.name === 'registry' && <RegistryPage />}
       {route.name === 'rsvp_entry' && <RsvpLookupPage />}
       {route.name === 'rsvp' && <RsvpPage inviteCode={route.inviteCode} />}
@@ -32,6 +34,9 @@ export function App() {
 }
 
 function parseRoute(pathname: string): Route {
+  if (pathname === '/our-story') {
+    return { name: 'our_story' };
+  }
   if (pathname === '/registry') {
     return { name: 'registry' };
   }

@@ -90,6 +90,11 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page
       .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toHaveAttribute('href', '/our-story');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Registry' }),
   ).toHaveAttribute('href', '/registry');
   await expect(
@@ -100,6 +105,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
       name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Read our story' }),
+  ).toHaveAttribute('href', '/our-story');
   await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '0');
   const carousel = page.getByLabel('Matt and Alison photos');
   await carousel.hover();
@@ -183,6 +191,111 @@ test('homepage details render on mobile', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toHaveAttribute('href', /^data:text\/calendar/);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Read our story' }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ clientWidth: 390, scrollWidth: 390 });
+});
+
+test('our story page renders editorial sections and calls to action', async ({
+  page,
+}) => {
+  await page.goto('/our-story');
+
+  await expect(
+    page.getByRole('heading', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('A few placeholder notes about who we are'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Matt proposing to Alison by the lake',
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'How we met' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'The proposal' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'What we love together' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Looking ahead' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Back to wedding details' }),
+  ).toHaveAttribute('href', '/#details');
+  await expect(
+    page.locator('.story-cta-band').getByRole('link', { name: 'RSVP' }),
+  ).toHaveAttribute('href', '/rsvp');
+});
+
+test('our story page renders on mobile without overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/our-story');
+
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Our Story' }),
+  ).toBeVisible();
+  const mobileMeetLayout = await page
+    .locator('.story-section-meet')
+    .evaluate((section) => {
+      const copyBox = section
+        .querySelector('.story-copy-block')
+        ?.getBoundingClientRect();
+      const imageBox = section
+        .querySelector('.story-thumbnail')
+        ?.getBoundingClientRect();
+      const sectionBox = section.getBoundingClientRect();
+      const styles = getComputedStyle(section);
+      const contentWidth =
+        sectionBox.width -
+        parseFloat(styles.paddingLeft) -
+        parseFloat(styles.paddingRight);
+
+      return {
+        copyTop: Math.round(copyBox?.top ?? 0),
+        imageTop: Math.round(imageBox?.top ?? 0),
+        imageWidth: Math.round(imageBox?.width ?? 0),
+        contentWidth: Math.round(contentWidth),
+      };
+    });
+  expect(mobileMeetLayout.copyTop).toBeLessThan(mobileMeetLayout.imageTop);
+  expect(mobileMeetLayout.imageWidth).toBe(mobileMeetLayout.contentWidth);
+  await expect(
+    page.getByRole('link', { name: 'Back to wedding details' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.story-cta-band').getByRole('link', { name: 'RSVP' }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ clientWidth: 390, scrollWidth: 390 });
 });
 
 test('homepage map link opens Apple Maps on Apple devices', async ({

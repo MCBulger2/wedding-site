@@ -24,6 +24,23 @@ interface GalleryPhoto {
   objectPosition?: string;
 }
 
+interface StorySection {
+  title: string;
+  body: string;
+  image?: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+}
+
+interface OurStoryContent {
+  title: string;
+  intro: string;
+  heroImage: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+  sections: StorySection[];
+  ctas: {
+    detailsLabel: string;
+    rsvpLabel: string;
+  };
+}
+
 const venue = {
   name: 'Superstition Manor',
   location: '1220 N Signal Butte Rd, Mesa, AZ 85207',
@@ -85,6 +102,53 @@ const registry: RegistryContent = {
   ],
 };
 
+const ourStory: OurStoryContent = {
+  title: 'Our Story',
+  intro:
+    'A few placeholder notes about who we are, how we met, and the moments that brought us here.',
+  heroImage: {
+    src: '/hero-wedding.jpg',
+    alt: 'Matt proposing to Alison by the lake',
+    objectPosition: 'center',
+  },
+  sections: [
+    {
+      title: 'How we met',
+      body:
+        'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
+      image: {
+        src: '/ring.jpg',
+        alt: 'Temporary desert garden ceremony aisle placeholder',
+        objectPosition: 'center',
+      },
+    },
+    {
+      title: 'The proposal',
+      body:
+        'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
+      image: {
+        src: '/smile.jpg',
+        alt: 'Temporary outdoor wedding cocktail hour placeholder',
+        objectPosition: 'center',
+      },
+    },
+    {
+      title: 'What we love together',
+      body:
+        'Exploring new places, cooking at home, desert sunsets, morning coffee, live music, and time with family and friends. We balance each other, laugh a lot, and are always up for our next adventure.',
+    },
+    {
+      title: 'Looking ahead',
+      body:
+        'We are so excited to celebrate this next chapter with our favorite people. We cannot wait for a day filled with love, good food, and unforgettable memories in Mesa, Arizona. See you there!',
+    },
+  ],
+  ctas: {
+    detailsLabel: 'Back to wedding details',
+    rsvpLabel: 'RSVP',
+  },
+};
+
 const rsvpDeadline = 'February 20, 2027';
 
 export const siteContent = {
@@ -117,6 +181,7 @@ export const siteContent = {
   ],
   hotels,
   registry,
+  ourStory,
   weddingEvent,
   photos: [
     {

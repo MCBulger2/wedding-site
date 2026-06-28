@@ -14,6 +14,7 @@ export function Header() {
       </a>
       <nav aria-label="Primary navigation">
         <a href="/#details">Details</a>
+        <a href="/our-story">Our Story</a>
         <a href="/registry">Registry</a>
         <a href="/rsvp">RSVP</a>
       </nav>

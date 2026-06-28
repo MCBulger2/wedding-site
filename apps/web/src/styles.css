@@ -272,7 +272,13 @@ button {
 }
 
 .photo-section-copy {
+  display: grid;
+  gap: 1rem;
   max-width: 520px;
+}
+
+.photo-section-copy .page-lede {
+  margin: 0;
 }
 
 .photo-carousel {
@@ -607,6 +613,139 @@ button {
   color: var(--copy-muted);
   line-height: 1.6;
   margin: 0;
+}
+
+.our-story-page {
+  background: linear-gradient(180deg, #fbfbf7 0%, #ffffff 44%, #f5f7f0 100%);
+}
+
+.our-story-hero {
+  align-items: stretch;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  min-height: clamp(420px, 52vw, 620px);
+  overflow: hidden;
+  padding: 0 0 0 clamp(1.25rem, 8vw, 8rem);
+}
+
+.our-story-hero-copy {
+  align-content: center;
+  display: grid;
+  justify-items: start;
+  padding-bottom: clamp(2rem, 7vw, 5rem);
+}
+
+.our-story-hero h1 {
+  color: var(--accent-strong);
+  font-size: clamp(4rem, 8vw, 7.3rem);
+}
+
+.story-rule {
+  background: var(--secondary-accent);
+  display: block;
+  height: 3px;
+  margin: 1.55rem 0 1rem;
+  width: 48px;
+}
+
+.our-story-hero .page-lede {
+  font-size: clamp(1.05rem, 1.7vw, 1.28rem);
+  margin: 0;
+  max-width: 420px;
+}
+
+.our-story-hero-image,
+.story-thumbnail,
+.story-landscape {
+  margin: 0;
+  overflow: hidden;
+}
+
+.our-story-hero-image {
+  align-self: stretch;
+  border-bottom-left-radius: 8px;
+  min-height: clamp(420px, 42vw, 560px);
+}
+
+.our-story-hero-image img,
+.story-thumbnail img,
+.story-landscape img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.story-section {
+  display: grid;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 5vw, 4rem);
+}
+
+.story-section-meet {
+  align-items: center;
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.story-section-proposal {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(244, 247, 241, 0.88), rgba(255, 255, 252, 0.84)),
+    var(--page-bg);
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  max-width: none;
+  padding-inline: max(clamp(1.25rem, 5vw, 4rem), calc((100vw - 1180px) / 2));
+}
+
+.story-section-duo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.story-section-duo .story-copy-block + .story-copy-block {
+  border-left: 1px solid rgba(36, 42, 47, 0.18);
+  padding-left: clamp(1.5rem, 5vw, 4rem);
+}
+
+.story-copy-block h2 {
+  color: var(--accent-strong);
+  font-size: clamp(2rem, 3vw, 2.7rem);
+  margin-bottom: 0.75rem;
+}
+
+.story-copy-block p {
+  color: var(--ink-soft);
+  line-height: 1.65;
+  margin: 0;
+  max-width: 680px;
+}
+
+.story-thumbnail {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(34, 43, 39, 0.08);
+}
+
+.story-landscape {
+  aspect-ratio: 16 / 5.4;
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+.story-cta-band {
+  align-items: center;
+  background: rgba(232, 241, 236, 0.6);
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  padding: 1.6rem clamp(1.25rem, 5vw, 4rem);
+}
+
+.story-cta-band .secondary-button,
+.story-cta-band .icon-button {
+  min-width: min(280px, 100%);
 }
 
 .faq-section {
@@ -1900,12 +2039,41 @@ textarea:focus {
   .admin-grid,
   .admin-login-shell,
   .faq-grid,
+  .our-story-hero,
   .photo-section,
   .registry-card,
   .registry-callout,
   .rsvp-lookup-card,
+  .story-section-duo,
+  .story-section-meet,
+  .story-section-proposal,
   .section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .our-story-hero {
+    padding: clamp(3rem, 7vw, 5rem) clamp(1.25rem, 5vw, 4rem) 0;
+  }
+
+  .our-story-hero-image {
+    align-self: auto;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px 8px 0 0;
+    height: auto;
+    min-height: 0;
+  }
+
+  .story-thumbnail {
+    aspect-ratio: 16 / 9;
+    order: 2;
+    width: 100%;
+  }
+
+  .story-section-duo .story-copy-block + .story-copy-block {
+    border-left: 0;
+    border-top: 1px solid rgba(36, 42, 47, 0.18);
+    padding-left: 0;
+    padding-top: clamp(1.5rem, 5vw, 3rem);
   }
 
   .rsvp-lookup-guide,
@@ -2033,6 +2201,20 @@ textarea:focus {
 
   .site-header nav {
     width: 100%;
+  }
+
+  .site-header nav {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .site-header nav a {
+    padding: 0.5rem 0.55rem;
+  }
+
+  .story-cta-band {
+    align-items: stretch;
+    display: grid;
   }
 
   .button-inline,
