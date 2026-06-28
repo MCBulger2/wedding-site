@@ -173,6 +173,7 @@
   border-radius: 8px;
   color: var(--hero-text);
   padding: clamp(1.25rem, 3vw, 2rem);
+  flex-direction: column;
 }
 
 .admin-toolbar :global(.eyebrow),
