@@ -222,7 +222,7 @@ test('our story page renders editorial sections and calls to action', async ({
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: 'Matt proposing to Alison by the lake',
     }),
   ).toBeVisible();
   await expect(
@@ -257,6 +257,30 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Our Story' }),
   ).toBeVisible();
+  const mobileStoryOrder = await page
+    .locator('.story-section-meet > *')
+    .evaluateAll((elements) =>
+      elements.map((element) =>
+        element.classList.contains('story-copy-block') ? 'copy' : 'image',
+      ),
+    );
+  expect(mobileStoryOrder).toEqual(['copy', 'image']);
+  const mobileMeetImageWidth = await page
+    .locator('.story-section-meet .story-thumbnail')
+    .evaluate((element) => {
+      const imageBox = element.getBoundingClientRect();
+      const sectionBox = element
+        .closest('.story-section-meet')
+        ?.getBoundingClientRect();
+
+      return {
+        imageWidth: Math.round(imageBox.width),
+        sectionWidth: Math.round(sectionBox?.width ?? 0),
+      };
+    });
+  expect(mobileMeetImageWidth.imageWidth).toBe(
+    mobileMeetImageWidth.sectionWidth,
+  );
   await expect(
     page.getByRole('link', { name: 'Back to wedding details' }),
   ).toBeVisible();

@@ -107,8 +107,8 @@ const ourStory: OurStoryContent = {
   intro:
     'A few placeholder notes about who we are, how we met, and the moments that brought us here.',
   heroImage: {
-    src: '/hero-wedding.png',
-    alt: 'Candlelit garden reception table at sunset',
+    src: '/hero-wedding.jpg',
+    alt: 'Matt proposing to Alison by the lake',
     objectPosition: 'center',
   },
   sections: [
@@ -117,7 +117,7 @@ const ourStory: OurStoryContent = {
       body:
         'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
       image: {
-        src: '/test-ceremony-aisle.png',
+        src: '/ring.jpg',
         alt: 'Temporary desert garden ceremony aisle placeholder',
         objectPosition: 'center',
       },
@@ -127,7 +127,7 @@ const ourStory: OurStoryContent = {
       body:
         'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
       image: {
-        src: '/test-cocktail-hour.png',
+        src: '/smile.jpg',
         alt: 'Temporary outdoor wedding cocktail hour placeholder',
         objectPosition: 'center',
       },

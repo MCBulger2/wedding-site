@@ -626,7 +626,7 @@ button {
   grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
   min-height: clamp(420px, 52vw, 620px);
   overflow: hidden;
-  padding: clamp(3.5rem, 8vw, 6rem) 0 0 clamp(1.25rem, 8vw, 8rem);
+  padding: 0 0 0 clamp(1.25rem, 8vw, 8rem);
 }
 
 .our-story-hero-copy {
@@ -663,10 +663,9 @@ button {
 }
 
 .our-story-hero-image {
-  align-self: end;
-  aspect-ratio: 16 / 6;
+  align-self: stretch;
   border-bottom-left-radius: 8px;
-  min-height: 320px;
+  min-height: clamp(420px, 42vw, 560px);
 }
 
 .our-story-hero-image img,
@@ -2057,14 +2056,17 @@ textarea:focus {
   }
 
   .our-story-hero-image {
+    align-self: auto;
     aspect-ratio: 16 / 9;
     border-radius: 8px 8px 0 0;
+    height: auto;
     min-height: 0;
   }
 
   .story-thumbnail {
     aspect-ratio: 16 / 9;
-    max-width: 420px;
+    order: 2;
+    width: 100%;
   }
 
   .story-section-duo .story-copy-block + .story-copy-block {
