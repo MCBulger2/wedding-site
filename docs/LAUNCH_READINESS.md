@@ -44,6 +44,12 @@ Notifications are best-effort. Guest RSVP saves continue even if SES delivery fa
 
 The public contact address is `contact@matt-alison.com`. When the production deploy provides `CONTACT_EMAIL_ADDRESS=contact@matt-alison.com`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN=matt-alison.com`, CDK also configures SES receiving for the hosted zone, creates the SES MX record, stores raw inbound messages in a private S3 bucket with 30-day expiration, and forwards messages to the configured recipient. Do not commit the real forwarding recipient to source control. Replying from the recipient mailbox should go to the original sender through the forwarded email's `Reply-To` header; Gmail alias or SMTP send-as setup can be handled manually later if true replies from `contact@matt-alison.com` become required.
 
+## Public RSVP Abuse Protection
+
+Production CDK synth and deploy now attach a CloudFront-scoped WAF web ACL to the site distribution for `/api/rsvp*` traffic. The ACL applies the AWS managed Amazon IP reputation list, the AWS managed common protections, and a per-IP rate-based block rule for repeated RSVP requests. The public HTTP API stage also applies explicit throttling on the RSVP read, RSVP write, and recovery routes so the direct execute-api endpoint still has infrastructure-level backpressure even outside the CloudFront path.
+
+Before launch, confirm the production deploy includes the CloudFront web ACL association, that WAF sampled requests and CloudWatch metrics are visible, and that the rate limits still leave enough headroom for normal RSVP edits and invitation-recovery retries.
+
 ## Cognito Passkeys
 
 Amazon Cognito currently documents WebAuthn/passkey support for user pools, and passkeys with user verification can satisfy MFA requirements in the supported configuration. CDK also exposes passkey sign-in properties in the installed version.
