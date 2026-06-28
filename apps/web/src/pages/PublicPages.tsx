@@ -2,7 +2,9 @@ import { generateIcs } from '@matt-alison-wedding/shared';
 import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cx, scoped } from '../classNames.js';
 import { siteContent } from '../siteContent.js';
+import styles from './PublicPages.module.css';
 
 const PHOTO_WHEEL_SCROLL_THRESHOLD = 90;
 const PHOTO_WHEEL_NAVIGATION_INTERVAL_MS = 450;
@@ -16,12 +18,12 @@ export function HomePage() {
 
   return (
     <main>
-      <section className="hero">
-        <div className="hero-copy">
+      <section className={scoped(styles, 'hero')}>
+        <div className={scoped(styles, 'hero-copy')}>
           <p className="eyebrow">Wedding Announcement</p>
           <h1>{siteContent.coupleNames}</h1>
-          <p className="hero-lede">{siteContent.announcement}</p>
-          <div className="hero-facts" aria-label="Wedding highlights">
+          <p className={scoped(styles, 'hero-lede')}>{siteContent.announcement}</p>
+          <div className={scoped(styles, 'hero-facts')} aria-label="Wedding highlights">
             <span>
               <CalendarDays aria-hidden="true" />
               {siteContent.dateLabel}
@@ -45,11 +47,11 @@ export function HomePage() {
 
       <PhotoCarousel photos={siteContent.photos} />
 
-      <section id="details" className="section-grid">
+      <section id="details" className={scoped(styles, 'section-grid')}>
         <div>
           <p className="eyebrow">Itinerary</p>
           <h2>Wedding day</h2>
-          <div className="timeline">
+          <div className={scoped(styles, 'timeline')}>
             {siteContent.schedule.map((item) => (
               <div key={item.time}>
                 <strong>{item.time}</strong>
@@ -61,11 +63,11 @@ export function HomePage() {
         <div>
           <p className="eyebrow">Venue</p>
           <h2>{siteContent.venueName}</h2>
-          <ul className="plain-list">
+          <ul className={scoped(styles, 'plain-list')}>
             <li>
               <MapPin aria-hidden="true" />
               <a
-                className="venue-address-link"
+                className={scoped(styles, 'venue-address-link')}
                 href={venueMapHref}
                 target="_blank"
                 rel="noreferrer"
@@ -83,7 +85,7 @@ export function HomePage() {
               {siteContent.dressCode}
             </li>
           </ul>
-          <div className="venue-map-frame">
+          <div className={scoped(styles, 'venue-map-frame')}>
             <iframe
               title={`${siteContent.venueName} map`}
               src={siteContent.venueMapEmbedUrl}
@@ -91,7 +93,7 @@ export function HomePage() {
               referrerPolicy="no-referrer"
             />
           </div>
-          <div className="hero-actions compact-actions">
+          <div className={cx('hero-actions', scoped(styles, 'compact-actions'))}>
             <a
               className="icon-button"
               href={venueMapHref}
@@ -113,11 +115,11 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="travel" className="section-grid travel-section">
+      <section id="travel" className={cx(scoped(styles, 'section-grid'), scoped(styles, 'travel-section'))}>
         <div>
           <p className="eyebrow">Travel</p>
           <h2>Getting there</h2>
-          <ul className="plain-list">
+          <ul className={scoped(styles, 'plain-list')}>
             {siteContent.travel.map((item) => (
               <li key={item}>
                 <Hotel aria-hidden="true" />
@@ -129,11 +131,11 @@ export function HomePage() {
         <div>
           <p className="eyebrow">Hotel block</p>
           <h2>Where to stay</h2>
-          <div className="hotel-list">
+          <div className={scoped(styles, 'hotel-list')}>
             {siteContent.hotels
               .filter((hotel) => hotel.publiclyShareable)
               .map((hotel) => (
-                <article key={hotel.name} className="hotel-card">
+                <article key={hotel.name} className={scoped(styles, 'hotel-card')}>
                   <h3>{hotel.name}</h3>
                   <p>{hotel.address}</p>
                   <dl>
@@ -175,7 +177,7 @@ export function HomePage() {
                       </a>
                     )}
                     {hotel.phoneNumber && (
-                      <span className="phone-note">{hotel.phoneNumber}</span>
+                      <span className={scoped(styles, 'phone-note')}>{hotel.phoneNumber}</span>
                     )}
                   </div>
                 </article>
@@ -184,8 +186,8 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="registry" className="registry-section">
-        <div className="registry-callout">
+      <section id="registry" className={scoped(styles, 'registry-section')}>
+        <div className={scoped(styles, 'registry-callout')}>
           <div>
             <p className="eyebrow">Registry</p>
             <h2>{siteContent.registry.title}</h2>
@@ -198,14 +200,25 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="faq" className="faq-section">
+      <section id="faq" className={scoped(styles, 'faq-section')}>
         <p className="eyebrow">FAQ</p>
         <h2>Guest notes</h2>
-        <div className="faq-grid">
+        <div className={scoped(styles, 'faq-grid')}>
           {siteContent.faqs.map((faq) => (
             <article key={faq.question}>
               <h3>{faq.question}</h3>
-              <p>{faq.answer}</p>
+              <p>
+                {faq.answer}
+                {faq.link && (
+                  <>
+                    {' '}
+                    <a className={scoped(styles, 'faq-link')} href={faq.link.href}>
+                      {faq.link.label}
+                    </a>
+                    .
+                  </>
+                )}
+              </p>
             </article>
           ))}
         </div>
@@ -234,39 +247,63 @@ export function RegistryPage() {
   const hasRegistryLinks = registry.links.length > 0;
 
   return (
-    <main className="narrow-page registry-page">
-      <section className="registry-hero-card">
-        <div className="registry-icon" aria-hidden="true">
+    <main className={cx('narrow-page', scoped(styles, 'registry-page'))}>
+      <section className={scoped(styles, 'registry-hero-card')}>
+        <div className={scoped(styles, 'registry-icon')} aria-hidden="true">
           <Gift />
         </div>
         <p className="eyebrow">Registry</p>
         <h1>{registry.title}</h1>
         <p className="page-lede">{registry.intro}</p>
-        <p className="form-message"><i>{registry.note}</i></p>
+        <p className="form-message">
+          <i>{registry.note}</i>
+        </p>
       </section>
 
       {hasRegistryLinks ? (
-        <section className="registry-list" aria-label="Registry links">
+        <section
+          className={scoped(styles, 'registry-list')}
+          aria-label="Registry links"
+        >
           {registry.links.map((link) => (
-            <article className="registry-card" key={link.name}>
-              <div>
+            <article
+              className={cx(
+                scoped(styles, 'registry-card'),
+                link.image && scoped(styles, 'registry-card-with-image'),
+              )}
+              key={link.name}
+            >
+              {link.image && (
+                <div className={scoped(styles, 'registry-card-media')}>
+                  <img
+                    src={link.image.src}
+                    alt={link.image.alt}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ objectPosition: link.image.objectPosition }}
+                  />
+                </div>
+              )}
+              <div className={scoped(styles, 'registry-card-body')}>
                 <h2>{link.name}</h2>
                 <p>{link.description}</p>
               </div>
-              <a
-                className="icon-button button-inline"
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink aria-hidden="true" />
-                {link.linkLabel}
-              </a>
+              <div className={scoped(styles, 'registry-card-action')}>
+                <a
+                  className="icon-button button-inline"
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink aria-hidden="true" />
+                  {link.linkLabel}
+                </a>
+              </div>
             </article>
           ))}
         </section>
       ) : (
-        <section className="registry-empty-card">
+        <section className={scoped(styles, 'registry-empty-card')}>
           <h2>{registry.comingSoonTitle}</h2>
           <p>{registry.comingSoonMessage}</p>
           <a className="secondary-button button-inline" href="/">
@@ -284,14 +321,14 @@ export function OurStoryPage() {
     ourStory.sections;
 
   return (
-    <main className="our-story-page">
-      <section className="our-story-hero" aria-labelledby="our-story-heading">
-        <div className="our-story-hero-copy">
+    <main className={scoped(styles, 'our-story-page')}>
+      <section className={scoped(styles, 'our-story-hero')} aria-labelledby="our-story-heading">
+        <div className={scoped(styles, 'our-story-hero-copy')}>
           <h1 id="our-story-heading">{ourStory.title}</h1>
-          <span className="story-rule" aria-hidden="true" />
+          <span className={scoped(styles, 'story-rule')} aria-hidden="true" />
           <p className="page-lede">{ourStory.intro}</p>
         </div>
-        <figure className="our-story-hero-image">
+        <figure className={scoped(styles, 'our-story-hero-image')}>
           <img
             src={ourStory.heroImage.src}
             alt={ourStory.heroImage.alt}
@@ -300,9 +337,9 @@ export function OurStoryPage() {
         </figure>
       </section>
 
-      <section className="story-section story-section-meet">
+      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-meet'))}>
         {meetSection?.image && (
-          <figure className="story-thumbnail">
+          <figure className={scoped(styles, 'story-thumbnail')}>
             <img
               src={meetSection.image.src}
               alt={meetSection.image.alt}
@@ -314,10 +351,10 @@ export function OurStoryPage() {
         <StoryText title={meetSection?.title} body={meetSection?.body} />
       </section>
 
-      <section className="story-section story-section-proposal">
+      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-proposal'))}>
         <StoryText title={proposalSection?.title} body={proposalSection?.body} />
         {proposalSection?.image && (
-          <figure className="story-landscape">
+          <figure className={scoped(styles, 'story-landscape')}>
             <img
               src={proposalSection.image.src}
               alt={proposalSection.image.alt}
@@ -328,12 +365,12 @@ export function OurStoryPage() {
         )}
       </section>
 
-      <section className="story-section story-section-duo">
+      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-duo'))}>
         <StoryText title={loveSection?.title} body={loveSection?.body} />
         <StoryText title={futureSection?.title} body={futureSection?.body} />
       </section>
 
-      <section className="story-cta-band" aria-label="Our story next steps">
+      <section className={scoped(styles, 'story-cta-band')} aria-label="Our story next steps">
         <a className="secondary-button button-inline" href="/#details">
           {ourStory.ctas.detailsLabel}
           <ArrowRight aria-hidden="true" />
@@ -353,7 +390,7 @@ function StoryText({ title, body }: { title?: string; body?: string }) {
   }
 
   return (
-    <article className="story-copy-block">
+    <article className={scoped(styles, 'story-copy-block')}>
       <h2>{title}</h2>
       <p>{body}</p>
     </article>
@@ -459,8 +496,8 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   };
 
   return (
-    <section className="photo-section" aria-labelledby="photo-carousel-heading">
-      <div className="photo-section-copy">
+    <section className={scoped(styles, 'photo-section')} aria-labelledby="photo-carousel-heading">
+      <div className={scoped(styles, 'photo-section-copy')}>
         <p className="eyebrow">Photos</p>
         <h2 id="photo-carousel-heading">A few favorite moments</h2>
         <p className="page-lede">
@@ -472,12 +509,12 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
           <ArrowRight aria-hidden="true" />
         </a>
       </div>
-      <div ref={carouselRef} className="photo-carousel" aria-roledescription="carousel" aria-label="Matt and Alison photos">
-        <div ref={emblaRef} className="photo-frame">
-          <div className="photo-track">
+      <div ref={carouselRef} className={scoped(styles, 'photo-carousel')} aria-roledescription="carousel" aria-label="Matt and Alison photos">
+        <div ref={emblaRef} className={scoped(styles, 'photo-frame')}>
+          <div className={scoped(styles, 'photo-track')}>
             {photos.map((photo, index) => (
               <figure
-                className="photo-slide"
+                className={scoped(styles, 'photo-slide')}
                 aria-hidden={index === activeIndex ? 'false' : 'true'}
                 key={`${photo.src}-${photo.caption}`}
               >
@@ -492,29 +529,29 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
             ))}
           </div>
           {hasMultiplePhotos && (
-            <div className="photo-controls" aria-label="Photo controls">
-              <button type="button" className="photo-nav-button" aria-label="Show previous photo" onClick={() => advancePhoto(-1)}>
+            <div className={scoped(styles, 'photo-controls')} aria-label="Photo controls">
+              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show previous photo" onClick={() => advancePhoto(-1)}>
                 <ChevronLeft aria-hidden="true" />
               </button>
-              <button type="button" className="photo-nav-button" aria-label="Show next photo" onClick={() => advancePhoto(1)}>
+              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show next photo" onClick={() => advancePhoto(1)}>
                 <ChevronRight aria-hidden="true" />
               </button>
             </div>
           )}
         </div>
-        <div className="photo-caption-row">
+        <div className={scoped(styles, 'photo-caption-row')}>
           <p aria-live="polite">
             <strong>{activePhoto.caption}</strong>
             {activePhoto.detail && <span>{activePhoto.detail}</span>}
           </p>
           {hasMultiplePhotos && (
-            <div className="photo-dots" aria-label="Choose a photo">
+            <div className={scoped(styles, 'photo-dots')} aria-label="Choose a photo">
               {photos.map((photo, index) => (
                 <button
                   type="button"
                   aria-label={`Show photo ${index + 1}: ${photo.caption}`}
                   aria-current={index === activeIndex ? 'true' : 'false'}
-                  className="photo-dot"
+                  className={scoped(styles, 'photo-dot')}
                   key={`${photo.caption}-dot`}
                   onClick={() => showPhoto(index)}
                 />

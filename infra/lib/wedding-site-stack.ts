@@ -15,11 +15,14 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNode from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as customResources from 'aws-cdk-lib/custom-resources';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ses from 'aws-cdk-lib/aws-ses';
+import * as sesActions from 'aws-cdk-lib/aws-ses-actions';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as s3Notifications from 'aws-cdk-lib/aws-s3-notifications';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
@@ -35,6 +38,8 @@ export interface WeddingSiteStackProps extends StackProps {
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
+  contactEmailAddress?: string;
+  contactForwardingRecipientEmail?: string;
   enablePasskeys: boolean;
 }
 
@@ -309,11 +314,41 @@ export class WeddingSiteStack extends Stack {
     });
 
     const hostedZone =
-      props.hostedZoneDomain && (frontendDomainName || props.apiDomainName || props.authDomainName)
+      props.hostedZoneDomain &&
+      (frontendDomainName ||
+        props.apiDomainName ||
+        props.authDomainName ||
+        props.contactEmailAddress)
         ? route53.HostedZone.fromLookup(this, 'HostedZone', {
             domainName: props.hostedZoneDomain,
           })
         : undefined;
+    const domainSesIdentities = new Map<string, ses.IEmailIdentity>();
+    const getSesIdentity = (
+      id: string,
+      emailAddress: string,
+    ): ses.IEmailIdentity => {
+      const emailDomain = getEmailDomain(emailAddress);
+      if (
+        hostedZone &&
+        props.hostedZoneDomain &&
+        normalizeDomainName(emailDomain) === normalizeDomainName(props.hostedZoneDomain)
+      ) {
+        const domainKey = normalizeDomainName(emailDomain);
+        const existingIdentity = domainSesIdentities.get(domainKey);
+        if (existingIdentity) {
+          return existingIdentity;
+        }
+
+        const identity = new ses.EmailIdentity(this, id, {
+          identity: ses.Identity.publicHostedZone(hostedZone),
+        });
+        domainSesIdentities.set(domainKey, identity);
+        return identity;
+      }
+
+      return ses.EmailIdentity.fromEmailIdentityName(this, id, emailAddress);
+    };
 
     const certificate = frontendDomainName
       ? (props.frontendCertificate ??
@@ -366,6 +401,9 @@ export class WeddingSiteStack extends Stack {
       : `https://${distribution.distributionDomainName}`;
     apiHandler.addEnvironment('FRONTEND_BASE_URL', deployedFrontendBaseUrl);
     apiHandler.addEnvironment('ADMIN_DASHBOARD_URL', `${deployedFrontendBaseUrl}/admin`);
+    if (props.contactEmailAddress) {
+      apiHandler.addEnvironment('CONTACT_EMAIL_ADDRESS', props.contactEmailAddress);
+    }
 
     const adminRedirectUris = buildAdminRedirectUris(frontendDomainName, distribution.distributionDomainName);
     const authCertificate = props.authDomainName
@@ -434,17 +472,10 @@ export class WeddingSiteStack extends Stack {
       apiHandler.addEnvironment('RSVP_NOTIFICATION_SENDER_EMAIL', props.notificationSenderEmail);
       apiHandler.addEnvironment('RSVP_NOTIFICATION_RECIPIENT_EMAILS', props.notificationRecipientEmails.join(','));
 
-      const senderDomain = props.notificationSenderEmail.split('@')[1];
-      const sesIdentity =
-        hostedZone && senderDomain === props.hostedZoneDomain
-          ? new ses.EmailIdentity(this, 'RsvpNotificationSesIdentity', {
-              identity: ses.Identity.publicHostedZone(hostedZone),
-            })
-          : ses.EmailIdentity.fromEmailIdentityName(
-              this,
-              'RsvpNotificationSesIdentity',
-              props.notificationSenderEmail,
-            );
+      const sesIdentity = getSesIdentity(
+        'RsvpNotificationSesIdentity',
+        props.notificationSenderEmail,
+      );
       sesIdentity.grantSendEmail(apiHandler);
       apiHandler.addToRolePolicy(
         new iam.PolicyStatement({
@@ -461,6 +492,143 @@ export class WeddingSiteStack extends Stack {
             },
           },
         }),
+      );
+    }
+
+    if (
+      props.contactEmailAddress &&
+      props.contactForwardingRecipientEmail &&
+      hostedZone &&
+      props.hostedZoneDomain &&
+      normalizeDomainName(getEmailDomain(props.contactEmailAddress)) ===
+        normalizeDomainName(props.hostedZoneDomain)
+    ) {
+      const contactEmailIdentity = getSesIdentity(
+        'ContactEmailSesIdentity',
+        props.contactEmailAddress,
+      );
+      const inboundEmailPrefix = 'incoming/';
+      const inboundEmailBucket = new s3.Bucket(this, 'ContactInboundEmailBucket', {
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+        lifecycleRules: [
+          {
+            expiration: Duration.days(30),
+            prefix: inboundEmailPrefix,
+          },
+        ],
+        removalPolicy,
+        autoDeleteObjects: props.envName === 'production' ? false : true,
+      });
+      const contactForwarderLogGroup = new logs.LogGroup(this, 'ContactForwarderLogGroup', {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy,
+      });
+      const contactForwarder = new lambdaNode.NodejsFunction(this, 'ContactForwarder', {
+        entry: path.join(repoRoot, 'apps/api/src/contactForwarder.ts'),
+        environment: {
+          CONTACT_EMAIL_ADDRESS: props.contactEmailAddress,
+          CONTACT_FORWARDING_RECIPIENT_EMAIL:
+            props.contactForwardingRecipientEmail,
+        },
+        logGroup: contactForwarderLogGroup,
+        runtime: lambda.Runtime.NODEJS_24_X,
+        timeout: Duration.seconds(20),
+      });
+
+      inboundEmailBucket.grantRead(contactForwarder, `${inboundEmailPrefix}*`);
+      inboundEmailBucket.addEventNotification(
+        s3.EventType.OBJECT_CREATED,
+        new s3Notifications.LambdaDestination(contactForwarder),
+        { prefix: inboundEmailPrefix },
+      );
+      contactForwarder.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [
+            contactEmailIdentity.emailIdentityArn,
+            `arn:${Stack.of(this).partition}:ses:${Stack.of(this).region}:${Stack.of(this).account}:identity/${props.contactForwardingRecipientEmail}`,
+          ],
+          conditions: {
+            StringEquals: {
+              'ses:FromAddress': props.contactEmailAddress,
+            },
+          },
+        }),
+      );
+
+      new route53.MxRecord(this, 'ContactEmailMxRecord', {
+        zone: hostedZone,
+        values: [
+          {
+            priority: 10,
+            hostName: `inbound-smtp.${Stack.of(this).region}.amazonaws.com`,
+          },
+        ],
+      });
+
+      const contactReceiptRuleSetName = `wedding-site-${props.envName}-contact`;
+      const contactReceiptRuleSet = new ses.ReceiptRuleSet(
+        this,
+        'ContactReceiptRuleSet',
+        {
+          receiptRuleSetName: contactReceiptRuleSetName,
+        },
+      );
+      const contactReceiptRule = contactReceiptRuleSet.addRule(
+        'ContactReceiptRule',
+        {
+          recipients: [props.contactEmailAddress],
+          scanEnabled: true,
+          actions: [
+            new sesActions.S3({
+              bucket: inboundEmailBucket,
+              objectKeyPrefix: inboundEmailPrefix,
+            }),
+          ],
+        },
+      );
+      contactReceiptRule.node.addDependency(contactEmailIdentity);
+
+      const activeReceiptRuleSet = new customResources.AwsCustomResource(
+        this,
+        'ActiveContactReceiptRuleSet',
+        {
+          onCreate: {
+            service: 'SES',
+            action: 'setActiveReceiptRuleSet',
+            parameters: {
+              RuleSetName: contactReceiptRuleSetName,
+            },
+            physicalResourceId: customResources.PhysicalResourceId.of(
+              contactReceiptRuleSetName,
+            ),
+          },
+          onUpdate: {
+            service: 'SES',
+            action: 'setActiveReceiptRuleSet',
+            parameters: {
+              RuleSetName: contactReceiptRuleSetName,
+            },
+            physicalResourceId: customResources.PhysicalResourceId.of(
+              contactReceiptRuleSetName,
+            ),
+          },
+          policy: customResources.AwsCustomResourcePolicy.fromStatements([
+            new iam.PolicyStatement({
+              actions: ['ses:SetActiveReceiptRuleSet'],
+              resources: ['*'],
+            }),
+          ]),
+          installLatestAwsSdk: false,
+        },
+      );
+      activeReceiptRuleSet.node.addDependency(contactReceiptRule);
+    } else if (props.contactEmailAddress || props.contactForwardingRecipientEmail) {
+      cdk.Annotations.of(this).addWarningV2(
+        'ContactEmailForwardingIncomplete',
+        'Contact email forwarding requires CONTACT_EMAIL_ADDRESS, CONTACT_FORWARDING_RECIPIENT_EMAIL, and a matching HOSTED_ZONE_DOMAIN.',
       );
     }
 
@@ -629,6 +797,11 @@ function getParentDomainName(domainName: string): string | undefined {
   }
 
   return labels.slice(1).join('.');
+}
+
+function getEmailDomain(emailAddress: string): string {
+  const [, domain] = emailAddress.split('@');
+  return domain ?? '';
 }
 
 function normalizeDomainName(domainName: string): string {

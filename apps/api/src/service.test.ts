@@ -385,11 +385,8 @@ describe('WeddingService', () => {
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
-  it('exports invitation QR labels as a PDF without searchable invite secrets', async () => {
-    const { service, repository } = await createSeededService({
-      inviteLifecycleStatus: 'not_generated',
-      inviteCodeHash: undefined,
-    });
+  it('exports invitation QR labels with the household name, invite code, and website URL', async () => {
+    const { service, repository } = await createSeededService();
 
     const pdf = await service.exportInvitationLabels(
       'https://wedding.example.com',
@@ -398,10 +395,9 @@ describe('WeddingService', () => {
 
     expect(pdf.subarray(0, 4).toString('utf8')).toBe('%PDF');
     expect(pdfText).toContain('The Example Household');
-    expect(pdfText).not.toContain(inviteCode);
-    expect(pdfText).not.toContain(
-      `https://wedding.example.com/rsvp/${inviteCode}`,
-    );
+    expect(pdfText).toContain(`Code: ${inviteCode}`);
+    expect(pdfText).toContain('Website:');
+    expect(pdfText).toContain('https://wedding.example.com');
     expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
       'exported',
     );

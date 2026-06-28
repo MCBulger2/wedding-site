@@ -29,7 +29,9 @@ npm run deploy:infra:production -- \
   -c authDomainName=auth.example.com \
   -c allowedOrigins=https://www.example.com \
   -c notificationSenderEmail=wedding@example.com \
-  -c notificationRecipientEmails=admin1@example.com,admin2@example.com
+  -c notificationRecipientEmails=admin1@example.com,admin2@example.com \
+  -c contactEmailAddress=contact@matt-alison.com \
+  -c contactForwardingRecipientEmail=admin@example.com
 ```
 
 `domainName` is still accepted as a shorthand for the frontend domain, but `frontendDomainName` is clearer for production.
@@ -39,6 +41,8 @@ npm run deploy:infra:production -- \
 RSVP notifications and invitation emails use SES through the API Lambda. If the notification sender email is under the hosted zone domain, CDK creates an SES domain identity and DKIM DNS records. Recipient verification and SES sandbox removal still need to be completed in AWS before production launch.
 
 Notifications are best-effort. Guest RSVP saves continue even if SES delivery fails, and failures are logged with household ID and RSVP update time.
+
+The public contact address is `contact@matt-alison.com`. When the production deploy provides `CONTACT_EMAIL_ADDRESS=contact@matt-alison.com`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN=matt-alison.com`, CDK also configures SES receiving for the hosted zone, creates the SES MX record, stores raw inbound messages in a private S3 bucket with 30-day expiration, and forwards messages to the configured recipient. Do not commit the real forwarding recipient to source control. Replying from the recipient mailbox should go to the original sender through the forwarded email's `Reply-To` header; Gmail alias or SMTP send-as setup can be handled manually later if true replies from `contact@matt-alison.com` become required.
 
 ## Cognito Passkeys
 

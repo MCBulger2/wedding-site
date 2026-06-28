@@ -155,6 +155,12 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Guest notes' }),
   ).toBeVisible();
   await expect(
+    page.getByRole('heading', { name: 'Who should I contact with questions?' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+  ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
+  await expect(
     page
       .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Admin' }),
@@ -199,6 +205,12 @@ test('homepage details render on mobile', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Who should I contact with questions?' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+  ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect
     .poll(() =>
       page.evaluate(() => ({
@@ -373,8 +385,35 @@ test('registry page renders configured links', async ({ page }) => {
     page.getByRole('heading', { name: 'Down Payment Fund' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Contribute' }).first(),
-  ).toHaveAttribute('href', 'https://www.example.com/honeymoon-fund');
+    page.getByRole('img', {
+      name: 'Travel journals, sunglasses, and a camera overlooking a coastal honeymoon destination',
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Ceramic house, keys, and greenery on a warm tabletop',
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByLabel('Registry links')
+      .locator('article')
+      .filter({ hasText: 'Honeymoon Fund' })
+      .getByRole('link', { name: 'Contribute' }),
+  ).toHaveAttribute(
+    'href',
+    'https://withjoy.com/matthew-and-alison-jan-2027/registry?pid=86869e07-24e0-4107-9e8a-dd6a571d2f86',
+  );
+  await expect(
+    page
+      .getByLabel('Registry links')
+      .locator('article')
+      .filter({ hasText: 'Down Payment Fund' })
+      .getByRole('link', { name: 'Contribute' }),
+  ).toHaveAttribute(
+    'href',
+    'https://withjoy.com/matthew-and-alison-jan-2027/registry?pid=f1fb6734-a2e9-4244-bea4-19b7646448a2',
+  );
   await expect(page.getByLabel('Registry links')).toBeVisible();
 });
 
