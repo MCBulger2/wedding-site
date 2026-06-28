@@ -69,10 +69,11 @@ const enablePasskeys =
   deploymentConfig.enablePasskeys;
 
 const certificateStack =
-  hostedZoneDomain && (frontendDomainName || authDomainName)
+  envName === 'production' || (hostedZoneDomain && (frontendDomainName || authDomainName))
     ? new CertificateStack(app, `WeddingSiteCertificates-${envName}`, {
         env: { account, region: 'us-east-1' },
         crossRegionReferences: true,
+        envName,
         hostedZoneDomain,
         frontendDomainName,
         authDomainName,
@@ -87,6 +88,7 @@ new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   frontendDomainName,
   apiDomainName,
   authDomainName,
+  cloudFrontWebAclArn: certificateStack?.cloudFrontWebAclArn,
   frontendCertificate: certificateStack?.frontendCertificate,
   authCertificate: certificateStack?.authCertificate,
   hostedZoneDomain,
