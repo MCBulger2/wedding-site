@@ -257,30 +257,31 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Our Story' }),
   ).toBeVisible();
-  const mobileStoryOrder = await page
-    .locator('.story-section-meet > *')
-    .evaluateAll((elements) =>
-      elements.map((element) =>
-        element.classList.contains('story-copy-block') ? 'copy' : 'image',
-      ),
-    );
-  expect(mobileStoryOrder).toEqual(['copy', 'image']);
-  const mobileMeetImageWidth = await page
-    .locator('.story-section-meet .story-thumbnail')
-    .evaluate((element) => {
-      const imageBox = element.getBoundingClientRect();
-      const sectionBox = element
-        .closest('.story-section-meet')
+  const mobileMeetLayout = await page
+    .locator('.story-section-meet')
+    .evaluate((section) => {
+      const copyBox = section
+        .querySelector('.story-copy-block')
         ?.getBoundingClientRect();
+      const imageBox = section
+        .querySelector('.story-thumbnail')
+        ?.getBoundingClientRect();
+      const sectionBox = section.getBoundingClientRect();
+      const styles = getComputedStyle(section);
+      const contentWidth =
+        sectionBox.width -
+        parseFloat(styles.paddingLeft) -
+        parseFloat(styles.paddingRight);
 
       return {
-        imageWidth: Math.round(imageBox.width),
-        sectionWidth: Math.round(sectionBox?.width ?? 0),
+        copyTop: Math.round(copyBox?.top ?? 0),
+        imageTop: Math.round(imageBox?.top ?? 0),
+        imageWidth: Math.round(imageBox?.width ?? 0),
+        contentWidth: Math.round(contentWidth),
       };
     });
-  expect(mobileMeetImageWidth.imageWidth).toBe(
-    mobileMeetImageWidth.sectionWidth,
-  );
+  expect(mobileMeetLayout.copyTop).toBeLessThan(mobileMeetLayout.imageTop);
+  expect(mobileMeetLayout.imageWidth).toBe(mobileMeetLayout.contentWidth);
   await expect(
     page.getByRole('link', { name: 'Back to wedding details' }),
   ).toBeVisible();
