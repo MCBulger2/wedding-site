@@ -168,6 +168,8 @@ interface HouseholdNotificationFormState {
   message: string;
 }
 
+type BulkAdminAction = 'email_invitations' | 'export_invitations' | 'export_labels';
+
 export function AdminPage() {
   const [authConfig, setAuthConfig] = useState<AdminAuthConfig | undefined>();
   const [session, setSession] = useState<AdminSession | undefined>();
@@ -215,10 +217,17 @@ export function AdminPage() {
   const [bulkEmailResults, setBulkEmailResults] = useState<
     InvitationEmailResult[] | undefined
   >();
+  const [bulkActionToConfirm, setBulkActionToConfirm] = useState<
+    BulkAdminAction | undefined
+  >();
+  const [pendingBulkAction, setPendingBulkAction] = useState<
+    BulkAdminAction | undefined
+  >();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | undefined>();
   const [qrCodeStatus, setQrCodeStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
+  const pendingBulkActionRef = useRef<BulkAdminAction | undefined>();
   const qrCodeRequestId = useRef(0);
 
   const load = async (
@@ -429,7 +438,9 @@ export function AdminPage() {
     }
   };
 
-  const handleExport = async (kind: 'rsvps' | 'invitations' | 'labels') => {
+  const handleExport = async (
+    kind: 'rsvps' | 'invitations' | 'labels',
+  ): Promise<boolean> => {
     try {
       if (!session) {
         throw new Error('Sign in before exporting data.');
@@ -463,10 +474,12 @@ export function AdminPage() {
           'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
         );
       }
+      return true;
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : 'Unable to export data',
       );
+      return false;
     }
   };
 
@@ -539,7 +552,7 @@ export function AdminPage() {
     }
   };
 
-  const handleEmailInvitations = async () => {
+  const handleEmailInvitations = async (): Promise<boolean> => {
     try {
       if (!session) {
         throw new Error('Sign in before emailing invitations.');
@@ -552,12 +565,14 @@ export function AdminPage() {
       const skipped = response.results.filter((result) => result.status === 'skipped').length;
       const failed = response.results.filter((result) => result.status === 'failed').length;
       setMessage(`Invitation email summary: ${sent} sent, ${skipped} skipped, ${failed} failed.`);
+      return true;
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
           : 'Unable to email invitations',
       );
+      return false;
     }
   };
 
@@ -771,6 +786,43 @@ export function AdminPage() {
     },
     { households: 0, invitedGuests: 0, attendingGuests: 0, pendingGuests: 0 },
   );
+  const loadedHouseholdCount = households.length;
+  const householdsWithEmailCount = households.filter(
+    (record) =>
+      Boolean(record.household.email) && !isHouseholdArchived(record.household),
+  ).length;
+  const bulkActionScopeNote =
+    visibleHouseholds.length === loadedHouseholdCount
+      ? `This action runs against all ${formatCountLabel(loadedHouseholdCount, 'loaded household')} currently in the dashboard.`
+      : `This action runs against all ${formatCountLabel(loadedHouseholdCount, 'loaded household')} currently in the dashboard, not only the ${formatCountLabel(visibleHouseholds.length, 'household')} matching the current filters.`;
+  const bulkActionDetails = getBulkActionDetails(
+    bulkActionScopeNote,
+    loadedHouseholdCount,
+    householdsWithEmailCount,
+  );
+
+  const confirmBulkAction = async () => {
+    if (!bulkActionToConfirm || pendingBulkActionRef.current) {
+      return;
+    }
+
+    pendingBulkActionRef.current = bulkActionToConfirm;
+    setPendingBulkAction(bulkActionToConfirm);
+    try {
+      const succeeded =
+        bulkActionToConfirm === 'email_invitations'
+          ? await handleEmailInvitations()
+          : bulkActionToConfirm === 'export_invitations'
+            ? await handleExport('invitations')
+            : await handleExport('labels');
+      if (succeeded) {
+        setBulkActionToConfirm(undefined);
+      }
+    } finally {
+      pendingBulkActionRef.current = undefined;
+      setPendingBulkAction(undefined);
+    }
+  };
 
   const profileName = getAdminProfileName(session);
   const isHouseholdsLoading =
@@ -872,26 +924,35 @@ export function AdminPage() {
           <button
             type="button"
             className="icon-button"
-            onClick={() => void handleEmailInvitations()}
+            disabled={pendingBulkAction === 'email_invitations'}
+            onClick={() => setBulkActionToConfirm('email_invitations')}
           >
             <Mail aria-hidden="true" />
-            Email invitations
+            {pendingBulkAction === 'email_invitations'
+              ? 'Emailing invitations...'
+              : 'Email invitations'}
           </button>
           <button
             type="button"
             className="icon-button"
-            onClick={() => void handleExport('invitations')}
+            disabled={pendingBulkAction === 'export_invitations'}
+            onClick={() => setBulkActionToConfirm('export_invitations')}
           >
             <Download aria-hidden="true" />
-            Export invitations
+            {pendingBulkAction === 'export_invitations'
+              ? 'Exporting invitations...'
+              : 'Export invitations'}
           </button>
           <button
             type="button"
             className="icon-button"
-            onClick={() => void handleExport('labels')}
+            disabled={pendingBulkAction === 'export_labels'}
+            onClick={() => setBulkActionToConfirm('export_labels')}
           >
             <Download aria-hidden="true" />
-            Export QR labels
+            {pendingBulkAction === 'export_labels'
+              ? 'Exporting QR labels...'
+              : 'Export QR labels'}
           </button>
           <button
             type="button"
@@ -1016,6 +1077,15 @@ export function AdminPage() {
             ))}
           </div>
         </Modal>
+      )}
+
+      {bulkActionToConfirm && (
+        <BulkActionConfirmationModal
+          action={bulkActionDetails[bulkActionToConfirm]}
+          pending={pendingBulkAction === bulkActionToConfirm}
+          onCancel={() => setBulkActionToConfirm(undefined)}
+          onConfirm={confirmBulkAction}
+        />
       )}
 
       <section className={scoped(styles, 'admin-grid')}>
@@ -1767,6 +1837,71 @@ function isHouseholdArchived(household: Household): boolean {
   );
 }
 
+interface BulkActionDetails {
+  dialogTitle: string;
+  summary: string;
+  countHeadline: string;
+  countDetail: string;
+  sideEffectDetail: string;
+  confirmLabel: string;
+  pendingLabel: string;
+  icon: typeof Mail | typeof Download;
+}
+
+function getBulkActionDetails(
+  scopeNote: string,
+  loadedHouseholdCount: number,
+  householdsWithEmailCount: number,
+): Record<BulkAdminAction, BulkActionDetails> {
+  return {
+    email_invitations: {
+      dialogTitle: 'Confirm invitation emails',
+      summary: 'Send invitation emails across the admin dashboard.',
+      countHeadline: formatCountLabel(
+        householdsWithEmailCount,
+        'household with a contact email',
+        'households with a contact email',
+      ),
+      countDetail: `${scopeNote} ${formatCountLabel(householdsWithEmailCount, 'household with a contact email', 'households with a contact email')} can send or resend immediately.`,
+      sideEffectDetail:
+        'Invitation lifecycle status can change to sent for successful deliveries. You will get a per-household result summary after the request finishes.',
+      confirmLabel: 'Email invitations',
+      pendingLabel: 'Emailing invitations...',
+      icon: Mail,
+    },
+    export_invitations: {
+      dialogTitle: 'Confirm invitation export',
+      summary: 'Download the mailing CSV for invitation planning and printing.',
+      countHeadline: formatCountLabel(loadedHouseholdCount, 'loaded household'),
+      countDetail: scopeNote,
+      sideEffectDetail:
+        'Completing this download marks invitation records as exported, which changes the invite lifecycle shown in the dashboard.',
+      confirmLabel: 'Export invitations',
+      pendingLabel: 'Exporting invitations...',
+      icon: Download,
+    },
+    export_labels: {
+      dialogTitle: 'Confirm QR label export',
+      summary: 'Generate the PDF used for invitation QR mailing labels.',
+      countHeadline: formatCountLabel(loadedHouseholdCount, 'loaded household'),
+      countDetail: scopeNote,
+      sideEffectDetail:
+        'Completing this PDF export marks invitation records as exported, which changes the invite lifecycle shown in the dashboard.',
+      confirmLabel: 'Export QR labels',
+      pendingLabel: 'Exporting QR labels...',
+      icon: Download,
+    },
+  };
+}
+
+function formatCountLabel(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function formatMemberName(member: {
   firstName: string;
   lastName: string;
@@ -1814,31 +1949,112 @@ function Modal({
   title,
   children,
   onClose,
+  closeDisabled = false,
+  showCloseButton = true,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  closeDisabled?: boolean;
+  showCloseButton?: boolean;
 }) {
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root
+      open
+      onOpenChange={(open) => !open && !closeDisabled && onClose()}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className={scoped(styles, 'modal-backdrop')}>
-          <Dialog.Content className={scoped(styles, 'modal-card')}>
+          <Dialog.Content
+            className={scoped(styles, 'modal-card')}
+            onEscapeKeyDown={(event) => {
+              if (closeDisabled) {
+                event.preventDefault();
+              }
+            }}
+            onPointerDownOutside={(event) => {
+              if (closeDisabled) {
+                event.preventDefault();
+              }
+            }}
+          >
             <div className="section-heading">
               <Dialog.Title asChild>
                 <h2>{title}</h2>
               </Dialog.Title>
-              <Dialog.Close asChild>
-                <button type="button" className="secondary-button button-inline">
-                  Close
-                </button>
-              </Dialog.Close>
+              {showCloseButton && (
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="secondary-button button-inline"
+                    disabled={closeDisabled}
+                  >
+                    Close
+                  </button>
+                </Dialog.Close>
+              )}
             </div>
             {children}
           </Dialog.Content>
         </Dialog.Overlay>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function BulkActionConfirmationModal({
+  action,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  action: BulkActionDetails;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const Icon = action.icon;
+
+  return (
+    <Modal
+      title={action.dialogTitle}
+      onClose={onCancel}
+      closeDisabled={pending}
+      showCloseButton={false}
+    >
+      <div className="modal-form">
+        <p className="form-message">{action.summary}</p>
+        <div className={scoped(styles, 'result-list')}>
+          <div className={scoped(styles, 'note-block')}>
+            <strong>{action.countHeadline}</strong>
+            <p>{action.countDetail}</p>
+          </div>
+          <div className={scoped(styles, 'note-block')}>
+            <strong>Before you continue</strong>
+            <p>{action.sideEffectDetail}</p>
+          </div>
+        </div>
+        <div className="toolbar-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onCancel}
+            disabled={pending}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => void onConfirm()}
+            disabled={pending}
+          >
+            <Icon aria-hidden="true" />
+            {pending ? action.pendingLabel : action.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
