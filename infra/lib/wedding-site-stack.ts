@@ -32,6 +32,7 @@ export interface WeddingSiteStackProps extends StackProps {
   frontendDomainName?: string;
   apiDomainName?: string;
   authDomainName?: string;
+  cloudFrontWebAclArn?: string;
   frontendCertificate?: acm.ICertificate;
   authCertificate?: acm.ICertificate;
   hostedZoneDomain?: string;
@@ -181,6 +182,7 @@ export class WeddingSiteStack extends Stack {
         excludePunctuation: true,
         passwordLength: 48,
       },
+      removalPolicy,
     });
 
     const inviteCodeKey = new kms.Key(this, 'InviteCodeKey', {
@@ -266,7 +268,16 @@ export class WeddingSiteStack extends Stack {
         allowOrigins: buildAllowedOrigins(props.allowedOrigins, frontendDomainName),
         maxAge: Duration.days(1),
       },
+      createDefaultStage: false,
     });
+    const defaultApiStageName = '$default';
+    const defaultApiStage = new apigwv2.CfnStage(api, 'DefaultStage', {
+      apiId: api.apiId,
+      autoDeploy: true,
+      stageName: defaultApiStageName,
+    });
+    // Preserve the logical ID of the previous HttpApi auto-created stage.
+    defaultApiStage.overrideLogicalId('HttpApiDefaultStage3EEB07D6');
 
     const apiIntegration = new integrations.HttpLambdaIntegration('ApiIntegration', apiHandler);
 
@@ -281,6 +292,25 @@ export class WeddingSiteStack extends Stack {
       methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration,
     });
+
+    defaultApiStage.defaultRouteSettings = {
+      throttlingBurstLimit: 100,
+      throttlingRateLimit: 50,
+    };
+    defaultApiStage.routeSettings = {
+      'GET /api/rsvp/{inviteCode}': {
+        throttlingBurstLimit: 20,
+        throttlingRateLimit: 10,
+      },
+      'PUT /api/rsvp/{inviteCode}': {
+        throttlingBurstLimit: 10,
+        throttlingRateLimit: 5,
+      },
+      'POST /api/rsvp/recovery': {
+        throttlingBurstLimit: 5,
+        throttlingRateLimit: 2,
+      },
+    };
 
     const siteBucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -395,6 +425,9 @@ export class WeddingSiteStack extends Stack {
       ],
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
     });
+    if (props.cloudFrontWebAclArn) {
+      distribution.attachWebAclId(props.cloudFrontWebAclArn);
+    }
 
     const deployedFrontendBaseUrl = frontendDomainName
       ? `https://${frontendDomainName}`
@@ -700,10 +733,15 @@ export class WeddingSiteStack extends Stack {
         domainName: props.apiDomainName,
         certificate: apiCertificate,
       });
-      new apigwv2.ApiMapping(this, 'ApiCustomDomainMapping', {
+      const apiCustomDomainMapping = new apigwv2.ApiMapping(this, 'ApiCustomDomainMapping', {
         api,
         domainName: apiCustomDomain,
+        stage: apigwv2.HttpStage.fromHttpStageAttributes(this, 'DefaultHttpStage', {
+          api,
+          stageName: defaultApiStageName,
+        }),
       });
+      apiCustomDomainMapping.node.addDependency(defaultApiStage);
       new route53.ARecord(this, 'ApiAliasRecord', {
         zone: hostedZone,
         recordName: props.apiDomainName,
