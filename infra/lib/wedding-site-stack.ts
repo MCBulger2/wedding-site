@@ -11,6 +11,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNode from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -165,6 +166,7 @@ export class WeddingSiteStack extends Stack {
       partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+      timeToLiveAttribute: 'ttl',
       removalPolicy,
     });
 
@@ -174,6 +176,13 @@ export class WeddingSiteStack extends Stack {
         excludePunctuation: true,
         passwordLength: 48,
       },
+    });
+
+    const inviteCodeKey = new kms.Key(this, 'InviteCodeKey', {
+      alias: `alias/wedding-site-${props.envName}-invite-codes`,
+      description: `KMS key for encrypted ${props.envName} wedding RSVP invite codes`,
+      enableKeyRotation: true,
+      removalPolicy,
     });
 
     const apiHandlerLogGroup = new logs.LogGroup(this, 'ApiHandlerLogGroup', {
@@ -186,6 +195,7 @@ export class WeddingSiteStack extends Stack {
       environment: {
         TABLE_NAME: table.tableName,
         INVITE_CODE_PEPPER_SECRET_ARN: inviteCodePepper.secretArn,
+        INVITE_CODE_KMS_KEY_ID: inviteCodeKey.keyId,
       },
       logGroup: apiHandlerLogGroup,
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -194,6 +204,12 @@ export class WeddingSiteStack extends Stack {
 
     table.grantReadWriteData(apiHandler);
     inviteCodePepper.grantRead(apiHandler);
+    apiHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['kms:Encrypt', 'kms:Decrypt'],
+        resources: [inviteCodeKey.keyArn],
+      }),
+    );
 
     const userPool = new cognito.UserPool(this, 'AdminUserPool', {
       selfSignUpEnabled: false,
@@ -255,6 +271,12 @@ export class WeddingSiteStack extends Stack {
       integration: apiIntegration,
     });
 
+    api.addRoutes({
+      path: '/api/rsvp/recovery',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration,
+    });
+
     const siteBucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -267,7 +289,7 @@ export class WeddingSiteStack extends Stack {
       securityHeadersBehavior: {
         contentSecurityPolicy: {
           contentSecurityPolicy:
-            "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'",
           override: true,
         },
         contentTypeOptions: { override: true },
@@ -466,12 +488,16 @@ export class WeddingSiteStack extends Stack {
       { path: '/api/admin/households/{id}', method: apigwv2.HttpMethod.PUT },
       { path: '/api/admin/households/{id}', method: apigwv2.HttpMethod.DELETE },
       { path: '/api/admin/households/{id}/invite-code', method: apigwv2.HttpMethod.POST },
+      { path: '/api/admin/households/{id}/invitation', method: apigwv2.HttpMethod.GET },
+      { path: '/api/admin/households/{id}/invitation-email', method: apigwv2.HttpMethod.POST },
       { path: '/api/admin/households/{id}/invite-lifecycle', method: apigwv2.HttpMethod.PUT },
       { path: '/api/admin/households/{id}/notifications', method: apigwv2.HttpMethod.POST },
       { path: '/api/admin/households/{id}/members/{memberId}', method: apigwv2.HttpMethod.PUT },
       { path: '/api/admin/households/{id}/members/{memberId}', method: apigwv2.HttpMethod.DELETE },
       { path: '/api/admin/rsvps/export', method: apigwv2.HttpMethod.GET },
       { path: '/api/admin/invitations/export', method: apigwv2.HttpMethod.GET },
+      { path: '/api/admin/invitations/labels', method: apigwv2.HttpMethod.GET },
+      { path: '/api/admin/invitations/email', method: apigwv2.HttpMethod.POST },
     ]) {
       api.addRoutes({
         path: route.path,

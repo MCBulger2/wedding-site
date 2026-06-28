@@ -8,13 +8,37 @@ export interface InviteCodeLookup {
   createdAt: string;
 }
 
+export interface InviteCodeSecret {
+  householdId: string;
+  inviteCodeHash: string;
+  inviteCodeCiphertext: string;
+  updatedAt: string;
+}
+
+export interface RecoveryRateLimitRecord {
+  scope: 'contact' | 'ip';
+  keyHash: string;
+  attempts: number;
+  windowExpiresAt: number;
+  updatedAt: string;
+}
+
 export interface WeddingRepository {
   getHousehold(householdId: string): Promise<Household | undefined>;
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
+  listHouseholdsByEmail(email: string): Promise<Household[]>;
+  listHouseholdsByPhone(phone: string): Promise<Household[]>;
+  getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined>;
+  getRecoveryRateLimitRecord(
+    scope: RecoveryRateLimitRecord['scope'],
+    keyHash: string,
+  ): Promise<RecoveryRateLimitRecord | undefined>;
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
+  saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void>;
   saveHousehold(household: Household): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
+  saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void>;
   saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void>;
 }
 
@@ -29,6 +53,19 @@ interface StoredInviteLookupItem extends InviteCodeLookup {
   pk: string;
   sk: string;
   entityType: 'InviteCodeLookup';
+}
+
+interface StoredInviteCodeSecretItem extends InviteCodeSecret {
+  pk: string;
+  sk: string;
+  entityType: 'InviteCodeSecret';
+}
+
+interface StoredRecoveryRateLimitItem extends RecoveryRateLimitRecord {
+  pk: string;
+  sk: string;
+  entityType: 'RecoveryRateLimit';
+  ttl: number;
 }
 
 export class DynamoWeddingRepository implements WeddingRepository {
@@ -62,6 +99,82 @@ export class DynamoWeddingRepository implements WeddingRepository {
     }
 
     return this.getHousehold((lookup.Item as StoredInviteLookupItem).householdId);
+  }
+
+  async listHouseholdsByEmail(email: string): Promise<Household[]> {
+    const result = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'entityType = :entityType AND email = :email',
+        ExpressionAttributeValues: {
+          ':entityType': 'Household',
+          ':email': email,
+        },
+      }),
+    );
+
+    return (result.Items ?? []).map((item) => fromHouseholdItem(item as StoredHouseholdItem));
+  }
+
+  async listHouseholdsByPhone(phone: string): Promise<Household[]> {
+    const result = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: 'entityType = :entityType AND phone = :phone',
+        ExpressionAttributeValues: {
+          ':entityType': 'Household',
+          ':phone': phone,
+        },
+      }),
+    );
+
+    return (result.Items ?? []).map((item) => fromHouseholdItem(item as StoredHouseholdItem));
+  }
+
+  async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: inviteCodeSecretKey(householdId),
+      }),
+    );
+
+    if (!result.Item) {
+      return undefined;
+    }
+
+    const item = result.Item as StoredInviteCodeSecretItem;
+    return {
+      householdId: item.householdId,
+      inviteCodeHash: item.inviteCodeHash,
+      inviteCodeCiphertext: item.inviteCodeCiphertext,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  async getRecoveryRateLimitRecord(
+    scope: RecoveryRateLimitRecord['scope'],
+    keyHash: string,
+  ): Promise<RecoveryRateLimitRecord | undefined> {
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: recoveryRateLimitKey(scope, keyHash),
+      }),
+    );
+
+    if (!result.Item) {
+      return undefined;
+    }
+
+    const item = result.Item as StoredRecoveryRateLimitItem;
+    return {
+      scope: item.scope,
+      keyHash: item.keyHash,
+      attempts: item.attempts,
+      windowExpiresAt: item.windowExpiresAt,
+      updatedAt: item.updatedAt,
+    };
   }
 
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
@@ -107,6 +220,20 @@ export class DynamoWeddingRepository implements WeddingRepository {
     );
   }
 
+  async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          ...record,
+          ...recoveryRateLimitKey(record.scope, record.keyHash),
+          entityType: 'RecoveryRateLimit',
+          ttl: Math.ceil(record.windowExpiresAt / 1000),
+        } satisfies StoredRecoveryRateLimitItem,
+      }),
+    );
+  }
+
   async saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void> {
     await this.client.send(
       new PutCommand({
@@ -116,6 +243,19 @@ export class DynamoWeddingRepository implements WeddingRepository {
           ...inviteLookupKey(lookup.inviteCodeHash),
           entityType: 'InviteCodeLookup',
         },
+      }),
+    );
+  }
+
+  async saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void> {
+    await this.client.send(
+      new PutCommand({
+        TableName: this.tableName,
+        Item: {
+          ...secret,
+          ...inviteCodeSecretKey(secret.householdId),
+          entityType: 'InviteCodeSecret',
+        } satisfies StoredInviteCodeSecretItem,
       }),
     );
   }
@@ -145,6 +285,8 @@ export class DynamoWeddingRepository implements WeddingRepository {
 export class InMemoryWeddingRepository implements WeddingRepository {
   readonly households = new Map<string, Household>();
   readonly inviteLookups = new Map<string, InviteCodeLookup>();
+  readonly inviteCodeSecrets = new Map<string, InviteCodeSecret>();
+  readonly recoveryRateLimits = new Map<string, RecoveryRateLimitRecord>();
   readonly rsvps = new Map<string, StoredRsvp>();
 
   async getHousehold(householdId: string): Promise<Household | undefined> {
@@ -156,6 +298,25 @@ export class InMemoryWeddingRepository implements WeddingRepository {
   async getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined> {
     const lookup = this.inviteLookups.get(inviteCodeHash);
     return lookup ? this.getHousehold(lookup.householdId) : undefined;
+  }
+
+  async listHouseholdsByEmail(email: string): Promise<Household[]> {
+    return [...this.households.values()].filter((household) => household.email === email);
+  }
+
+  async listHouseholdsByPhone(phone: string): Promise<Household[]> {
+    return [...this.households.values()].filter((household) => household.phone === phone);
+  }
+
+  async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
+    return this.inviteCodeSecrets.get(householdId);
+  }
+
+  async getRecoveryRateLimitRecord(
+    scope: RecoveryRateLimitRecord['scope'],
+    keyHash: string,
+  ): Promise<RecoveryRateLimitRecord | undefined> {
+    return this.recoveryRateLimits.get(`${scope}:${keyHash}`);
   }
 
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
@@ -174,8 +335,16 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     });
   }
 
+  async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
+    this.recoveryRateLimits.set(`${record.scope}:${record.keyHash}`, record);
+  }
+
   async saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void> {
     this.inviteLookups.set(lookup.inviteCodeHash, lookup);
+  }
+
+  async saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void> {
+    this.inviteCodeSecrets.set(secret.householdId, secret);
   }
 
   async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
@@ -209,6 +378,14 @@ function householdKey(householdId: string) {
 
 function inviteLookupKey(inviteCodeHash: string) {
   return { pk: `INVITE#${inviteCodeHash}`, sk: 'LOOKUP' };
+}
+
+function inviteCodeSecretKey(householdId: string) {
+  return { pk: `HOUSEHOLD#${householdId}`, sk: 'INVITE_CODE_SECRET' };
+}
+
+function recoveryRateLimitKey(scope: RecoveryRateLimitRecord['scope'], keyHash: string) {
+  return { pk: `RECOVERY_RATE_LIMIT#${scope}#${keyHash}`, sk: 'WINDOW' };
 }
 
 function fromHouseholdItem(item: StoredHouseholdItem): Household {

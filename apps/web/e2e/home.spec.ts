@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 const adminAuthConfig = {
   clientId: 'admin-client-id',
@@ -43,6 +43,40 @@ const household = {
   updatedAt: '2026-06-15T22:00:00.000Z',
 };
 
+const firstGalleryPhoto = {
+  alt: "A close up of Alison's engagement ring",
+  caption: 'Engagement ring',
+};
+
+const secondGalleryPhoto = {
+  alt: 'Alison & Matt, shortly after the proposal',
+  caption: 'Alison & Matt after the proposal',
+};
+
+async function openHouseholdActions(card: Locator) {
+  const trigger = card.getByRole('button', { name: 'Actions' });
+  await trigger.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
+  });
+  await trigger.click();
+}
+
+async function clickHouseholdAction(card: Locator, actionName: string) {
+  const page = card.page();
+
+  await openHouseholdActions(card);
+  const action = page.getByRole('menuitem', { name: actionName });
+  await expect(action).toBeVisible();
+
+  try {
+    await action.click({ timeout: 1_000 });
+    return;
+  } catch {
+    await action.focus();
+    await page.keyboard.press('Enter');
+  }
+}
+
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
@@ -56,6 +90,11 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page
       .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toHaveAttribute('href', '/our-story');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Registry' }),
   ).toHaveAttribute('href', '/registry');
   await expect(
@@ -63,38 +102,51 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Read our story' }),
+  ).toHaveAttribute('href', '/our-story');
   await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '0');
   const carousel = page.getByLabel('Matt and Alison photos');
   await carousel.hover();
   await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
   await page.getByRole('button', { name: 'Show next photo' }).click();
-  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Temporary test photo of a desert garden ceremony aisle',
+      name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Wedding day' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Desert Garden Venue' }),
+    page.getByRole('heading', { name: 'Superstition Manor' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open map' })).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
+    }),
+  ).toHaveAttribute('href', /google\.com\/maps/);
+  await expect(page.getByTitle('Superstition Manor map')).toHaveAttribute(
+    'src',
+    /openstreetmap\.org\/export\/embed\.html/,
+  );
+  await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
+    'href',
+    /google\.com\/maps/,
+  );
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Where to stay' }),
   ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TBD Hotel' })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Sonoran Courtyard Hotel' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'View registry' }),
@@ -117,67 +169,213 @@ test('homepage details render on mobile', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByLabel('Wedding highlights').getByText('March 20, 2027'),
+    page.getByLabel('Wedding highlights').getByText('January 18, 2027'),
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
-      name: 'Candlelit garden reception table at sunset',
+      name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
   await expect(
-    page.getByText('Ceremony at 3:00 PM; reception at 5:00 PM'),
+    page.getByText('Ceremony at 4:30 PM; reception at 10:00 PM'),
   ).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
+    }),
+  ).toBeVisible();
+  await expect(page.getByTitle('Superstition Manor map')).toBeVisible();
   await expect(
     page.getByText('Phoenix Sky Harbor International Airport'),
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
   ).toHaveAttribute('href', /^data:text\/calendar/);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Read our story' }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ clientWidth: 390, scrollWidth: 390 });
 });
 
-test('photo carousel advances on horizontal wheel event', async ({ page }) => {
+test('our story page renders editorial sections and calls to action', async ({
+  page,
+}) => {
+  await page.goto('/our-story');
+
+  await expect(
+    page.getByRole('heading', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('A few placeholder notes about who we are'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', {
+      name: 'Matt proposing to Alison by the lake',
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'How we met' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'The proposal' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'What we love together' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Looking ahead' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Back to wedding details' }),
+  ).toHaveAttribute('href', '/#details');
+  await expect(
+    page.locator('.story-cta-band').getByRole('link', { name: 'RSVP' }),
+  ).toHaveAttribute('href', '/rsvp');
+});
+
+test('our story page renders on mobile without overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/our-story');
+
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'Our Story' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Our Story' }),
+  ).toBeVisible();
+  const mobileMeetLayout = await page
+    .locator('.story-section-meet')
+    .evaluate((section) => {
+      const copyBox = section
+        .querySelector('.story-copy-block')
+        ?.getBoundingClientRect();
+      const imageBox = section
+        .querySelector('.story-thumbnail')
+        ?.getBoundingClientRect();
+      const sectionBox = section.getBoundingClientRect();
+      const styles = getComputedStyle(section);
+      const contentWidth =
+        sectionBox.width -
+        parseFloat(styles.paddingLeft) -
+        parseFloat(styles.paddingRight);
+
+      return {
+        copyTop: Math.round(copyBox?.top ?? 0),
+        imageTop: Math.round(imageBox?.top ?? 0),
+        imageWidth: Math.round(imageBox?.width ?? 0),
+        contentWidth: Math.round(contentWidth),
+      };
+    });
+  expect(mobileMeetLayout.copyTop).toBeLessThan(mobileMeetLayout.imageTop);
+  expect(mobileMeetLayout.imageWidth).toBe(mobileMeetLayout.contentWidth);
+  await expect(
+    page.getByRole('link', { name: 'Back to wedding details' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.story-cta-band').getByRole('link', { name: 'RSVP' }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ clientWidth: 390, scrollWidth: 390 });
+});
+
+test('homepage map link opens Apple Maps on Apple devices', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'platform', {
+      configurable: true,
+      value: 'iPhone',
+    });
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
+    'href',
+    /maps\.apple\/p/,
+  );
+  await expect(
+    page.getByRole('link', {
+      name: '1220 N Signal Butte Rd, Mesa, AZ 85207',
+    }),
+  ).toHaveAttribute('href', /maps\.apple\/p/);
+});
+
+test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByRole('img', { name: 'Candlelit garden reception table at sunset' }),
+    page.getByRole('img', {
+      name: firstGalleryPhoto.alt,
+    }),
   ).toBeVisible();
 
   const carousel = page.getByLabel('Matt and Alison photos');
+  const activeCaption = carousel.locator('.photo-caption-row strong');
   await carousel.scrollIntoViewIfNeeded();
   const box = await carousel.boundingBox();
   if (!box) throw new Error('Carousel bounding box not found');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-  // Horizontal scroll to the right should advance to the next photo
+  await page.mouse.wheel(20, 0);
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
+
   await page.mouse.wheel(300, 0);
 
-  await expect(page.getByText('Ceremony preview')).toBeVisible();
+  for (let i = 0; i < 3; i += 1) {
+    await page.waitForTimeout(50);
+    await page.mouse.wheel(300, 0);
+  }
+
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
   await expect(
     page.getByRole('img', {
-      name: 'Temporary test photo of a desert garden ceremony aisle',
+      name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
+
+  await page.waitForTimeout(500);
+  await page.mouse.wheel(300, 0);
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
 
-test('registry page renders coming soon state', async ({ page }) => {
+test('registry page renders configured links', async ({ page }) => {
   await page.goto('/registry');
 
   await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
+  ).toBeVisible();
+  await expect(page.getByText('Your presence is the best gift.')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
   await expect(
-    page.getByText('Your presence is the best gift.'),
+    page.getByRole('heading', { name: 'Down Payment Fund' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Registry details coming soon' }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('Check back closer to the celebration'),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: 'Back to wedding details' }),
-  ).toHaveAttribute('href', '/');
-  await expect(page.getByLabel('Registry links')).toHaveCount(0);
+    page.getByRole('link', { name: 'Contribute' }).first(),
+  ).toHaveAttribute('href', 'https://www.example.com/honeymoon-fund');
+  await expect(page.getByLabel('Registry links')).toBeVisible();
 });
 
 test('registry page renders on mobile', async ({ page }) => {
@@ -190,10 +388,10 @@ test('registry page renders on mobile', async ({ page }) => {
       .getByRole('link', { name: 'Registry' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Wedding registry' }),
+    page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Registry details coming soon' }),
+    page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
 });
 
@@ -210,6 +408,64 @@ test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', as
   expect(viewport).not.toBeNull();
   expect(footerBounds!.y + footerBounds!.height).toBeGreaterThanOrEqual(
     viewport!.height - pixelTolerance,
+  );
+});
+
+test('rsvp recovery stays collapsed by default and shows generic success when expanded', async ({
+  page,
+}) => {
+  await page.route('**/api/rsvp/recovery', async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accepted: true,
+        message:
+          "If that matches our guest list, we'll send your private RSVP link.",
+      }),
+    });
+  });
+
+  await page.goto('/rsvp');
+
+  await expect(
+    page.getByRole('button', { name: "Don't have a code?" }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByLabel('Email or mobile number')).toHaveCount(0);
+
+  await page.getByRole('button', { name: "Don't have a code?" }).click();
+  await expect(
+    page.getByRole('button', { name: "Don't have a code?" }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByLabel('Email or mobile number')).toBeFocused();
+
+  await page.getByLabel('Email or mobile number').fill('sam@example.com');
+  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
+  await expect(
+    page.getByText(
+      "If that matches our guest list, we'll send your private RSVP link.",
+    ),
+  ).toBeVisible();
+});
+
+test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/rsvp');
+
+  await page.getByRole('button', { name: "Don't have a code?" }).click();
+  await expect(page.getByLabel('Email or mobile number')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Send private RSVP link' }),
+  ).toBeVisible();
+
+  const cardBounds = await page.locator('.lookup-card').boundingBox();
+  const buttonBounds = await page
+    .getByRole('button', { name: 'Send private RSVP link' })
+    .boundingBox();
+  expect(cardBounds).not.toBeNull();
+  expect(buttonBounds).not.toBeNull();
+  expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(
+    cardBounds!.x + cardBounds!.width + 1,
   );
 });
 
@@ -242,7 +498,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
   let savedBody: any;
   let savedRsvp: any;
 
-  await page.route('**/api/rsvp/test-invite-code-123', async (route) => {
+  await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -276,15 +532,16 @@ test('guest can look up an invite code and submit an RSVP', async ({
   });
 
   await page.goto('/rsvp');
-  await page.getByLabel('Invitation code').fill('test-invite-code-123');
+  await page.getByLabel('Invitation code').fill('a2b3c4d5e6');
   await page.getByRole('button', { name: 'View RSVP' }).click();
 
-  await expect(page).toHaveURL(/\/rsvp\/test-invite-code-123$/);
+  await expect(page).toHaveURL(/\/rsvp\/A2B3C4D5E6$/);
   await expect(
     page.getByRole('heading', { name: 'The Example Household' }),
   ).toBeVisible();
+  await expect(page.getByLabel('Sam Example meal choice')).toHaveCount(0);
 
-  await page.getByLabel('Taylor Example attending').uncheck();
+  await page.getByRole('button', { name: 'Taylor Example not attending' }).click();
   await page.getByRole('button', { name: 'Add plus-one' }).click();
   await page.getByRole('button', { name: 'Save RSVP' }).click();
 
@@ -321,7 +578,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
     notes: 'Excited to celebrate.',
   });
 
-  await expect(page).toHaveURL(/\/rsvp\/test-invite-code-123\/success$/);
+  await expect(page).toHaveURL(/\/rsvp\/A2B3C4D5E6\/success$/);
   await expect(
     page.getByRole('heading', { name: 'RSVP received' }),
   ).toBeVisible();
@@ -329,6 +586,8 @@ test('guest can look up an invite code and submit an RSVP', async ({
     page.getByRole('link', { name: 'Review or update RSVP' }),
   ).toBeVisible();
   await expect(page.getByText('submitted')).toBeVisible();
+  await expect(page.getByText('Attending (2)')).toBeVisible();
+  await expect(page.getByText('Not attending (1)')).toBeVisible();
 });
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({
@@ -340,6 +599,11 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject?: string;
     message: string;
   }> = [];
+  const deliveredInvitationEmails: Array<{
+    householdId: string;
+    deliveredTo: string;
+  }> = [];
+  let labelExportRequests = 0;
   let households: Array<{
     household: Record<string, unknown>;
     attendance: Record<string, number>;
@@ -451,32 +715,125 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
-  await page.route('**/api/admin/households/h1/notifications', async (route) => {
-    const payload = route.request().postDataJSON() as {
-      channel: 'email' | 'sms';
-      subject?: string;
-      message: string;
-    };
-    const deliveredTo =
-      payload.channel === 'email'
-        ? String(
-            households.find((record) => record.household.householdId === 'h1')
-              ?.household.email ?? '',
-          )
-        : String(
-            households.find((record) => record.household.householdId === 'h1')
-              ?.household.phone ?? '',
-          );
-    deliveredNotifications.push({ ...payload, deliveredTo });
+  await page.route(
+    '**/api/admin/households/h1/notifications',
+    async (route) => {
+      const payload = route.request().postDataJSON() as {
+        channel: 'email' | 'sms';
+        subject?: string;
+        message: string;
+      };
+      const deliveredTo =
+        payload.channel === 'email'
+          ? String(
+              households.find((record) => record.household.householdId === 'h1')
+                ?.household.email ?? '',
+            )
+          : String(
+              households.find((record) => record.household.householdId === 'h1')
+                ?.household.phone ?? '',
+            );
+      deliveredNotifications.push({ ...payload, deliveredTo });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          channel: payload.channel,
+          deliveredTo,
+        }),
+      });
+    },
+  );
+
+  await page.route('**/api/admin/households/*/invitation', async (route) => {
+    const requestOrigin = new URL(route.request().url()).origin;
+    const householdId =
+      route
+        .request()
+        .url()
+        .match(/households\/([^/]+)\/invitation/)?.[1] ?? '';
+    const record = households.find(
+      (entry) => entry.household.householdId === householdId,
+    );
+    const inviteCode = householdId === 'h2' ? 'FRESH22456' : 'A2B3C4D5E6';
+
     await route.fulfill({
-      status: 200,
+      status: record ? 200 : 404,
       contentType: 'application/json',
-      body: JSON.stringify({
-        channel: payload.channel,
-        deliveredTo,
-      }),
+      body: JSON.stringify(
+        record
+          ? {
+              householdId,
+              inviteCode,
+              inviteCodeHash: record.household.inviteCodeHash,
+              rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
+            }
+          : { message: 'Household not found' },
+      ),
     });
   });
+
+  await page.route(
+    '**/api/admin/households/*/invitation-email',
+    async (route) => {
+      const requestOrigin = new URL(route.request().url()).origin;
+      const householdId =
+        route
+          .request()
+          .url()
+          .match(/households\/([^/]+)\/invitation-email/)?.[1] ?? '';
+      const record = households.find(
+        (entry) => entry.household.householdId === householdId,
+      );
+      const inviteCode = householdId === 'h2' ? 'FRESH22456' : 'A2B3C4D5E6';
+
+      if (!record) {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Household not found' }),
+        });
+        return;
+      }
+
+      households = households.map((entry) =>
+        entry.household.householdId === householdId
+          ? {
+              ...entry,
+              household: {
+                ...entry.household,
+                inviteLifecycleStatus: 'sent',
+                inviteSentAt: '2026-06-15T22:30:00.000Z',
+              },
+            }
+          : entry,
+      );
+      deliveredInvitationEmails.push({
+        householdId,
+        deliveredTo: String(record.household.email ?? ''),
+      });
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          invitation: {
+            householdId,
+            inviteCode,
+            inviteCodeHash: record.household.inviteCodeHash,
+            rsvpUrl: `${requestOrigin}/rsvp/${inviteCode}`,
+          },
+          result: {
+            householdId,
+            displayName: record.household.displayName,
+            status: 'sent',
+            deliveredTo: record.household.email,
+            message: `Sent invitation email to ${record.household.email}`,
+          },
+        }),
+      });
+    },
+  );
 
   await page.route('**/api/admin/households/h2/invite-code', async (route) => {
     households = households.map((record) =>
@@ -496,7 +853,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        inviteCode: 'fresh-invite-code-456',
+        inviteCode: 'FRESH22456',
         inviteCodeHash: 'hash-value',
       }),
     });
@@ -619,6 +976,54 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     });
   });
 
+  await page.route('**/api/admin/invitations/labels', async (route) => {
+    labelExportRequests += 1;
+    households = households.map((record) => ({
+      ...record,
+      household: {
+        ...record.household,
+        inviteLifecycleStatus: 'exported',
+        inviteExportedAt: '2026-06-15T22:15:00.000Z',
+      },
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-labels',
+    });
+  });
+
+  await page.route('**/api/admin/invitations/email', async (route) => {
+    const results = households.map((record) => {
+      if (!record.household.email) {
+        return {
+          householdId: record.household.householdId,
+          displayName: record.household.displayName,
+          status: 'skipped',
+          message: 'Household does not have a contact email address',
+        };
+      }
+
+      deliveredInvitationEmails.push({
+        householdId: String(record.household.householdId),
+        deliveredTo: String(record.household.email),
+      });
+      return {
+        householdId: record.household.householdId,
+        displayName: record.household.displayName,
+        status: 'sent',
+        deliveredTo: record.household.email,
+        message: `Sent invitation email to ${record.household.email}`,
+      };
+    });
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results }),
+    });
+  });
+
   await page.route('**/api/admin/auth/config', async (route) => {
     await route.fulfill({
       status: 200,
@@ -671,17 +1076,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Example Household' });
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
+  await clickHouseholdAction(exampleCard, 'Notify');
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
     .fill('The shuttle now departs at 4:15 PM.');
   await page.getByRole('button', { name: 'Send update' }).click();
   await expect(
-    page.getByText(
-      'Sent EMAIL to The Example Household at sam@example.com.',
-    ),
+    page.getByText('Sent EMAIL to The Example Household at sam@example.com.'),
   ).toBeVisible();
   expect(deliveredNotifications[0]).toMatchObject({
     channel: 'email',
@@ -689,8 +1091,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject: 'Travel update',
   });
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Notify' }).click();
+  await clickHouseholdAction(exampleCard, 'Notify');
   await page.getByLabel('Delivery channel').selectOption('sms');
   await expect(page.getByLabel('Notification subject')).toHaveCount(0);
   await page
@@ -698,9 +1099,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .fill('Ceremony starts at 3:00 PM.');
   await page.getByRole('button', { name: 'Send update' }).click();
   await expect(
-    page.getByText(
-      'Sent SMS to The Example Household at +14805550100.',
-    ),
+    page.getByText('Sent SMS to The Example Household at +14805550100.'),
   ).toBeVisible();
   expect(deliveredNotifications[1]).toMatchObject({
     channel: 'sms',
@@ -716,19 +1115,41 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('exported').first()).toBeVisible();
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
+  await page.getByRole('button', { name: 'Export QR labels' }).click();
   await expect(
-    exampleCard.getByRole('menuitem', { name: 'Show invitation' }),
+    page.getByText(
+      'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
+    ),
   ).toBeVisible();
-  await exampleCard.getByRole('menuitem', { name: 'Show invitation' }).click();
-  await expect(
-    exampleCard.getByRole('link', { name: 'http://127.0.0.1:5173/rsvp/code' }),
-  ).toBeVisible();
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Hide invitation' }).click();
+  expect(labelExportRequests).toBe(1);
 
-  await exampleCard.getByRole('button', { name: 'Actions' }).click();
-  await exampleCard.getByRole('menuitem', { name: 'Edit' }).click();
+  await clickHouseholdAction(exampleCard, 'View invitation');
+  await expect(
+    exampleCard.getByRole('link', {
+      name: new URL('/rsvp/A2B3C4D5E6', page.url()).toString(),
+    }),
+  ).toBeVisible();
+  await exampleCard.getByRole('button', { name: 'Email invitation' }).click();
+  await expect(
+    page.getByText(
+      'The Example Household: Sent invitation email to sam@example.com',
+    ),
+  ).toBeVisible();
+  expect(deliveredInvitationEmails[0]).toMatchObject({
+    householdId: 'h1',
+    deliveredTo: 'sam@example.com',
+  });
+
+  await page.getByRole('button', { name: 'Email invitations' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Invitation email results' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Sent invitation email to sam@example.com').first(),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await clickHouseholdAction(exampleCard, 'Edit');
   await page
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
@@ -744,16 +1165,13 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Updated Household' });
-  await updatedCard.getByRole('button', { name: 'Archive' }).click();
+  await clickHouseholdAction(updatedCard, 'Archive');
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'The Updated Household' }),
   ).toHaveCount(0);
   await page.getByLabel('Show archived households').check();
   await expect(page.getByText('archived').first()).toBeVisible();
-  await expect(
-    updatedCard.getByRole('button', { name: 'Archive' }),
-  ).toBeDisabled();
 
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.getByLabel('Household display name').fill('The Harper Household');
@@ -782,18 +1200,18 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
   await expect(newCard.locator('.invite-code-block strong').first()).toHaveText(
-    'fresh-invite-code-456',
+    'FRESH22456',
   );
   await expect(
     newCard.getByRole('link', {
-      name: 'http://127.0.0.1:5173/rsvp/fresh-invite-code-456',
+      name: new URL('/rsvp/FRESH22456', page.url()).toString(),
     }),
   ).toBeVisible();
-  await newCard.getByRole('button', { name: 'Actions' }).click();
-  await newCard.getByRole('menuitem', { name: 'Invitation QR' }).click();
+  await newCard.getByRole('button', { name: 'QR code' }).click();
   await expect(
     page.getByRole('dialog', { name: 'The Harper Household invitation QR' }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
 
   await page.reload();
   await expect(
@@ -803,16 +1221,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Harper Household' });
-  await reloadedCard.getByRole('button', { name: 'Actions' }).click();
+  await clickHouseholdAction(reloadedCard, 'View invitation');
   await expect(
-    reloadedCard.getByRole('menuitem', { name: 'Show invitation' }),
-  ).toBeVisible();
-  await reloadedCard
-    .getByRole('menuitem', { name: 'Show invitation' })
-    .click();
-  await expect(reloadedCard.locator('.invite-code-block strong').first()).toHaveText(
-    'fresh-invite-code-456',
-  );
+    reloadedCard.locator('.invite-code-block strong').first(),
+  ).toHaveText('FRESH22456');
 });
 
 test('admin route clears malformed stored sessions instead of crashing', async ({

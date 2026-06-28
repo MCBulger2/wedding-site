@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   CalendarEventSchema,
+  BulkInvitationEmailResponseSchema,
   CreateHouseholdInputSchema,
+  GenericRecoverySuccessMessage,
   HotelBlockSchema,
+  InvitationDetailsSchema,
+  RsvpRecoveryAcceptedResponseSchema,
+  RsvpRecoveryRequestSchema,
   RsvpUpdateSchema,
+  SendInvitationEmailResponseSchema,
   SendHouseholdNotificationInputSchema,
   UpdateHouseholdInputSchema,
   generateIcs,
+  siteContent,
 } from './index.js';
 
 describe('RsvpUpdateSchema', () => {
@@ -132,7 +139,72 @@ describe('SendHouseholdNotificationInputSchema', () => {
   });
 });
 
+describe('RsvpRecovery schemas', () => {
+  it('accepts a recovery request contact and generic accepted response', () => {
+    expect(
+      RsvpRecoveryRequestSchema.safeParse({
+        contact: 'sam@example.com',
+      }).success,
+    ).toBe(true);
+
+    expect(
+      RsvpRecoveryAcceptedResponseSchema.safeParse({
+        accepted: true,
+        message: GenericRecoverySuccessMessage,
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe('invitation admin schemas', () => {
+  it('validates revealed invitation details and email send results', () => {
+    const invitation = InvitationDetailsSchema.safeParse({
+      householdId: 'h1',
+      inviteCode: 'A2B3C4D5E6',
+      inviteCodeHash: 'hash',
+      rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
+    });
+
+    expect(invitation.success).toBe(true);
+
+    expect(
+      SendInvitationEmailResponseSchema.safeParse({
+        invitation: invitation.success ? invitation.data : undefined,
+        result: {
+          householdId: 'h1',
+          displayName: 'The Example Household',
+          status: 'sent',
+          deliveredTo: 'guest@example.com',
+          message: 'Sent invitation email to guest@example.com',
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      BulkInvitationEmailResponseSchema.safeParse({
+        results: [
+          {
+            householdId: 'h1',
+            displayName: 'The Example Household',
+            status: 'skipped',
+            message: 'Household does not have a contact email address',
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+});
+
 describe('structured public planning data', () => {
+  it('uses a parseable OpenStreetMap embed URL with a venue marker', () => {
+    const embedUrl = new URL(siteContent.venueMapEmbedUrl);
+
+    expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
+    expect(embedUrl.hostname).toBe('www.openstreetmap.org');
+    expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
+    expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
+  });
+
   it('validates hotel block data', () => {
     const result = HotelBlockSchema.safeParse({
       name: 'Example Hotel',
@@ -142,7 +214,8 @@ describe('structured public planning data', () => {
       groupCode: 'MATTALISON',
       cutoffDate: 'January 15, 2027',
       nightlyRateNotes: 'Wedding block rate available while rooms last.',
-      transportationNotes: 'Shuttle details will be posted closer to the wedding.',
+      transportationNotes:
+        'Shuttle details will be posted closer to the wedding.',
     });
 
     expect(result.success).toBe(true);

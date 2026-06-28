@@ -2,8 +2,8 @@
 
 import type { Household } from '@matt-alison-wedding/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { HouseholdCardActions } from './App';
+import { describe, expect, it, vi } from 'vitest';
+import { HouseholdCardActions } from './pages/AdminPage.js';
 
 const household = {
   householdId: 'household-1',
@@ -23,41 +23,46 @@ const household = {
   maxPlusOnes: 0,
   rsvpStatus: 'not_started',
   inviteLifecycleStatus: 'generated',
+  inviteCodeHash: 'hash',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 } as Household;
 
 describe('HouseholdCardActions', () => {
-  it('opens the menu and closes it with Escape or by clicking outside', () => {
+  it('opens the menu and closes it with Escape or menu selection', () => {
+    const onNotify = vi.fn();
     render(
       <HouseholdCardActions
         household={household}
-        revealedInvite={{
-          householdId: 'household-1',
-          displayName: 'The Example Family',
-          inviteCode: 'invite-code-123',
-          inviteCodeHash: 'hash',
-        }}
-        isInviteExpanded={false}
         initialMenuOpen={false}
         canNotify
-        onNotify={() => {}}
+        canEmailInvitation
+        onNotify={onNotify}
+        onEmailInvitation={() => {}}
         onEdit={() => {}}
         onRotateInviteCode={() => {}}
-        onToggleInvite={() => {}}
-        onOpenQrCode={() => {}}
+        onManageInvitation={() => {}}
+        onArchive={() => {}}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /actions/i }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: /actions/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(screen.getByRole('menu')).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: /invitation qr/i })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: /email invitation/i })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: /view invitation/i })).not.toBeNull();
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /actions/i }));
-    fireEvent.mouseDown(document.body);
+    fireEvent.pointerDown(screen.getByRole('button', { name: /actions/i }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: /notify/i }));
+    expect(onNotify).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('menu')).toBeNull();
   });
 });

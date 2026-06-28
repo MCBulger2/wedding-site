@@ -5,6 +5,7 @@ import {
   createHouseholdMessengerFromEnvironment,
   createNotifierFromEnvironment,
 } from './notifications.js';
+import { createInviteCodeProtectorFromEnvironment } from './inviteCodeProtector.js';
 import { PublicError, WeddingService } from './service.js';
 
 const secrets = new SecretsManagerClient({});
@@ -13,6 +14,43 @@ let cachedPepper: string | undefined;
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     const service = await createService();
+    return handleRequest(service, event);
+  } catch (error) {
+    if (error instanceof PublicError) {
+      return json({ message: error.message, details: error.details }, error.statusCode);
+    }
+
+    console.error(error);
+    return json({ message: 'Something went wrong' }, 500);
+  }
+};
+
+export async function handleRequest(
+  service: Pick<
+    WeddingService,
+    | 'archiveHousehold'
+    | 'createHousehold'
+    | 'exportInvitations'
+    | 'exportInvitationLabels'
+    | 'exportRsvps'
+    | 'getRsvp'
+    | 'importHouseholds'
+    | 'listHouseholds'
+    | 'requestRsvpRecovery'
+    | 'revealInvitation'
+    | 'rotateInviteCode'
+    | 'sendHouseholdNotification'
+    | 'sendInvitationEmail'
+    | 'sendInvitationEmails'
+    | 'updateHousehold'
+    | 'updateHouseholdMember'
+    | 'updateInviteLifecycle'
+    | 'updateRsvp'
+    | 'removeHouseholdMember'
+  >,
+  event: Parameters<APIGatewayProxyHandlerV2>[0],
+): Promise<APIGatewayProxyResultV2> {
+  try {
     const method = event.requestContext.http.method;
     const path = normalizePath(event.rawPath);
     const body = parseBody(event.body);
@@ -39,6 +77,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (method === 'PUT' && path.startsWith('/rsvp/')) {
       const inviteCode = decodeURIComponent(path.slice('/rsvp/'.length));
       return json(await service.updateRsvp(inviteCode, body));
+    }
+
+    if (method === 'POST' && path === '/rsvp/recovery') {
+      return json(
+        await service.requestRsvpRecovery(body, {
+          sourceIp: event.requestContext.http.sourceIp,
+          baseUrl: frontendBaseUrl(event),
+        }),
+        202,
+      );
     }
 
     if (method === 'GET' && path === '/admin/households') {
@@ -98,6 +146,26 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       );
     }
 
+    const invitationMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation$/);
+    if (method === 'GET' && invitationMatch) {
+      return json(
+        await service.revealInvitation(
+          decodeURIComponent(invitationMatch[1]),
+          frontendBaseUrl(event),
+        ),
+      );
+    }
+
+    const invitationEmailMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation-email$/);
+    if (method === 'POST' && invitationEmailMatch) {
+      return json(
+        await service.sendInvitationEmail(
+          decodeURIComponent(invitationEmailMatch[1]),
+          frontendBaseUrl(event),
+        ),
+      );
+    }
+
     const householdNotificationMatch = path.match(/^\/admin\/households\/([^/]+)\/notifications$/);
     if (method === 'POST' && householdNotificationMatch) {
       return json(
@@ -106,6 +174,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           body,
         ),
       );
+    }
+
+    if (method === 'POST' && path === '/admin/invitations/email') {
+      return json(await service.sendInvitationEmails(frontendBaseUrl(event)));
     }
 
     if (method === 'GET' && path === '/admin/rsvps/export') {
@@ -120,18 +192,27 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     if (method === 'GET' && path === '/admin/invitations/export') {
-      const baseUrl =
-        firstPopulatedValue(
-          process.env.FRONTEND_BASE_URL,
-          headerValue(event.headers, 'origin'),
-        ) ?? 'https://example.com';
       return {
         statusCode: 200,
         headers: {
           'content-type': 'text/csv; charset=utf-8',
           'content-disposition': 'attachment; filename="invitations.csv"',
         },
-        body: await service.exportInvitations(baseUrl),
+        body: await service.exportInvitations(frontendBaseUrl(event)),
+      };
+    }
+
+    if (method === 'GET' && path === '/admin/invitations/labels') {
+      const pdf = await service.exportInvitationLabels(frontendBaseUrl(event));
+      return {
+        statusCode: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': 'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
+          'cache-control': 'no-store',
+        },
+        isBase64Encoded: true,
+        body: pdf.toString('base64'),
       };
     }
 
@@ -144,7 +225,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     console.error(error);
     return json({ message: 'Something went wrong' }, 500);
   }
-};
+}
 
 function parseBody(body?: string): any {
   if (!body) {
@@ -181,6 +262,7 @@ async function createService(): Promise<WeddingService> {
     pepper,
     createNotifierFromEnvironment(),
     createHouseholdMessengerFromEnvironment(),
+    createInviteCodeProtectorFromEnvironment(),
   );
 }
 
@@ -219,4 +301,13 @@ function headerValue(headers: Record<string, string | undefined>, name: string):
 
 function firstPopulatedValue(...values: Array<string | undefined>): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
+}
+
+function frontendBaseUrl(event: Parameters<APIGatewayProxyHandlerV2>[0]): string {
+  return (
+    firstPopulatedValue(
+      process.env.FRONTEND_BASE_URL,
+      headerValue(event.headers, 'origin'),
+    ) ?? 'https://example.com'
+  );
 }
