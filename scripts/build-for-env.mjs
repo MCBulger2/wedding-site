@@ -12,6 +12,9 @@ loadEnvFiles(envName);
 
 const apiDomainName = process.env.API_DOMAIN_NAME?.trim();
 const viteApiBaseUrl = apiDomainName ? `https://${apiDomainName}/api` : process.env.VITE_API_BASE_URL?.trim() || '/api';
+const viteContactEmailAddress =
+  process.env.CONTACT_EMAIL_ADDRESS?.trim() ||
+  process.env.VITE_CONTACT_EMAIL_ADDRESS?.trim();
 
 const npmExecPath = process.env.npm_execpath;
 if (!npmExecPath) {
@@ -27,6 +30,9 @@ const buildResult = spawnSync(process.execPath, [npmExecPath, 'run', 'build'], {
     ...process.env,
     ENV_NAME: envName,
     VITE_API_BASE_URL: viteApiBaseUrl,
+    ...(viteContactEmailAddress
+      ? { VITE_CONTACT_EMAIL_ADDRESS: viteContactEmailAddress }
+      : {}),
   },
 });
 
