@@ -1147,6 +1147,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   });
 
   await page.getByRole('button', { name: 'Export invitations' }).click();
+  await page
+    .getByRole('dialog', { name: 'Confirm invitation export' })
+    .getByRole('button', { name: 'Export invitations' })
+    .click();
   await expect(
     page.getByText(
       'Exported invitation mailing data. Review the CSV before printing.',
@@ -1155,6 +1159,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByText('exported').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Export QR labels' }).click();
+  await page
+    .getByRole('dialog', { name: 'Confirm QR label export' })
+    .getByRole('button', { name: 'Export QR labels' })
+    .click();
   await expect(
     page.getByText(
       'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
@@ -1180,6 +1188,10 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   });
 
   await page.getByRole('button', { name: 'Email invitations' }).click();
+  await page
+    .getByRole('dialog', { name: 'Confirm invitation emails' })
+    .getByRole('button', { name: 'Email invitations' })
+    .click();
   await expect(
     page.getByRole('dialog', { name: 'Invitation email results' }),
   ).toBeVisible();
@@ -1264,6 +1276,201 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(
     reloadedCard.locator('.invite-code-block strong').first(),
   ).toHaveText('FRESH22456');
+});
+
+test('admin bulk invitation actions require confirmation and block duplicate submits', async ({
+  page,
+}) => {
+  let invitationExportRequests = 0;
+  let labelExportRequests = 0;
+  let bulkInvitationEmailRequests = 0;
+  let households: Array<{
+    household: Record<string, unknown>;
+    attendance: Record<string, number>;
+    rsvp?: Record<string, unknown>;
+  }> = [
+    {
+      household: { ...household },
+      attendance: {
+        invitedGuests: 3,
+        attendingGuests: 0,
+        declinedGuests: 0,
+        pendingGuests: 2,
+        plusOneGuests: 1,
+      },
+    },
+  ];
+
+  await page.route('**/api/admin/households', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ households }),
+    });
+  });
+
+  await page.route('**/api/admin/invitations/export', async (route) => {
+    invitationExportRequests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    households = households.map((record) => ({
+      ...record,
+      household: {
+        ...record.household,
+        inviteLifecycleStatus: 'exported',
+        inviteExportedAt: '2026-06-15T22:15:00.000Z',
+      },
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/csv',
+      body:
+        'householdId,household,rsvpUrl,qrCodeDataUrl\n' +
+        'h1,The Example Household,https://example.com/rsvp/code,"data:image/png;base64,abc"',
+    });
+  });
+
+  await page.route('**/api/admin/invitations/labels', async (route) => {
+    labelExportRequests += 1;
+    households = households.map((record) => ({
+      ...record,
+      household: {
+        ...record.household,
+        inviteLifecycleStatus: 'exported',
+        inviteExportedAt: '2026-06-15T22:15:00.000Z',
+      },
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-labels',
+    });
+  });
+
+  await page.route('**/api/admin/invitations/email', async (route) => {
+    bulkInvitationEmailRequests += 1;
+    households = households.map((record) => ({
+      ...record,
+      household: {
+        ...record.household,
+        inviteLifecycleStatus: 'sent',
+        inviteSentAt: '2026-06-15T22:20:00.000Z',
+      },
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [
+          {
+            householdId: 'h1',
+            displayName: 'The Example Household',
+            status: 'sent',
+            deliveredTo: 'sam@example.com',
+            message: 'Sent invitation email to sam@example.com',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+
+  await page.route(
+    `${adminAuthConfig.userPoolDomain}/oauth2/token`,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          access_token: 'fake-access-token',
+          id_token: createJwt({ email: 'admin@example.com' }),
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      });
+    },
+  );
+
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('adminAuth.state', 'login-state');
+    window.sessionStorage.setItem('adminAuth.codeVerifier', 'test-verifier');
+  });
+
+  await page.goto('/admin?code=hosted-ui-code&state=login-state');
+
+  await expect(
+    page.getByRole('heading', { name: 'RSVP dashboard' }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Export invitations' }).click();
+  const exportDialog = page.getByRole('dialog', {
+    name: 'Confirm invitation export',
+  });
+  await expect(exportDialog).toBeVisible();
+  await expect(
+    exportDialog.getByText('1 loaded household', { exact: true }),
+  ).toBeVisible();
+  await exportDialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(exportDialog).toHaveCount(0);
+  expect(invitationExportRequests).toBe(0);
+
+  await page.getByRole('button', { name: 'Export invitations' }).click();
+  const exportConfirmDialog = page.getByRole('dialog', {
+    name: 'Confirm invitation export',
+  });
+  await exportConfirmDialog
+    .getByRole('button', { name: 'Export invitations' })
+    .dblclick();
+  await expect(
+    exportConfirmDialog.getByRole('button', {
+      name: 'Exporting invitations...',
+    }),
+  ).toBeDisabled();
+  await expect.poll(() => invitationExportRequests).toBe(1);
+  await expect(
+    page.getByText(
+      'Exported invitation mailing data. Review the CSV before printing.',
+    ),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Export QR labels' }).click();
+  const labelDialog = page.getByRole('dialog', {
+    name: 'Confirm QR label export',
+  });
+  await expect(
+    labelDialog.getByText('1 loaded household', { exact: true }),
+  ).toBeVisible();
+  await labelDialog.getByRole('button', { name: 'Export QR labels' }).click();
+  await expect.poll(() => labelExportRequests).toBe(1);
+  await expect(
+    page.getByText(
+      'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
+    ),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Email invitations' }).click();
+  const emailDialog = page.getByRole('dialog', {
+    name: 'Confirm invitation emails',
+  });
+  await expect(
+    emailDialog.getByText('1 household with a contact email', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await emailDialog.getByRole('button', { name: 'Email invitations' }).click();
+  await expect.poll(() => bulkInvitationEmailRequests).toBe(1);
+  await expect(
+    page.getByRole('dialog', { name: 'Invitation email results' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Sent invitation email to sam@example.com').first(),
+  ).toBeVisible();
 });
 
 test('admin route clears malformed stored sessions instead of crashing', async ({
