@@ -297,20 +297,23 @@ export class WeddingSiteStack extends Stack {
       throttlingBurstLimit: 100,
       throttlingRateLimit: 50,
     };
-    defaultApiStage.routeSettings = {
+    // CfnStage routeSettings is a map whose values must use CloudFormation's
+    // PascalCase field names; the typed CDK property currently serializes them
+    // as lower-case and API Gateway rejects the deployment.
+    defaultApiStage.addPropertyOverride('RouteSettings', {
       'GET /api/rsvp/{inviteCode}': {
-        throttlingBurstLimit: 20,
-        throttlingRateLimit: 10,
+        ThrottlingBurstLimit: 20,
+        ThrottlingRateLimit: 10,
       },
       'PUT /api/rsvp/{inviteCode}': {
-        throttlingBurstLimit: 10,
-        throttlingRateLimit: 5,
+        ThrottlingBurstLimit: 10,
+        ThrottlingRateLimit: 5,
       },
       'POST /api/rsvp/recovery': {
-        throttlingBurstLimit: 5,
-        throttlingRateLimit: 2,
+        ThrottlingBurstLimit: 5,
+        ThrottlingRateLimit: 2,
       },
-    };
+    });
 
     const siteBucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

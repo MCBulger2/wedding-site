@@ -9,7 +9,7 @@ const webDistPath = path.resolve('apps/web/dist');
 const webDistIndexPath = path.join(webDistPath, 'index.html');
 let createdWebDistFixture = false;
 
-function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
+function synthTemplate(envName: WeddingSiteStackProps['envName']) {
   const app = new cdk.App();
   const stack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
     env: { account: '123456789012', region: 'us-west-1' },
@@ -18,7 +18,12 @@ function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
     notificationRecipientEmails: [],
     enablePasskeys: false,
   });
-  const template = Template.fromStack(stack).toJSON();
+
+  return Template.fromStack(stack).toJSON();
+}
+
+function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
+  const template = synthTemplate(envName);
   const inviteCodePepper = Object.values(template.Resources).find(
     (resource) =>
       resource &&
@@ -62,5 +67,45 @@ describe('WeddingSiteStack invite code pepper retention', () => {
 
     expect(inviteCodePepper.DeletionPolicy).not.toBe('Retain');
     expect(inviteCodePepper.UpdateReplacePolicy).not.toBe('Retain');
+  });
+});
+
+describe('WeddingSiteStack API stage throttling', () => {
+  beforeAll(() => {
+    if (!fs.existsSync(webDistPath)) {
+      fs.mkdirSync(webDistPath, { recursive: true });
+      fs.writeFileSync(webDistIndexPath, '<!doctype html><title>test</title>');
+      createdWebDistFixture = true;
+    }
+  });
+
+  afterAll(() => {
+    if (createdWebDistFixture) {
+      fs.rmSync(webDistPath, { recursive: true, force: true });
+    }
+  });
+
+  it('synthesizes CloudFormation-compatible route setting keys', () => {
+    const template = synthTemplate('production');
+    const stage = Object.values(template.Resources).find(
+      (resource) =>
+        resource &&
+        typeof resource === 'object' &&
+        'Type' in resource &&
+        resource.Type === 'AWS::ApiGatewayV2::Stage',
+    );
+
+    expect(stage).toBeDefined();
+    expect(stage).toMatchObject({
+      Properties: {
+        RouteSettings: {
+          'GET /api/rsvp/{inviteCode}': {
+            ThrottlingBurstLimit: 20,
+            ThrottlingRateLimit: 10,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(stage)).not.toContain('throttlingBurstLimit');
   });
 });
