@@ -32,6 +32,7 @@ export interface WeddingSiteStackProps extends StackProps {
   frontendDomainName?: string;
   apiDomainName?: string;
   authDomainName?: string;
+  cloudFrontWebAclArn?: string;
   frontendCertificate?: acm.ICertificate;
   authCertificate?: acm.ICertificate;
   hostedZoneDomain?: string;
@@ -282,6 +283,28 @@ export class WeddingSiteStack extends Stack {
       integration: apiIntegration,
     });
 
+    const apiDefaultStage = api.defaultStage?.node.defaultChild as apigwv2.CfnStage | undefined;
+    if (apiDefaultStage) {
+      apiDefaultStage.defaultRouteSettings = {
+        throttlingBurstLimit: 100,
+        throttlingRateLimit: 50,
+      };
+      apiDefaultStage.routeSettings = {
+        'GET /api/rsvp/{inviteCode}': {
+          throttlingBurstLimit: 20,
+          throttlingRateLimit: 10,
+        },
+        'PUT /api/rsvp/{inviteCode}': {
+          throttlingBurstLimit: 10,
+          throttlingRateLimit: 5,
+        },
+        'POST /api/rsvp/recovery': {
+          throttlingBurstLimit: 5,
+          throttlingRateLimit: 2,
+        },
+      };
+    }
+
     const siteBucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -395,6 +418,9 @@ export class WeddingSiteStack extends Stack {
       ],
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
     });
+    if (props.cloudFrontWebAclArn) {
+      distribution.attachWebAclId(props.cloudFrontWebAclArn);
+    }
 
     const deployedFrontendBaseUrl = frontendDomainName
       ? `https://${frontendDomainName}`
