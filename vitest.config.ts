@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       'apps/api/src/**/*.test.ts',
       'apps/web/src/**/*.test.{ts,tsx}',
+      'infra/**/*.test.ts',
       'packages/shared/src/**/*.test.ts',
     ],
   },
