@@ -268,7 +268,16 @@ export class WeddingSiteStack extends Stack {
         allowOrigins: buildAllowedOrigins(props.allowedOrigins, frontendDomainName),
         maxAge: Duration.days(1),
       },
+      createDefaultStage: false,
     });
+    const defaultApiStageName = '$default';
+    const defaultApiStage = new apigwv2.CfnStage(api, 'DefaultStage', {
+      apiId: api.apiId,
+      autoDeploy: true,
+      stageName: defaultApiStageName,
+    });
+    // Preserve the logical ID of the previous HttpApi auto-created stage.
+    defaultApiStage.overrideLogicalId('HttpApiDefaultStage3EEB07D6');
 
     const apiIntegration = new integrations.HttpLambdaIntegration('ApiIntegration', apiHandler);
 
@@ -727,10 +736,15 @@ export class WeddingSiteStack extends Stack {
         domainName: props.apiDomainName,
         certificate: apiCertificate,
       });
-      new apigwv2.ApiMapping(this, 'ApiCustomDomainMapping', {
+      const apiCustomDomainMapping = new apigwv2.ApiMapping(this, 'ApiCustomDomainMapping', {
         api,
         domainName: apiCustomDomain,
+        stage: apigwv2.HttpStage.fromHttpStageAttributes(this, 'DefaultHttpStage', {
+          api,
+          stageName: defaultApiStageName,
+        }),
       });
+      apiCustomDomainMapping.node.addDependency(defaultApiStage);
       new route53.ARecord(this, 'ApiAliasRecord', {
         zone: hostedZone,
         recordName: props.apiDomainName,
