@@ -139,7 +139,11 @@ The deploy workflow expects these GitHub environment settings:
 - Variable `ALLOWED_ORIGINS`: optional comma-separated CORS origins for direct API access.
 - Variable `NOTIFICATION_SENDER_EMAIL`: optional SES sender override.
 - Variable `NOTIFICATION_RECIPIENT_EMAILS`: optional comma-separated notification recipients.
+- Variable `CONTACT_EMAIL_ADDRESS`: optional public contact email address, for example `contact@matt-alison.com`.
+- Variable `CONTACT_FORWARDING_RECIPIENT_EMAIL`: optional private forwarding recipient for inbound contact emails. Set this in GitHub environment variables or local env files; do not commit personal recipient addresses.
 - Variable `ENABLE_PASSKEYS`: optional `true` or `false` override.
+
+When `CONTACT_EMAIL_ADDRESS`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN` are all configured and the contact address domain matches the hosted zone, CDK enables SES inbound email for the domain, creates an MX record for SES receiving, stores raw inbound mail in a private expiring S3 bucket, and forwards messages to the configured recipient from the public contact address. The forwarding email sets `Reply-To` to the original sender when it can be parsed safely, so replies from the recipient mailbox go back to the guest. If SES is still in sandbox, the forwarding recipient must be verified or SES production sending must be enabled before live forwarding works.
 
 ## Security And Cost Principles
 

@@ -26,7 +26,9 @@ import {
   saveRsvp,
   type RsvpPayload,
 } from '../api.js';
+import { cx, scoped } from '../classNames.js';
 import { siteContent } from '../siteContent.js';
+import styles from './RsvpPages.module.css';
 
 type RsvpFieldErrorMap = Record<string, string>;
 
@@ -95,16 +97,21 @@ export function RsvpLookupPage() {
   };
 
   return (
-    <main className="narrow-page rsvp-flow-page">
-      <section className="lookup-card rsvp-lookup-card">
-        <div className="rsvp-lookup-guide">
+    <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
+      <section
+        className={cx('lookup-card', scoped(styles, 'rsvp-lookup-card'))}
+      >
+        <div className={scoped(styles, 'rsvp-lookup-guide')}>
           <p className="eyebrow">Private RSVP</p>
           <h1>Enter your invitation code</h1>
           <p className="page-lede">
             Your mailed invitation includes a private RSVP code. Enter it here
             to view or update your household&apos;s response.
           </p>
-          <ol className="rsvp-step-list" aria-label="RSVP steps">
+          <ol
+            className={scoped(styles, 'rsvp-step-list')}
+            aria-label="RSVP steps"
+          >
             <li>
               <span>1</span>
               <div>
@@ -130,8 +137,8 @@ export function RsvpLookupPage() {
             </li>
           </ol>
         </div>
-        <div className="rsvp-lookup-panel">
-          <form className="lookup-form" onSubmit={submit}>
+        <div className={scoped(styles, 'rsvp-lookup-panel')}>
+          <form className={scoped(styles, 'lookup-form')} onSubmit={submit}>
             <label>
               Invitation code
               <input
@@ -162,12 +169,12 @@ export function RsvpLookupPage() {
               />
             </div>
           )}
-          <div className="lookup-divider">
+          <div className={scoped(styles, 'lookup-divider')}>
             <span>or</span>
           </div>
           <button
             type="button"
-            className="recovery-toggle"
+            className={scoped(styles, 'recovery-toggle')}
             aria-expanded={recoveryExpanded}
             aria-controls="rsvp-recovery-form"
             onClick={() => {
@@ -183,7 +190,7 @@ export function RsvpLookupPage() {
           {recoveryExpanded && (
             <form
               id="rsvp-recovery-form"
-              className="recovery-form"
+              className={scoped(styles, 'recovery-form')}
               onSubmit={submitRecovery}
             >
               <label className={recoveryError ? 'field-error' : undefined}>
@@ -218,13 +225,18 @@ export function RsvpLookupPage() {
                   </span>
                 )}
               </label>
-              <p className="form-message recovery-helper">
+              <p
+                className={cx(
+                  'form-message',
+                  scoped(styles, 'recovery-helper'),
+                )}
+              >
                 Enter the email address or mobile number already saved with your
                 household.
               </p>
               <button
                 type="submit"
-                className="recovery-submit-button"
+                className={scoped(styles, 'recovery-submit-button')}
                 disabled={recoveryStatus === 'submitting'}
               >
                 <Send aria-hidden="true" />
@@ -473,7 +485,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
   );
 
   return (
-    <main className="narrow-page rsvp-flow-page">
+    <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
       <p className="eyebrow">Private RSVP</p>
       <h1>{household.displayName}</h1>
       <p className="page-lede">
@@ -506,7 +518,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </a>
         </div>
       )}
-      <div className="rsvp-summary-band" aria-label="RSVP overview">
+      <div
+        className={scoped(styles, 'rsvp-summary-band')}
+        aria-label="RSVP overview"
+      >
         <div>
           <CalendarDays aria-hidden="true" />
           <span>
@@ -532,7 +547,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           Not you?
         </a>
       </div>
-      <form className="rsvp-form" onSubmit={submit}>
+      <form className={scoped(styles, 'rsvp-form')} onSubmit={submit}>
         {status === 'saving' && (
           <div className="inline-loading-shell" aria-live="polite">
             <LoadingPulse
@@ -543,7 +558,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </div>
         )}
         <section
-          className="rsvp-form-section"
+          className={scoped(styles, 'rsvp-form-section')}
           aria-labelledby="rsvp-guests-heading"
         >
           <div className="section-heading">
@@ -561,10 +576,13 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             )!;
             const fullName = `${member.firstName} ${member.lastName}`;
             return (
-              <fieldset className="guest-response-card" key={member.id}>
+              <fieldset
+                className={scoped(styles, 'guest-response-card')}
+                key={member.id}
+              >
                 <legend>{fullName}</legend>
-                <div className="guest-response-grid">
-                  <div className="guest-response-person">
+                <div className={scoped(styles, 'guest-response-grid')}>
+                  <div className={scoped(styles, 'guest-response-person')}>
                     <strong>{fullName}</strong>
                     <span>
                       {member.weddingPartyRole ||
@@ -574,13 +592,16 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                     </span>
                   </div>
                   <div
-                    className="segmented-control"
+                    className={scoped(styles, 'segmented-control')}
                     role="group"
                     aria-label={`${fullName} attendance`}
                   >
                     <button
                       type="button"
-                      className={`rsvp-segment ${memberRsvp.attending ? 'is-selected' : ''}`}
+                      className={cx(
+                        scoped(styles, 'rsvp-segment'),
+                        memberRsvp.attending && scoped(styles, 'is-selected'),
+                      )}
                       aria-pressed={memberRsvp.attending}
                       aria-label={`${fullName} attending`}
                       onClick={() =>
@@ -598,7 +619,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                     </button>
                     <button
                       type="button"
-                      className={`rsvp-segment ${!memberRsvp.attending ? 'is-selected' : ''}`}
+                      className={cx(
+                        scoped(styles, 'rsvp-segment'),
+                        !memberRsvp.attending && scoped(styles, 'is-selected'),
+                      )}
                       aria-pressed={!memberRsvp.attending}
                       aria-label={`${fullName} not attending`}
                       onClick={() =>
@@ -611,7 +635,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                       Not attending
                     </button>
                   </div>
-                  <div className="guest-response-detail">
+                  <div className={scoped(styles, 'guest-response-detail')}>
                     {memberRsvp.attending ? (
                       <label
                         className={
@@ -653,7 +677,12 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                         />
                       </label>
                     ) : (
-                      <p className="form-message guest-decline-note">
+                      <p
+                        className={cx(
+                          'form-message',
+                          scoped(styles, 'guest-decline-note'),
+                        )}
+                      >
                         No additional details needed for guests who are not
                         attending.
                       </p>
@@ -666,7 +695,12 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         </section>
 
         {household.maxPlusOnes > 0 && (
-          <section className="subsection-card">
+          <section
+            className={cx(
+              'subsection-card',
+              scoped(styles, 'rsvp-plus-one-section'),
+            )}
+          >
             <div className="section-heading">
               <div>
                 <h2>Plus-ones</h2>
@@ -849,7 +883,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         )}
 
         <section
-          className="rsvp-notes-grid single-notes"
+          className={cx(
+            scoped(styles, 'rsvp-notes-grid'),
+            scoped(styles, 'single-notes'),
+          )}
           aria-label="Additional notes"
         >
           <label className={fieldError('notes') ? 'field-error' : undefined}>
@@ -872,14 +909,17 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             <FieldError path="notes" errors={fieldErrors} />
           </label>
         </section>
-        <div className="rsvp-save-bar">
+        <div className={scoped(styles, 'rsvp-save-bar')}>
           <button type="submit" disabled={status === 'saving'}>
             {status === 'saving' ? 'Saving...' : 'Save RSVP'}
           </button>
         </div>
         {message && (
           <p
-            className={`form-message ${Object.keys(fieldErrors).length > 0 ? 'error-message' : ''}`}
+            className={cx(
+              'form-message',
+              Object.keys(fieldErrors).length > 0 && 'error-message',
+            )}
           >
             {message}
           </p>
@@ -977,10 +1017,16 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
   const responseSummary = buildRsvpSummary(household, savedRsvp);
 
   return (
-    <main className="narrow-page rsvp-flow-page">
-      <section className="lookup-card success-card rsvp-success-card">
+    <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
+      <section
+        className={cx(
+          'lookup-card',
+          'success-card',
+          scoped(styles, 'rsvp-success-card'),
+        )}
+      >
         <p className="eyebrow">Private RSVP</p>
-        <div className="success-mark" aria-hidden="true">
+        <div className={scoped(styles, 'success-mark')} aria-hidden="true">
           <Check />
         </div>
         <h1>RSVP received</h1>
@@ -1004,7 +1050,7 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
           </a>
         </div>
         <div
-          className="rsvp-response-summary"
+          className={scoped(styles, 'rsvp-response-summary')}
           aria-label="RSVP response summary"
         >
           <section>
@@ -1343,7 +1389,7 @@ function LoadingPulse({
   compact?: boolean;
 }) {
   return (
-    <div className={`loading-pulse ${compact ? 'compact' : ''}`}>
+    <div className={cx('loading-pulse', compact && 'compact')}>
       <div className="loading-mark" aria-hidden="true">
         <Heart />
       </div>

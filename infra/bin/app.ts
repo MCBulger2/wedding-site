@@ -55,6 +55,14 @@ const notificationRecipientEmails =
   parseStringList(app.node.tryGetContext('notificationRecipientEmails')) ??
   parseStringList(process.env.NOTIFICATION_RECIPIENT_EMAILS) ??
   deploymentConfig.notificationRecipientEmails;
+const contactEmailAddress =
+  readString(app.node.tryGetContext('contactEmailAddress')) ??
+  readString(process.env.CONTACT_EMAIL_ADDRESS) ??
+  deploymentConfig.contactEmailAddress;
+const contactForwardingRecipientEmail =
+  readString(app.node.tryGetContext('contactForwardingRecipientEmail')) ??
+  readString(process.env.CONTACT_FORWARDING_RECIPIENT_EMAIL) ??
+  deploymentConfig.contactForwardingRecipientEmail;
 const enablePasskeys =
   parseBoolean(app.node.tryGetContext('enablePasskeys')) ??
   parseBoolean(process.env.ENABLE_PASSKEYS) ??
@@ -85,6 +93,8 @@ new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   allowedOrigins,
   notificationSenderEmail,
   notificationRecipientEmails,
+  contactEmailAddress,
+  contactForwardingRecipientEmail,
   enablePasskeys,
 });
 

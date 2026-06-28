@@ -5,7 +5,9 @@ import { Archive, CheckSquare, Download, Edit3, ExternalLink, Heart, Image, KeyR
 import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
 import { archiveHousehold, createHousehold, downloadInvitationLabelsPdf, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
+import { cx, scoped } from '../classNames.js';
 import { createLocalAdminMockSession, localAdminMockAuthConfig, localAdminMockEnabled } from '../localAdminMock.js';
+import styles from './AdminPage.module.css';
 
 interface HouseholdFormState {
   displayName: string;
@@ -80,20 +82,20 @@ export function HouseholdCardActions({
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          className="household-action-menu"
+          className={scoped(styles, 'household-action-menu')}
           align="end"
           collisionPadding={12}
           sideOffset={6}
         >
           <DropdownMenu.Item
-            className="household-action-menu-item"
+            className={scoped(styles, 'household-action-menu-item')}
             onClick={onEdit}
           >
             <Edit3 aria-hidden="true" />
             Edit
           </DropdownMenu.Item>
           <DropdownMenu.Item
-            className="household-action-menu-item"
+            className={scoped(styles, 'household-action-menu-item')}
             disabled={!canNotify}
             onClick={onNotify}
           >
@@ -101,7 +103,7 @@ export function HouseholdCardActions({
             Notify
           </DropdownMenu.Item>
           <DropdownMenu.Item
-            className="household-action-menu-item"
+            className={scoped(styles, 'household-action-menu-item')}
             disabled={!canEmailInvitation}
             onClick={onEmailInvitation}
           >
@@ -111,7 +113,7 @@ export function HouseholdCardActions({
               : 'Email invitation'}
           </DropdownMenu.Item>
           <DropdownMenu.Item
-            className="household-action-menu-item"
+            className={scoped(styles, 'household-action-menu-item')}
             onClick={onManageInvitation}
           >
             <KeyRound aria-hidden="true" />
@@ -121,7 +123,7 @@ export function HouseholdCardActions({
           </DropdownMenu.Item>
           {household.inviteCodeHash && (
             <DropdownMenu.Item
-              className="household-action-menu-item"
+              className={scoped(styles, 'household-action-menu-item')}
               onClick={onRotateInviteCode}
             >
               <KeyRound aria-hidden="true" />
@@ -130,7 +132,7 @@ export function HouseholdCardActions({
           )}
           {onMarkSent && (
             <DropdownMenu.Item
-              className="household-action-menu-item"
+              className={scoped(styles, 'household-action-menu-item')}
               onClick={onMarkSent}
             >
               <CheckSquare aria-hidden="true" />
@@ -139,7 +141,7 @@ export function HouseholdCardActions({
           )}
           {onMarkExported && (
             <DropdownMenu.Item
-              className="household-action-menu-item"
+              className={scoped(styles, 'household-action-menu-item')}
               onClick={onMarkExported}
             >
               <CheckSquare aria-hidden="true" />
@@ -147,7 +149,7 @@ export function HouseholdCardActions({
             </DropdownMenu.Item>
           )}
           <DropdownMenu.Item
-            className="household-action-menu-item"
+            className={scoped(styles, 'household-action-menu-item')}
             disabled={Boolean(household.archivedAt)}
             onClick={onArchive}
           >
@@ -778,7 +780,7 @@ export function AdminPage() {
 
   if (authStatus === 'loading' || authStatus === 'signing_in') {
     return (
-      <main className="admin-page">
+      <main className={scoped(styles, 'admin-page')}>
         <LoadingScreen
           eyebrow="Admin"
           title="Preparing sign-in"
@@ -795,21 +797,21 @@ export function AdminPage() {
     !session
   ) {
     return (
-      <main className="admin-page">
+      <main className={scoped(styles, 'admin-page')}>
         <section
-          className="admin-login-shell"
+          className={scoped(styles, 'admin-login-shell')}
           aria-labelledby="admin-login-title"
         >
-          <div className="admin-login-intro">
+          <div className={scoped(styles, 'admin-login-intro')}>
             <p className="eyebrow">Admin dashboard</p>
             <h1 id="admin-login-title">Admin sign in</h1>
             <p className="page-lede">
               Manage RSVPs, households, and invitations.
             </p>
           </div>
-          <section className="admin-login-card" aria-label="Admin sign in">
-            <div className="admin-login-card-header">
-              <span className="admin-login-icon">
+          <section className={scoped(styles, 'admin-login-card')} aria-label="Admin sign in">
+            <div className={scoped(styles, 'admin-login-card-header')}>
+              <span className={scoped(styles, 'admin-login-icon')}>
                 <KeyRound aria-hidden="true" />
               </span>
               <div>
@@ -820,7 +822,7 @@ export function AdminPage() {
             {authConfig ? (
               <button
                 type="button"
-                className="icon-button admin-login-button"
+                className={cx('icon-button', scoped(styles, 'admin-login-button'))}
                 onClick={() => void beginAdminLogin(authConfig)}
               >
                 <KeyRound aria-hidden="true" />
@@ -829,14 +831,14 @@ export function AdminPage() {
             ) : (
               <button
                 type="button"
-                className="secondary-button admin-login-button"
+                className={cx('secondary-button', scoped(styles, 'admin-login-button'))}
                 disabled
               >
                 <KeyRound aria-hidden="true" />
                 Sign-in unavailable
               </button>
             )}
-            <p className="admin-login-note">
+            <p className={scoped(styles, 'admin-login-note')}>
               You will return here after signing in.
             </p>
           </section>
@@ -846,8 +848,8 @@ export function AdminPage() {
   }
 
   return (
-    <main className="admin-page">
-      <section className="admin-toolbar">
+    <main className={scoped(styles, 'admin-page')}>
+      <section className={scoped(styles, 'admin-toolbar')}>
         <div>
           <p className="eyebrow">Admin</p>
           <h2>RSVP dashboard</h2>
@@ -953,13 +955,13 @@ export function AdminPage() {
             setQrCodeStatus('idle');
           }}
         >
-          <div className="qr-modal-content">
+          <div className={scoped(styles, 'qr-modal-content')}>
             <p className="form-message">
               Guests can scan this code or use the RSVP link below.
             </p>
             {qrCodeStatus === 'loading' && (
               <div
-                className="inline-loading-shell qr-loading-shell"
+                className={cx('inline-loading-shell', scoped(styles, 'qr-loading-shell'))}
                 aria-live="polite"
               >
                 <LoadingPulse
@@ -970,13 +972,13 @@ export function AdminPage() {
               </div>
             )}
             {qrCodeStatus === 'error' && (
-              <p className="warning-message">
+              <p className={scoped(styles, 'warning-message')}>
                 Unable to generate the QR code right now.
               </p>
             )}
             {qrCodeDataUrl && (
               <img
-                className="qr-code-image"
+                className={scoped(styles, 'qr-code-image')}
                 src={qrCodeDataUrl}
                 alt={`QR code for ${qrModalInvite.displayName}`}
               />
@@ -999,9 +1001,15 @@ export function AdminPage() {
           title="Invitation email results"
           onClose={() => setBulkEmailResults(undefined)}
         >
-          <div className="result-list" aria-label="Invitation email results">
+          <div className={scoped(styles, 'result-list')} aria-label="Invitation email results">
             {bulkEmailResults.map((result) => (
-              <p className={`status-result ${result.status}`} key={result.householdId}>
+              <p
+                className={cx(
+                  scoped(styles, 'status-result'),
+                  scoped(styles, result.status),
+                )}
+                key={result.householdId}
+              >
                 <strong>{result.displayName}</strong>
                 <span>{result.message}</span>
               </p>
@@ -1010,15 +1018,15 @@ export function AdminPage() {
         </Modal>
       )}
 
-      <section className="admin-grid">
-        <section className="subsection-card">
+      <section className={scoped(styles, 'admin-grid')}>
+        <section className={scoped(styles, 'subsection-card')}>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Results</p>
               <h2>View responses</h2>
             </div>
           </div>
-          <div className="stats-grid">
+          <div className={scoped(styles, 'stats-grid')}>
             {isHouseholdsLoading ? (
               <>
                 <SkeletonStat />
@@ -1047,7 +1055,7 @@ export function AdminPage() {
               </>
             )}
           </div>
-          <div className="filter-grid">
+          <div className={scoped(styles, 'filter-grid')}>
             <label>
               Search
               <input
@@ -1072,7 +1080,7 @@ export function AdminPage() {
                 <option value="declined">Declined</option>
               </select>
             </label>
-            <label className="checkbox-row filter-toggle">
+            <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
               <input
                 aria-label="Show archived households"
                 type="checkbox"
@@ -1083,10 +1091,10 @@ export function AdminPage() {
             </label>
           </div>
 
-          <div className="results-list" aria-label="Households">
+          <div className={scoped(styles, 'results-list')} aria-label="Households">
             {isHouseholdsRefreshing && (
               <div
-                className="inline-loading-shell dashboard-refresh"
+                className={cx('inline-loading-shell', scoped(styles, 'dashboard-refresh'))}
                 aria-live="polite"
               >
                 <LoadingPulse
@@ -1110,25 +1118,34 @@ export function AdminPage() {
 
               return (
                 <article
-                  className="household-card"
+                  className={scoped(styles, 'household-card')}
                   key={record.household.householdId}
                 >
                   <div className="section-heading">
                     <div>
-                      <div className="title-row">
+                      <div className={scoped(styles, 'title-row')}>
                         <h3>{record.household.displayName}</h3>
                         <span
-                          className={`status-pill ${record.household.rsvpStatus}`}
+                          className={cx(
+                            scoped(styles, 'status-pill'),
+                            scoped(styles, record.household.rsvpStatus),
+                          )}
                         >
                           {record.household.rsvpStatus.replace('_', ' ')}
                         </span>
                         <span
-                          className={`status-pill invite-${record.household.inviteLifecycleStatus}`}
+                          className={cx(
+                            scoped(styles, 'status-pill'),
+                            scoped(
+                              styles,
+                              `invite-${record.household.inviteLifecycleStatus}`,
+                            ),
+                          )}
                         >
                           {inviteStatusLabel(record.household)}
                         </span>
                       </div>
-                      <div className="meta-row">
+                      <div className={scoped(styles, 'meta-row')}>
                         <span>
                           <Users aria-hidden="true" />
                           {record.household.members.length} household guests
@@ -1170,7 +1187,7 @@ export function AdminPage() {
                   </div>
                   {invitation && isInvitationExpanded && (
                     <section
-                      className="invite-preview-card"
+                      className={scoped(styles, 'invite-preview-card')}
                       aria-label={`${record.household.displayName} invitation details`}
                     >
                       <div>
@@ -1178,21 +1195,21 @@ export function AdminPage() {
                         <h4>
                           Share this code, link, or QR with the household.
                         </h4>
-                        <p className="form-message compact-message">
+                        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
                           Revealed for this admin session only.
                         </p>
                       </div>
-                      <div className="invite-code-box">
-                        <div className="invite-code-block">
-                          <span className="invite-detail-label">
+                      <div className={scoped(styles, 'invite-code-box')}>
+                        <div className={scoped(styles, 'invite-code-block')}>
+                          <span className={scoped(styles, 'invite-detail-label')}>
                             Invite code
                           </span>
                           <strong>{invitation.inviteCode}</strong>
                         </div>
-                        <div className="invite-code-block">
-                          <span className="invite-detail-label">RSVP link</span>
+                        <div className={scoped(styles, 'invite-code-block')}>
+                          <span className={scoped(styles, 'invite-detail-label')}>RSVP link</span>
                           <a
-                            className="invite-link"
+                            className={scoped(styles, 'invite-link')}
                             href={invitation.rsvpUrl}
                             target="_blank"
                             rel="noreferrer"
@@ -1241,10 +1258,10 @@ export function AdminPage() {
 
                   {editingHouseholdId === record.household.householdId && (
                     <section
-                      className="edit-panel"
+                      className={scoped(styles, 'edit-panel')}
                       aria-label={`Edit ${record.household.displayName}`}
                     >
-                      <div className="split-fields">
+                      <div className={scoped(styles, 'split-fields')}>
                         <label>
                           Display name
                           <input
@@ -1315,7 +1332,7 @@ export function AdminPage() {
                               ? formatMemberName(member)
                               : `Member ${index + 1}`}
                           </legend>
-                          <div className="split-fields">
+                          <div className={scoped(styles, 'split-fields')}>
                             <label>
                               First name
                               <input
@@ -1463,19 +1480,19 @@ export function AdminPage() {
                     </section>
                   )}
 
-                  <div className="stats-inline">
+                  <div className={scoped(styles, 'stats-inline')}>
                     <span><b>{record.attendance.attendingGuests}</b> attending</span>
                     <span><b>{record.attendance.pendingGuests}</b> pending</span>
                     <span><b>{record.attendance.plusOneGuests}</b> plus-ones</span>
                   </div>
 
-                  <div className="member-list">
+                  <div className={scoped(styles, 'member-list')}>
                     {record.household.members.map((member) => {
                       const memberRsvp = record.rsvp?.members.find(
                         (entry) => entry.memberId === member.id,
                       );
                       return (
-                        <div key={member.id} className="member-row">
+                        <div key={member.id} className={scoped(styles, 'member-row')}>
                           <strong>{formatMemberName(member)}</strong>
                           <span>
                             {memberRsvp
@@ -1488,7 +1505,7 @@ export function AdminPage() {
                   </div>
 
                   {record.rsvp?.plusOnes.length ? (
-                    <div className="note-block">
+                    <div className={scoped(styles, 'note-block')}>
                       <strong>Plus-ones</strong>
                       <ul className="plain-list compact-list">
                         {record.rsvp.plusOnes.map((plusOne, index) => (
@@ -1501,14 +1518,14 @@ export function AdminPage() {
                   ) : null}
 
                   {record.rsvp?.notes && (
-                    <div className="note-block">
+                    <div className={scoped(styles, 'note-block')}>
                       <strong>Notes</strong>
                       <p>{record.rsvp.notes}</p>
                     </div>
                   )}
 
                   {record.rsvp?.accessibilityNotes && (
-                    <div className="note-block">
+                    <div className={scoped(styles, 'note-block')}>
                       <strong>Accessibility</strong>
                       <p>{record.rsvp.accessibilityNotes}</p>
                     </div>
@@ -1534,7 +1551,7 @@ function AddressFields({
 }) {
   return (
     <>
-      <div className="split-fields">
+      <div className={scoped(styles, 'split-fields')}>
         <label>
           Address line 1
           <input
@@ -1568,7 +1585,7 @@ function AddressFields({
           />
         </label>
       </div>
-      <div className="split-fields">
+      <div className={scoped(styles, 'split-fields')}>
         <label>
           City
           <input
@@ -1602,7 +1619,7 @@ function AddressFields({
           />
         </label>
       </div>
-      <div className="split-fields">
+      <div className={scoped(styles, 'split-fields')}>
         <label>
           Postal code
           <input
@@ -1805,8 +1822,8 @@ function Modal({
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="modal-backdrop">
-          <Dialog.Content className="modal-card">
+        <Dialog.Overlay className={scoped(styles, 'modal-backdrop')}>
+          <Dialog.Content className={scoped(styles, 'modal-card')}>
             <div className="section-heading">
               <Dialog.Title asChild>
                 <h2>{title}</h2>
@@ -1871,7 +1888,7 @@ function HouseholdForm({
           onChange={(event) => setForm({ ...form, phone: event.target.value })}
         />
       </label>
-      <p className="form-message compact-message">
+      <p className={cx('form-message', scoped(styles, 'compact-message'))}>
         Use a US 10-digit number or E.164 format such as +14805550100 for SMS.
       </p>
       <label>
@@ -1925,7 +1942,7 @@ function HouseholdForm({
       {form.members.map((member, index) => (
         <fieldset key={index}>
           <legend>Member {index + 1}</legend>
-          <div className="split-fields">
+          <div className={scoped(styles, 'split-fields')}>
             <label>
               First name
               <input
@@ -2128,7 +2145,7 @@ function HouseholdNotificationForm({
         />
       </label>
       {form.channel === 'sms' && (
-        <p className="form-message compact-message">
+        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
           SMS uses Amazon SNS and should stay concise.
         </p>
       )}
@@ -2180,7 +2197,7 @@ function AdminDashboardSkeleton() {
   return (
     <div className="admin-skeleton" aria-hidden="true">
       {[0, 1, 2].map((item) => (
-        <article className="household-card skeleton-household-card" key={item}>
+        <article className={cx(scoped(styles, 'household-card'), 'skeleton-household-card')} key={item}>
           <div className="section-heading">
             <div className="skeleton-stack">
               <span className="skeleton-line title" />
@@ -2191,12 +2208,12 @@ function AdminDashboardSkeleton() {
               <span className="skeleton-button" />
             </div>
           </div>
-          <div className="stats-inline">
+          <div className={scoped(styles, 'stats-inline')}>
             <span className="skeleton-line short" />
             <span className="skeleton-line short" />
             <span className="skeleton-line short" />
           </div>
-          <div className="member-list">
+          <div className={scoped(styles, 'member-list')}>
             <span className="skeleton-row" />
             <span className="skeleton-row" />
           </div>
@@ -2216,7 +2233,7 @@ function LoadingPulse({
   compact?: boolean;
 }) {
   return (
-    <div className={`loading-pulse ${compact ? 'compact' : ''}`}>
+    <div className={cx('loading-pulse', compact && 'compact')}>
       <div className="loading-mark" aria-hidden="true">
         <Heart />
       </div>

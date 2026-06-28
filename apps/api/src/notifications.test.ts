@@ -131,15 +131,17 @@ describe('notifications', () => {
     expect(email.subject).toBe("You're invited to Matt and Alison's wedding");
     expect(email.text).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.text).toContain('Invitation code: A2B3C4D5E6');
+    expect(email.text).toContain('Questions? Email us at contact@matt-alison.com.');
     expect(email.html).toContain('Open your RSVP');
     expect(email.html).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.html).toContain('Invitation code');
     expect(email.html).toContain('A2B3C4D5E6');
+    expect(email.html).toContain('contact@matt-alison.com');
     expect(email.html).toContain(siteContent.venueName);
     expect(email.html).toContain(siteContent.rsvpDeadline);
   });
 
-  it('sends invitation emails as styled HTML instead of text-only email', async () => {
+  it('sends invitation emails with text and styled HTML bodies', async () => {
     const sesClient = new RecordingSesClient();
     const client = new AwsWeddingNotificationsClient(
       {
@@ -162,10 +164,11 @@ describe('notifications', () => {
 
     expect(sesClient.commands).toHaveLength(1);
     const body = sesClient.commands[0].input.Content?.Simple?.Body;
-    expect(body?.Text).toBeUndefined();
+    expect(body?.Text?.Data).toContain('contact@matt-alison.com');
     expect(body?.Html?.Data).toContain('Matt &amp; Alison');
     expect(body?.Html?.Data).toContain('Open your RSVP');
     expect(body?.Html?.Data).toContain('A2B3C4D5E6');
+    expect(body?.Html?.Data).toContain('contact@matt-alison.com');
   });
 
   it('builds recovery email content with the private RSVP link and no separate invite code field', () => {
