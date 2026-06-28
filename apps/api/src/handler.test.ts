@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { handleRequest } from './handler.js';
 import { PublicError } from './service.js';
@@ -9,6 +9,14 @@ const acceptedRecoveryResponse = {
 };
 
 describe('handleRequest', () => {
+  beforeEach(() => {
+    vi.stubEnv('FRONTEND_BASE_URL', 'https://frontend.example.com');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('returns 422 for invalid recovery contact input', async () => {
     const service = createServiceDouble({
       requestRsvpRecovery: vi.fn(async () => {
@@ -67,6 +75,25 @@ describe('handleRequest', () => {
     );
   });
 
+  it('fails closed for recovery links when the canonical frontend URL is missing', async () => {
+    vi.stubEnv('FRONTEND_BASE_URL', '');
+    const requestRsvpRecovery = vi.fn(async () => acceptedRecoveryResponse);
+    const service = createServiceDouble({ requestRsvpRecovery });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/recovery', 'POST', { contact: 'sam@example.com' }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(503);
+    expect(JSON.parse(httpResponse.body as string)).toMatchObject({
+      message:
+        'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+    });
+    expect(requestRsvpRecovery).not.toHaveBeenCalled();
+  });
+
   it('passes phone recovery requests through with request context', async () => {
     const requestRsvpRecovery = vi.fn(async () => acceptedRecoveryResponse);
     const service = createServiceDouble({ requestRsvpRecovery });
@@ -94,6 +121,92 @@ describe('handleRequest', () => {
     const httpResponse = response as Exclude<typeof response, string>;
     expect(httpResponse.statusCode).toBe(202);
     expect(JSON.parse(httpResponse.body as string)).toHaveProperty('accepted', true);
+  });
+
+  it('uses the configured frontend URL instead of the request origin for invitation exports', async () => {
+    const exportInvitations = vi.fn(async () => 'csv-content');
+    const service = createServiceDouble({ exportInvitations });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/admin/invitations/export', 'GET'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(httpResponse.body).toBe('csv-content');
+    expect(exportInvitations).toHaveBeenCalledWith('https://frontend.example.com');
+  });
+
+  it('fails closed for invitation exports when the canonical frontend URL is missing', async () => {
+    vi.stubEnv('FRONTEND_BASE_URL', '');
+    const exportInvitations = vi.fn(async () => 'csv-content');
+    const service = createServiceDouble({ exportInvitations });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/admin/invitations/export', 'GET'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(503);
+    expect(JSON.parse(httpResponse.body as string)).toMatchObject({
+      message:
+        'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+    });
+    expect(exportInvitations).not.toHaveBeenCalled();
+  });
+
+  it('uses the configured frontend URL instead of the request origin for invitation emails', async () => {
+    const sendInvitationEmail = vi.fn(async () => ({
+      result: {
+        householdId: 'household-1',
+        displayName: 'Test Household',
+        status: 'sent' as const,
+        deliveredTo: 'sam@example.com',
+        message: 'Sent',
+      },
+    }));
+    const service = createServiceDouble({ sendInvitationEmail });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/admin/households/household-1/invitation-email', 'POST'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(sendInvitationEmail).toHaveBeenCalledWith(
+      'household-1',
+      'https://frontend.example.com',
+    );
+  });
+
+  it('fails closed for invitation emails when the canonical frontend URL is missing', async () => {
+    vi.stubEnv('FRONTEND_BASE_URL', '');
+    const sendInvitationEmail = vi.fn(async () => ({
+      result: {
+        householdId: 'household-1',
+        displayName: 'Test Household',
+        status: 'sent' as const,
+        deliveredTo: 'sam@example.com',
+        message: 'Sent',
+      },
+    }));
+    const service = createServiceDouble({ sendInvitationEmail });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/admin/households/household-1/invitation-email', 'POST'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(503);
+    expect(JSON.parse(httpResponse.body as string)).toMatchObject({
+      message:
+        'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+    });
+    expect(sendInvitationEmail).not.toHaveBeenCalled();
   });
 
   it('returns invitation QR labels as a base64 PDF download', async () => {
@@ -129,7 +242,7 @@ function createEvent(
     rawPath,
     rawQueryString: '',
     headers: {
-      origin: 'https://frontend.example.com',
+      origin: 'https://attacker.example.com',
     },
     requestContext: {
       accountId: '123456789012',
