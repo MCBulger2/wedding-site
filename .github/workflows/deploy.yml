@@ -3,6 +3,7 @@ name: Deploy
 on:
   push:
     branches:
+      - 'codex/release-*'
       - develop
       - main
   workflow_dispatch:
@@ -50,7 +51,7 @@ jobs:
       - run: npm run synth -w infra -- -c envName=${DEPLOY_ENV}
 
   deploy:
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/codex/release-') || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
