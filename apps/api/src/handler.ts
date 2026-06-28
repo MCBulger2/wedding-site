@@ -83,7 +83,7 @@ export async function handleRequest(
       return json(
         await service.requestRsvpRecovery(body, {
           sourceIp: event.requestContext.http.sourceIp,
-          baseUrl: frontendBaseUrl(event),
+          baseUrl: frontendBaseUrl(),
         }),
         202,
       );
@@ -151,7 +151,7 @@ export async function handleRequest(
       return json(
         await service.revealInvitation(
           decodeURIComponent(invitationMatch[1]),
-          frontendBaseUrl(event),
+          frontendBaseUrl(),
         ),
       );
     }
@@ -161,7 +161,7 @@ export async function handleRequest(
       return json(
         await service.sendInvitationEmail(
           decodeURIComponent(invitationEmailMatch[1]),
-          frontendBaseUrl(event),
+          frontendBaseUrl(),
         ),
       );
     }
@@ -177,7 +177,7 @@ export async function handleRequest(
     }
 
     if (method === 'POST' && path === '/admin/invitations/email') {
-      return json(await service.sendInvitationEmails(frontendBaseUrl(event)));
+      return json(await service.sendInvitationEmails(frontendBaseUrl()));
     }
 
     if (method === 'GET' && path === '/admin/rsvps/export') {
@@ -198,12 +198,12 @@ export async function handleRequest(
           'content-type': 'text/csv; charset=utf-8',
           'content-disposition': 'attachment; filename="invitations.csv"',
         },
-        body: await service.exportInvitations(frontendBaseUrl(event)),
+        body: await service.exportInvitations(frontendBaseUrl()),
       };
     }
 
     if (method === 'GET' && path === '/admin/invitations/labels') {
-      const pdf = await service.exportInvitationLabels(frontendBaseUrl(event));
+      const pdf = await service.exportInvitationLabels(frontendBaseUrl());
       return {
         statusCode: 200,
         headers: {
@@ -298,7 +298,7 @@ function firstPopulatedValue(...values: Array<string | undefined>): string | und
   return values.map((value) => value?.trim()).find(Boolean);
 }
 
-function frontendBaseUrl(_event: Parameters<APIGatewayProxyHandlerV2>[0]): string {
+function frontendBaseUrl(): string {
   const baseUrl = firstPopulatedValue(process.env.FRONTEND_BASE_URL);
   if (!baseUrl) {
     throw new PublicError(
