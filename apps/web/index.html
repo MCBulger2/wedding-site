@@ -8,6 +8,27 @@
       content="Wedding announcement and RSVP website for Matt and Alison's 2027 wedding."
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      (() => {
+        let theme = 'light';
+
+        try {
+          const storageKey = 'wedding.theme';
+          const storedTheme = window.localStorage.getItem(storageKey);
+          theme =
+            storedTheme === 'light' || storedTheme === 'dark'
+              ? storedTheme
+              : window.matchMedia?.('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+        } catch {
+          theme = 'light';
+        }
+
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <title>Matt and Alison Wedding</title>
   </head>
   <body>
