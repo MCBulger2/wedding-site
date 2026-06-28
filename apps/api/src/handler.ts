@@ -294,20 +294,18 @@ function normalizePath(rawPath: string): string {
   return rawPath.startsWith('/api/') ? rawPath.slice('/api'.length) : rawPath;
 }
 
-function headerValue(headers: Record<string, string | undefined>, name: string): string | undefined {
-  const matchingKey = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
-  return matchingKey ? headers[matchingKey] : undefined;
-}
-
 function firstPopulatedValue(...values: Array<string | undefined>): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
 }
 
-function frontendBaseUrl(event: Parameters<APIGatewayProxyHandlerV2>[0]): string {
-  return (
-    firstPopulatedValue(
-      process.env.FRONTEND_BASE_URL,
-      headerValue(event.headers, 'origin'),
-    ) ?? 'https://example.com'
-  );
+function frontendBaseUrl(_event: Parameters<APIGatewayProxyHandlerV2>[0]): string {
+  const baseUrl = firstPopulatedValue(process.env.FRONTEND_BASE_URL);
+  if (!baseUrl) {
+    throw new PublicError(
+      'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+      503,
+    );
+  }
+
+  return baseUrl;
 }
