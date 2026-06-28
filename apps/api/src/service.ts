@@ -59,7 +59,9 @@ const AVERY_5160_LABEL = {
 
 interface PreparedInvitationExportRow {
   household: Household;
+  inviteCode?: string;
   rsvpUrl: string;
+  websiteUrl: string;
 }
 
 export class PublicError extends Error {
@@ -835,6 +837,7 @@ export class WeddingService {
         rows.push({
           household,
           rsvpUrl: '',
+          websiteUrl: baseUrl.replace(/\/$/, ''),
         });
         continue;
       }
@@ -867,7 +870,9 @@ export class WeddingService {
 
       rows.push({
         household: updated,
+        inviteCode,
         rsvpUrl: `${baseUrl.replace(/\/$/, '')}/rsvp/${encodeURIComponent(inviteCode)}`,
+        websiteUrl: baseUrl.replace(/\/$/, ''),
       });
     }
 
@@ -1114,13 +1119,23 @@ function drawInvitationLabel(
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
   const householdText = truncatePdfText(
     row.household.displayName,
-    Math.floor(textWidth / 4.8),
+    Math.floor(textWidth / 4.3),
+  );
+  const inviteCodeText = truncatePdfText(
+    row.inviteCode ? `Code: ${row.inviteCode}` : 'Code unavailable',
+    Math.floor(textWidth / 3.4),
+  );
+  const websiteText = truncatePdfText(
+    row.websiteUrl,
+    Math.floor(textWidth / 2.8),
   );
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
-    textCommand(householdText, textX, y + 22, 8.5, 'F2', '0.141 0.196 0.220'),
-    textCommand('RSVP', textX, y + 50, 7, 'F1', '0.322 0.384 0.373'),
+    textCommand(householdText, textX, y + 17, 7.5, 'F2', '0.141 0.196 0.220'),
+    textCommand(inviteCodeText, textX, y + 33, 6.5, 'F1', '0.141 0.196 0.220'),
+    textCommand('Website:', textX, y + 47, 5.5, 'F2', '0.322 0.384 0.373'),
+    textCommand(websiteText, textX, y + 58, 5, 'F1', '0.322 0.384 0.373'),
   ].join('\n');
 }
 
