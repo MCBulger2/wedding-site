@@ -98,7 +98,9 @@ export function RsvpLookupPage() {
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
-      <section className={cx('lookup-card', scoped(styles, 'rsvp-lookup-card'))}>
+      <section
+        className={cx('lookup-card', scoped(styles, 'rsvp-lookup-card'))}
+      >
         <div className={scoped(styles, 'rsvp-lookup-guide')}>
           <p className="eyebrow">Private RSVP</p>
           <h1>Enter your invitation code</h1>
@@ -106,7 +108,10 @@ export function RsvpLookupPage() {
             Your mailed invitation includes a private RSVP code. Enter it here
             to view or update your household&apos;s response.
           </p>
-          <ol className={scoped(styles, 'rsvp-step-list')} aria-label="RSVP steps">
+          <ol
+            className={scoped(styles, 'rsvp-step-list')}
+            aria-label="RSVP steps"
+          >
             <li>
               <span>1</span>
               <div>
@@ -220,7 +225,12 @@ export function RsvpLookupPage() {
                   </span>
                 )}
               </label>
-              <p className={cx('form-message', scoped(styles, 'recovery-helper'))}>
+              <p
+                className={cx(
+                  'form-message',
+                  scoped(styles, 'recovery-helper'),
+                )}
+              >
                 Enter the email address or mobile number already saved with your
                 household.
               </p>
@@ -508,7 +518,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </a>
         </div>
       )}
-      <div className={scoped(styles, 'rsvp-summary-band')} aria-label="RSVP overview">
+      <div
+        className={scoped(styles, 'rsvp-summary-band')}
+        aria-label="RSVP overview"
+      >
         <div>
           <CalendarDays aria-hidden="true" />
           <span>
@@ -563,7 +576,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             )!;
             const fullName = `${member.firstName} ${member.lastName}`;
             return (
-              <fieldset className={scoped(styles, 'guest-response-card')} key={member.id}>
+              <fieldset
+                className={scoped(styles, 'guest-response-card')}
+                key={member.id}
+              >
                 <legend>{fullName}</legend>
                 <div className={scoped(styles, 'guest-response-grid')}>
                   <div className={scoped(styles, 'guest-response-person')}>
@@ -584,8 +600,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                       type="button"
                       className={cx(
                         scoped(styles, 'rsvp-segment'),
-                        memberRsvp.attending &&
-                          scoped(styles, 'is-selected'),
+                        memberRsvp.attending && scoped(styles, 'is-selected'),
                       )}
                       aria-pressed={memberRsvp.attending}
                       aria-label={`${fullName} attending`}
@@ -606,8 +621,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                       type="button"
                       className={cx(
                         scoped(styles, 'rsvp-segment'),
-                        !memberRsvp.attending &&
-                          scoped(styles, 'is-selected'),
+                        !memberRsvp.attending && scoped(styles, 'is-selected'),
                       )}
                       aria-pressed={!memberRsvp.attending}
                       aria-label={`${fullName} not attending`}
@@ -663,7 +677,12 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                         />
                       </label>
                     ) : (
-                      <p className={cx('form-message', scoped(styles, 'guest-decline-note'))}>
+                      <p
+                        className={cx(
+                          'form-message',
+                          scoped(styles, 'guest-decline-note'),
+                        )}
+                      >
                         No additional details needed for guests who are not
                         attending.
                       </p>
@@ -676,7 +695,12 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         </section>
 
         {household.maxPlusOnes > 0 && (
-          <section className="subsection-card">
+          <section
+            className={cx(
+              'subsection-card',
+              scoped(styles, 'rsvp-plus-one-section'),
+            )}
+          >
             <div className="section-heading">
               <div>
                 <h2>Plus-ones</h2>
@@ -859,7 +883,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         )}
 
         <section
-          className={cx(scoped(styles, 'rsvp-notes-grid'), scoped(styles, 'single-notes'))}
+          className={cx(
+            scoped(styles, 'rsvp-notes-grid'),
+            scoped(styles, 'single-notes'),
+          )}
           aria-label="Additional notes"
         >
           <label className={fieldError('notes') ? 'field-error' : undefined}>
@@ -991,7 +1018,13 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
-      <section className={cx('lookup-card', 'success-card', scoped(styles, 'rsvp-success-card'))}>
+      <section
+        className={cx(
+          'lookup-card',
+          'success-card',
+          scoped(styles, 'rsvp-success-card'),
+        )}
+      >
         <p className="eyebrow">Private RSVP</p>
         <div className={scoped(styles, 'success-mark')} aria-hidden="true">
           <Check />
