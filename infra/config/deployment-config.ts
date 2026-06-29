@@ -7,6 +7,11 @@ export interface DeploymentConfig {
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
+  twilioAccountSid?: string;
+  twilioApiKeySid?: string;
+  twilioApiKeySecretArn?: string;
+  twilioMessagingServiceSid?: string;
+  twilioFromPhoneNumber?: string;
   contactEmailAddress?: string;
   contactForwardingRecipientEmail?: string;
   enablePasskeys: boolean;

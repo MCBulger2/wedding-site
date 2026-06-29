@@ -1,4 +1,7 @@
-import { SNSClient } from '@aws-sdk/client-sns';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import {
   siteContent,
@@ -61,7 +64,7 @@ describe('notifications', () => {
         publicWebsiteUrl: 'https://wedding.example.com',
       },
       sesClient as unknown as SESv2Client,
-      new SNSClient({}),
+      new RecordingSecretsManagerClient() as unknown as SecretsManagerClient,
     );
 
     await client.sendHouseholdNotification({
@@ -149,7 +152,7 @@ describe('notifications', () => {
         recipientEmails: [],
       },
       sesClient as unknown as SESv2Client,
-      new SNSClient({}),
+      new RecordingSecretsManagerClient() as unknown as SecretsManagerClient,
     );
 
     await client.sendInvitationEmail({
@@ -202,6 +205,116 @@ describe('notifications', () => {
     expect(message).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(message).not.toContain('Invitation code');
   });
+
+  it('sends household SMS notifications through Twilio with form body and API key auth', async () => {
+    const secretsClient = new RecordingSecretsManagerClient('twilio-secret-value');
+    const fetchRecorder = createRecordingFetch();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        senderEmail: 'rsvp@example.com',
+        recipientEmails: [],
+        twilio: {
+          accountSid: 'AC123',
+          apiKeySid: 'SK123',
+          apiKeySecretArn: 'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio',
+          messagingServiceSid: 'MG123',
+        },
+      },
+      new RecordingSesClient() as unknown as SESv2Client,
+      secretsClient as unknown as SecretsManagerClient,
+      fetchRecorder.fetch,
+    );
+
+    await client.sendHouseholdNotification({
+      channel: 'sms',
+      household: createHousehold({ phone: '+14805550100' }),
+      message: 'Please RSVP this week.',
+    });
+
+    expect(secretsClient.commands).toHaveLength(1);
+    expect(secretsClient.commands[0].input.SecretId).toBe(
+      'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio',
+    );
+    expect(fetchRecorder.requests).toHaveLength(1);
+    expect(fetchRecorder.requests[0].url).toBe(
+      'https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json',
+    );
+    expect(fetchRecorder.requests[0].init.method).toBe('POST');
+    expect(fetchRecorder.requests[0].init.headers).toMatchObject({
+      Authorization: `Basic ${Buffer.from('SK123:twilio-secret-value').toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    });
+
+    const body = fetchRecorder.requests[0].init.body as URLSearchParams;
+    expect(body.get('To')).toBe('+14805550100');
+    expect(body.get('Body')).toBe('Please RSVP this week.');
+    expect(body.get('MessagingServiceSid')).toBe('MG123');
+    expect(body.toString()).not.toContain('twilio-secret-value');
+  });
+
+  it('sends recovery SMS messages through Twilio with only the private RSVP link', async () => {
+    const fetchRecorder = createRecordingFetch();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        senderEmail: 'rsvp@example.com',
+        recipientEmails: [],
+        twilio: {
+          accountSid: 'AC123',
+          apiKeySid: 'SK123',
+          apiKeySecretArn: 'twilio-secret-arn',
+          fromPhoneNumber: '+18005550100',
+        },
+      },
+      new RecordingSesClient() as unknown as SESv2Client,
+      new RecordingSecretsManagerClient('twilio-secret-value') as unknown as SecretsManagerClient,
+      fetchRecorder.fetch,
+    );
+
+    await client.sendRecoverySms({
+      household: createHousehold({ phone: '+14805550100' }),
+      invitation: {
+        householdId: 'h1',
+        inviteCode: 'A2B3C4D5E6',
+        inviteCodeHash: 'hash-value',
+        rsvpUrl: 'https://wedding.example.com/rsvp/A2B3C4D5E6',
+      },
+    });
+
+    const body = fetchRecorder.requests[0].init.body as URLSearchParams;
+    expect(body.get('To')).toBe('+14805550100');
+    expect(body.get('From')).toBe('+18005550100');
+    expect(body.get('Body')).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
+    expect(body.get('Body')).not.toContain('Invitation code');
+  });
+
+  it('fails SMS sends with a sanitized error when Twilio is incomplete', async () => {
+    const secretsClient = new RecordingSecretsManagerClient('twilio-secret-value');
+    const fetchRecorder = createRecordingFetch();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        senderEmail: 'rsvp@example.com',
+        recipientEmails: [],
+        twilio: {
+          accountSid: 'AC123',
+          apiKeySid: 'SK123',
+          apiKeySecretArn: 'twilio-secret-arn',
+        },
+      },
+      new RecordingSesClient() as unknown as SESv2Client,
+      secretsClient as unknown as SecretsManagerClient,
+      fetchRecorder.fetch,
+    );
+
+    await expect(
+      client.sendHouseholdNotification({
+        channel: 'sms',
+        household: createHousehold({ phone: '+14805550100' }),
+        message: 'Please RSVP this week.',
+      }),
+    ).rejects.toThrow('SMS notifications are not configured');
+    expect(secretsClient.commands).toHaveLength(0);
+    expect(fetchRecorder.requests).toHaveLength(0);
+  });
 });
 
 class RecordingSesClient {
@@ -211,6 +324,33 @@ class RecordingSesClient {
     this.commands.push(command);
     return {};
   }
+}
+
+class RecordingSecretsManagerClient {
+  readonly commands: GetSecretValueCommand[] = [];
+
+  constructor(private readonly secret = 'secret-value') {}
+
+  async send(command: GetSecretValueCommand): Promise<{ SecretString: string }> {
+    this.commands.push(command);
+    return { SecretString: this.secret };
+  }
+}
+
+function createRecordingFetch(): {
+  fetch: typeof fetch;
+  requests: Array<{ url: string; init: RequestInit }>;
+} {
+  const requests: Array<{ url: string; init: RequestInit }> = [];
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    requests.push({
+      url: input instanceof URL ? input.toString() : String(input),
+      init: init ?? {},
+    });
+    return new Response('{}', { status: 201 });
+  };
+
+  return { fetch, requests };
 }
 
 function createHousehold(overrides: Partial<Household> = {}): Household {

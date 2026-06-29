@@ -39,6 +39,11 @@ export interface WeddingSiteStackProps extends StackProps {
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
+  twilioAccountSid?: string;
+  twilioApiKeySid?: string;
+  twilioApiKeySecretArn?: string;
+  twilioMessagingServiceSid?: string;
+  twilioFromPhoneNumber?: string;
   contactEmailAddress?: string;
   contactForwardingRecipientEmail?: string;
   enablePasskeys: boolean;
@@ -531,6 +536,29 @@ export class WeddingSiteStack extends Stack {
       );
     }
 
+    const twilioConfigState = getTwilioConfigState(props);
+    if (twilioConfigState === 'complete') {
+      apiHandler.addEnvironment('TWILIO_ACCOUNT_SID', props.twilioAccountSid!);
+      apiHandler.addEnvironment('TWILIO_API_KEY_SID', props.twilioApiKeySid!);
+      apiHandler.addEnvironment('TWILIO_API_KEY_SECRET_ARN', props.twilioApiKeySecretArn!);
+      if (props.twilioMessagingServiceSid) {
+        apiHandler.addEnvironment('TWILIO_MESSAGING_SERVICE_SID', props.twilioMessagingServiceSid);
+      } else {
+        apiHandler.addEnvironment('TWILIO_FROM_PHONE_NUMBER', props.twilioFromPhoneNumber!);
+      }
+
+      secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'TwilioApiKeySecret',
+        props.twilioApiKeySecretArn!,
+      ).grantRead(apiHandler);
+    } else if (twilioConfigState === 'partial') {
+      cdk.Annotations.of(this).addWarningV2(
+        'TwilioSmsConfigurationIncomplete',
+        'Twilio SMS requires TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET_ARN, and either TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_PHONE_NUMBER.',
+      );
+    }
+
     if (
       props.contactEmailAddress &&
       props.contactForwardingRecipientEmail &&
@@ -667,13 +695,6 @@ export class WeddingSiteStack extends Stack {
         'Contact email forwarding requires CONTACT_EMAIL_ADDRESS, CONTACT_FORWARDING_RECIPIENT_EMAIL, and a matching HOSTED_ZONE_DOMAIN.',
       );
     }
-
-    apiHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['sns:Publish'],
-        resources: ['*'],
-      }),
-    );
 
     const adminAuthorizer = new authorizers.HttpUserPoolAuthorizer('AdminAuthorizer', userPool, {
       userPoolClients: [userPoolClient],
@@ -847,6 +868,27 @@ function getEmailDomain(emailAddress: string): string {
 
 function normalizeDomainName(domainName: string): string {
   return domainName.trim().replace(/\.+$/, '').toLowerCase();
+}
+
+function getTwilioConfigState(props: WeddingSiteStackProps): 'complete' | 'partial' | 'absent' {
+  const hasRequired =
+    Boolean(props.twilioAccountSid) &&
+    Boolean(props.twilioApiKeySid) &&
+    Boolean(props.twilioApiKeySecretArn);
+  const hasSender = Boolean(props.twilioMessagingServiceSid) || Boolean(props.twilioFromPhoneNumber);
+  const hasAny = [
+    props.twilioAccountSid,
+    props.twilioApiKeySid,
+    props.twilioApiKeySecretArn,
+    props.twilioMessagingServiceSid,
+    props.twilioFromPhoneNumber,
+  ].some(Boolean);
+
+  if (hasRequired && hasSender) {
+    return 'complete';
+  }
+
+  return hasAny ? 'partial' : 'absent';
 }
 
 function cognitoUserPoolDomainAliasTarget(domain: cognito.UserPoolDomain): route53.IAliasRecordTarget {
