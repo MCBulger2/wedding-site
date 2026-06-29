@@ -7,6 +7,10 @@ export default defineConfig({
   testDir: './apps/web/e2e',
   webServer: {
     command: `npm run dev -w apps/web -- --host 127.0.0.1 --port ${e2ePort}`,
+    env: {
+      ...process.env,
+      VITE_ENABLE_LOCAL_ADMIN_MOCKS: 'false',
+    },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },

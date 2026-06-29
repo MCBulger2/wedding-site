@@ -1,13 +1,31 @@
 import { generateIcs } from '@matt-alison-wedding/shared';
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Gift,
+  Heart,
+  Hotel,
+  KeyRound,
+  MapPin,
+} from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
+import { ResponsiveImage } from '../components/ResponsiveImage.js';
 import { siteContent } from '../siteContent.js';
 import styles from './PublicPages.module.css';
 
 const PHOTO_WHEEL_SCROLL_THRESHOLD = 90;
 const PHOTO_WHEEL_NAVIGATION_INTERVAL_MS = 450;
+const HERO_IMAGE_SIZES = '100vw';
+const CAROUSEL_IMAGE_SIZES = '(max-width: 980px) 100vw, 58vw';
+const STORY_HERO_IMAGE_SIZES = '(max-width: 980px) 100vw, 58vw';
+const STORY_THUMBNAIL_SIZES = '(max-width: 980px) 100vw, 180px';
+const STORY_LANDSCAPE_SIZES = '(max-width: 980px) 100vw, 56vw';
 
 export function HomePage() {
   const calendarHref = useMemo(() => {
@@ -19,11 +37,27 @@ export function HomePage() {
   return (
     <main>
       <section className={scoped(styles, 'hero')}>
+        <div className={scoped(styles, 'hero-media')} aria-hidden="true">
+          <ResponsiveImage
+            image={siteContent.ourStory.heroImage}
+            alt=""
+            sizes={HERO_IMAGE_SIZES}
+            loading="eager"
+            fetchPriority="high"
+            className={scoped(styles, 'hero-media-image')}
+          />
+        </div>
+        <div className={scoped(styles, 'hero-overlay')} aria-hidden="true" />
         <div className={scoped(styles, 'hero-copy')}>
           <p className="eyebrow">Wedding Announcement</p>
           <h1>{siteContent.coupleNames}</h1>
-          <p className={scoped(styles, 'hero-lede')}>{siteContent.announcement}</p>
-          <div className={scoped(styles, 'hero-facts')} aria-label="Wedding highlights">
+          <p className={scoped(styles, 'hero-lede')}>
+            {siteContent.announcement}
+          </p>
+          <div
+            className={scoped(styles, 'hero-facts')}
+            aria-label="Wedding highlights"
+          >
             <span>
               <CalendarDays aria-hidden="true" />
               {siteContent.dateLabel}
@@ -93,7 +127,9 @@ export function HomePage() {
               referrerPolicy="no-referrer"
             />
           </div>
-          <div className={cx('hero-actions', scoped(styles, 'compact-actions'))}>
+          <div
+            className={cx('hero-actions', scoped(styles, 'compact-actions'))}
+          >
             <a
               className="icon-button"
               href={venueMapHref}
@@ -115,7 +151,13 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="travel" className={cx(scoped(styles, 'section-grid'), scoped(styles, 'travel-section'))}>
+      <section
+        id="travel"
+        className={cx(
+          scoped(styles, 'section-grid'),
+          scoped(styles, 'travel-section'),
+        )}
+      >
         <div>
           <p className="eyebrow">Travel</p>
           <h2>Getting there</h2>
@@ -135,7 +177,10 @@ export function HomePage() {
             {siteContent.hotels
               .filter((hotel) => hotel.publiclyShareable)
               .map((hotel) => (
-                <article key={hotel.name} className={scoped(styles, 'hotel-card')}>
+                <article
+                  key={hotel.name}
+                  className={scoped(styles, 'hotel-card')}
+                >
                   <h3>{hotel.name}</h3>
                   <p>{hotel.address}</p>
                   <dl>
@@ -177,7 +222,9 @@ export function HomePage() {
                       </a>
                     )}
                     {hotel.phoneNumber && (
-                      <span className={scoped(styles, 'phone-note')}>{hotel.phoneNumber}</span>
+                      <span className={scoped(styles, 'phone-note')}>
+                        {hotel.phoneNumber}
+                      </span>
                     )}
                   </div>
                 </article>
@@ -212,7 +259,10 @@ export function HomePage() {
                 {faq.link && (
                   <>
                     {' '}
-                    <a className={scoped(styles, 'faq-link')} href={faq.link.href}>
+                    <a
+                      className={scoped(styles, 'faq-link')}
+                      href={faq.link.href}
+                    >
                       {faq.link.label}
                     </a>
                     .
@@ -239,7 +289,9 @@ function getNativeMapUrl(): string {
     /iphone|ipad|ipod/.test(userAgent) ||
     (platform === 'macintel' && navigator.maxTouchPoints > 1);
 
-  return isAppleDevice ? siteContent.venueAppleMapsUrl : siteContent.venueMapUrl;
+  return isAppleDevice
+    ? siteContent.venueAppleMapsUrl
+    : siteContent.venueMapUrl;
 }
 
 export function RegistryPage() {
@@ -322,55 +374,83 @@ export function OurStoryPage() {
 
   return (
     <main className={scoped(styles, 'our-story-page')}>
-      <section className={scoped(styles, 'our-story-hero')} aria-labelledby="our-story-heading">
+      <section
+        className={scoped(styles, 'our-story-hero')}
+        aria-labelledby="our-story-heading"
+      >
         <div className={scoped(styles, 'our-story-hero-copy')}>
           <h1 id="our-story-heading">{ourStory.title}</h1>
           <span className={scoped(styles, 'story-rule')} aria-hidden="true" />
           <p className="page-lede">{ourStory.intro}</p>
         </div>
         <figure className={scoped(styles, 'our-story-hero-image')}>
-          <img
-            src={ourStory.heroImage.src}
+          <ResponsiveImage
+            image={ourStory.heroImage}
             alt={ourStory.heroImage.alt}
-            style={{ objectPosition: ourStory.heroImage.objectPosition }}
+            sizes={STORY_HERO_IMAGE_SIZES}
+            loading="eager"
+            className={scoped(styles, 'story-image')}
           />
         </figure>
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-meet'))}>
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-meet'),
+        )}
+      >
         {meetSection?.image && (
           <figure className={scoped(styles, 'story-thumbnail')}>
-            <img
-              src={meetSection.image.src}
+            <ResponsiveImage
+              image={meetSection.image}
               alt={meetSection.image.alt}
-              decoding="async"
-              style={{ objectPosition: meetSection.image.objectPosition }}
+              sizes={STORY_THUMBNAIL_SIZES}
+              loading="lazy"
+              className={scoped(styles, 'story-image')}
             />
           </figure>
         )}
         <StoryText title={meetSection?.title} body={meetSection?.body} />
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-proposal'))}>
-        <StoryText title={proposalSection?.title} body={proposalSection?.body} />
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-proposal'),
+        )}
+      >
+        <StoryText
+          title={proposalSection?.title}
+          body={proposalSection?.body}
+        />
         {proposalSection?.image && (
           <figure className={scoped(styles, 'story-landscape')}>
-            <img
-              src={proposalSection.image.src}
+            <ResponsiveImage
+              image={proposalSection.image}
               alt={proposalSection.image.alt}
-              decoding="async"
-              style={{ objectPosition: proposalSection.image.objectPosition }}
+              sizes={STORY_LANDSCAPE_SIZES}
+              loading="lazy"
+              className={scoped(styles, 'story-image')}
             />
           </figure>
         )}
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-duo'))}>
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-duo'),
+        )}
+      >
         <StoryText title={loveSection?.title} body={loveSection?.body} />
         <StoryText title={futureSection?.title} body={futureSection?.body} />
       </section>
 
-      <section className={scoped(styles, 'story-cta-band')} aria-label="Our story next steps">
+      <section
+        className={scoped(styles, 'story-cta-band')}
+        aria-label="Our story next steps"
+      >
         <a className="secondary-button button-inline" href="/#details">
           {ourStory.ctas.detailsLabel}
           <ArrowRight aria-hidden="true" />
@@ -449,12 +529,8 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       if (Math.abs(scroll.deltaX) < PHOTO_WHEEL_SCROLL_THRESHOLD) return;
 
       const now = Date.now();
-      if (
-        now - scroll.lastNavigationAt <
-        PHOTO_WHEEL_NAVIGATION_INTERVAL_MS
-      ) {
-        scroll.deltaX =
-          Math.sign(scroll.deltaX) * PHOTO_WHEEL_SCROLL_THRESHOLD;
+      if (now - scroll.lastNavigationAt < PHOTO_WHEEL_NAVIGATION_INTERVAL_MS) {
+        scroll.deltaX = Math.sign(scroll.deltaX) * PHOTO_WHEEL_SCROLL_THRESHOLD;
         return;
       }
 
@@ -496,20 +572,28 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   };
 
   return (
-    <section className={scoped(styles, 'photo-section')} aria-labelledby="photo-carousel-heading">
+    <section
+      className={scoped(styles, 'photo-section')}
+      aria-labelledby="photo-carousel-heading"
+    >
       <div className={scoped(styles, 'photo-section-copy')}>
         <p className="eyebrow">Photos</p>
         <h2 id="photo-carousel-heading">A few favorite moments</h2>
         <p className="page-lede">
-          A growing gallery for engagement and wedding-weekend photos, with more memories to add as the celebration gets
-          closer.
+          A growing gallery for engagement and wedding-weekend photos, with more
+          memories to add as the celebration gets closer.
         </p>
         <a className="secondary-button button-inline" href="/our-story">
           Read our story
           <ArrowRight aria-hidden="true" />
         </a>
       </div>
-      <div ref={carouselRef} className={scoped(styles, 'photo-carousel')} aria-roledescription="carousel" aria-label="Matt and Alison photos">
+      <div
+        ref={carouselRef}
+        className={scoped(styles, 'photo-carousel')}
+        aria-roledescription="carousel"
+        aria-label="Matt and Alison photos"
+      >
         <div ref={emblaRef} className={scoped(styles, 'photo-frame')}>
           <div className={scoped(styles, 'photo-track')}>
             {photos.map((photo, index) => (
@@ -518,22 +602,36 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
                 aria-hidden={index === activeIndex ? 'false' : 'true'}
                 key={`${photo.src}-${photo.caption}`}
               >
-                <img
-                  src={photo.src}
+                <ResponsiveImage
+                  image={photo}
                   alt={photo.alt}
+                  sizes={CAROUSEL_IMAGE_SIZES}
                   loading={index === 0 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  style={{ objectPosition: photo.objectPosition }}
+                  fetchPriority={index === 0 ? 'high' : 'auto'}
+                  className={scoped(styles, 'photo-slide-image')}
                 />
               </figure>
             ))}
           </div>
           {hasMultiplePhotos && (
-            <div className={scoped(styles, 'photo-controls')} aria-label="Photo controls">
-              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show previous photo" onClick={() => advancePhoto(-1)}>
+            <div
+              className={scoped(styles, 'photo-controls')}
+              aria-label="Photo controls"
+            >
+              <button
+                type="button"
+                className={scoped(styles, 'photo-nav-button')}
+                aria-label="Show previous photo"
+                onClick={() => advancePhoto(-1)}
+              >
                 <ChevronLeft aria-hidden="true" />
               </button>
-              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show next photo" onClick={() => advancePhoto(1)}>
+              <button
+                type="button"
+                className={scoped(styles, 'photo-nav-button')}
+                aria-label="Show next photo"
+                onClick={() => advancePhoto(1)}
+              >
                 <ChevronRight aria-hidden="true" />
               </button>
             </div>
@@ -545,7 +643,10 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
             {activePhoto.detail && <span>{activePhoto.detail}</span>}
           </p>
           {hasMultiplePhotos && (
-            <div className={scoped(styles, 'photo-dots')} aria-label="Choose a photo">
+            <div
+              className={scoped(styles, 'photo-dots')}
+              aria-label="Choose a photo"
+            >
               {photos.map((photo, index) => (
                 <button
                   type="button"
