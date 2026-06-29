@@ -2362,7 +2362,7 @@ function HouseholdNotificationForm({
       </label>
       {form.channel === 'sms' && (
         <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-          SMS uses Amazon SNS and should stay concise.
+          SMS is delivered through Twilio and should stay concise.
         </p>
       )}
       <div className="toolbar-actions">

@@ -1,4 +1,4 @@
-import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import { siteContent } from '@matt-alison-wedding/shared';
 import type {
@@ -47,15 +47,27 @@ export interface WeddingNotificationsConfig {
   recipientEmails: string[];
   adminDashboardUrl?: string;
   publicWebsiteUrl?: string;
+  twilio?: TwilioSmsConfig;
+}
+
+export interface TwilioSmsConfig {
+  accountSid?: string;
+  apiKeySid?: string;
+  apiKeySecretArn?: string;
+  messagingServiceSid?: string;
+  fromPhoneNumber?: string;
 }
 
 export class AwsWeddingNotificationsClient
   implements RsvpNotifier, HouseholdMessenger
 {
+  private twilioApiKeySecret: string | undefined;
+
   constructor(
     private readonly config: WeddingNotificationsConfig,
     private readonly sesClient = new SESv2Client({}),
-    private readonly snsClient = new SNSClient({}),
+    private readonly secretsManagerClient = new SecretsManagerClient({}),
+    private readonly fetchFn: typeof fetch = fetch,
   ) {}
 
   async notifyRsvpChanged(input: RsvpNotificationInput): Promise<void> {
@@ -147,12 +159,7 @@ export class AwsWeddingNotificationsClient
       throw new Error('Household does not have a contact mobile number');
     }
 
-    await this.snsClient.send(
-      new PublishCommand({
-        PhoneNumber: input.household.phone,
-        Message: input.message,
-      }),
-    );
+    await this.sendTwilioSms(input.household.phone, input.message);
 
     return {
       channel: 'sms',
@@ -247,12 +254,63 @@ export class AwsWeddingNotificationsClient
       throw new Error('Household does not have a contact mobile number');
     }
 
-    await this.snsClient.send(
-      new PublishCommand({
-        PhoneNumber: input.household.phone,
-        Message: buildRecoverySms(input),
-      }),
+    await this.sendTwilioSms(input.household.phone, buildRecoverySms(input));
+  }
+
+  private async sendTwilioSms(to: string, body: string): Promise<void> {
+    const twilio = this.config.twilio;
+    if (
+      !twilio?.accountSid ||
+      !twilio.apiKeySid ||
+      !twilio.apiKeySecretArn ||
+      (!twilio.messagingServiceSid && !twilio.fromPhoneNumber)
+    ) {
+      throw new Error('SMS notifications are not configured');
+    }
+
+    const apiKeySecret = await this.getTwilioApiKeySecret(twilio.apiKeySecretArn);
+    const requestBody = new URLSearchParams({
+      To: to,
+      Body: body,
+    });
+    if (twilio.messagingServiceSid) {
+      requestBody.set('MessagingServiceSid', twilio.messagingServiceSid);
+    } else if (twilio.fromPhoneNumber) {
+      requestBody.set('From', twilio.fromPhoneNumber);
+    }
+
+    const response = await this.fetchFn(
+      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(twilio.accountSid)}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${twilio.apiKeySid}:${apiKeySecret}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: requestBody,
+      },
     );
+
+    if (!response.ok) {
+      throw new Error(`SMS notification delivery failed with status ${response.status}`);
+    }
+  }
+
+  private async getTwilioApiKeySecret(secretArn: string): Promise<string> {
+    if (this.twilioApiKeySecret) {
+      return this.twilioApiKeySecret;
+    }
+
+    const result = await this.secretsManagerClient.send(
+      new GetSecretValueCommand({ SecretId: secretArn }),
+    );
+    const secret = result.SecretString ?? decodeSecretBinary(result.SecretBinary);
+    if (!secret) {
+      throw new Error('SMS notifications are not configured');
+    }
+
+    this.twilioApiKeySecret = secret;
+    return secret;
   }
 }
 
@@ -488,6 +546,7 @@ export function createNotifierFromEnvironment(): RsvpNotifier | undefined {
     recipientEmails,
     adminDashboardUrl,
     publicWebsiteUrl: resolveOptionalValue(process.env.FRONTEND_BASE_URL),
+    twilio: readTwilioConfigFromEnvironment(),
   });
 }
 
@@ -502,6 +561,7 @@ export function createHouseholdMessengerFromEnvironment(): HouseholdMessenger {
     recipientEmails: splitCsv(process.env.RSVP_NOTIFICATION_RECIPIENT_EMAILS),
     adminDashboardUrl: resolveOptionalValue(process.env.ADMIN_DASHBOARD_URL),
     publicWebsiteUrl: resolveOptionalValue(process.env.FRONTEND_BASE_URL),
+    twilio: readTwilioConfigFromEnvironment(),
   });
 }
 
@@ -676,4 +736,18 @@ function splitCsv(value: string | undefined): string[] {
 
 function resolveOptionalValue(...values: Array<string | undefined>): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
+}
+
+function readTwilioConfigFromEnvironment(): TwilioSmsConfig {
+  return {
+    accountSid: resolveOptionalValue(process.env.TWILIO_ACCOUNT_SID),
+    apiKeySid: resolveOptionalValue(process.env.TWILIO_API_KEY_SID),
+    apiKeySecretArn: resolveOptionalValue(process.env.TWILIO_API_KEY_SECRET_ARN),
+    messagingServiceSid: resolveOptionalValue(process.env.TWILIO_MESSAGING_SERVICE_SID),
+    fromPhoneNumber: resolveOptionalValue(process.env.TWILIO_FROM_PHONE_NUMBER),
+  };
+}
+
+function decodeSecretBinary(secretBinary: Uint8Array | undefined): string | undefined {
+  return secretBinary ? Buffer.from(secretBinary).toString('utf8') : undefined;
 }
