@@ -1,22 +1,50 @@
 .hero {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(13, 31, 25, 0.88) 0%,
-      rgba(13, 31, 25, 0.56) 42%,
-      rgba(13, 31, 25, 0.16) 100%
-    ),
-    url('/hero-wedding.jpg') center / cover;
   align-items: center;
   color: var(--hero-text);
   display: flex;
+  isolation: isolate;
   min-height: clamp(560px, calc(100svh - 72px), 760px);
+  overflow: hidden;
   padding: clamp(3rem, 8vh, 5.5rem) clamp(1.25rem, 5vw, 4rem);
+  position: relative;
+}
+
+.hero-media,
+.hero-overlay {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.hero-media {
+  z-index: -2;
+}
+
+.hero-media picture,
+.hero-media-image {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.hero-media-image {
+  object-fit: cover;
+}
+
+.hero-overlay {
+  background: linear-gradient(
+    90deg,
+    rgba(13, 31, 25, 0.88) 0%,
+    rgba(13, 31, 25, 0.56) 42%,
+    rgba(13, 31, 25, 0.16) 100%
+  );
+  z-index: -1;
 }
 
 .hero-copy {
   animation: rise-in 620ms ease-out both;
   max-width: 760px;
+  position: relative;
 }
 
 .hero :global(.eyebrow) {
@@ -122,11 +150,15 @@
   min-width: 0;
 }
 
-.photo-slide img {
+.photo-slide picture,
+.photo-slide-image {
   display: block;
   height: 100%;
-  object-fit: cover;
   width: 100%;
+}
+
+.photo-slide-image {
+  object-fit: cover;
 }
 
 .photo-controls {
@@ -514,13 +546,17 @@
   min-height: clamp(420px, 42vw, 560px);
 }
 
-.our-story-hero-image img,
-.story-thumbnail img,
-.story-landscape img {
+.our-story-hero-image picture,
+.story-thumbnail picture,
+.story-landscape picture,
+.story-image {
   display: block;
   height: 100%;
-  object-fit: cover;
   width: 100%;
+}
+
+.story-image {
+  object-fit: cover;
 }
 
 .story-section {
@@ -628,6 +664,59 @@
 }
 
 @media (max-width: 980px) {
+  .photo-section,
+  .section-grid,
+  .our-story-hero,
+  .story-section-meet,
+  .story-section-proposal,
+  .story-section-duo,
+  .faq-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    min-height: clamp(520px, calc(100svh - 72px), 660px);
+  }
+
+  .hero-overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(13, 31, 25, 0.82) 0%,
+      rgba(13, 31, 25, 0.5) 48%,
+      rgba(13, 31, 25, 0.22) 100%
+    );
+  }
+
+  .photo-section,
+  .our-story-hero {
+    gap: 2rem;
+  }
+
+  .our-story-hero {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .our-story-hero-copy {
+    padding: clamp(2rem, 7vw, 4rem) clamp(1.25rem, 5vw, 4rem) 0;
+  }
+
+  .our-story-hero-image {
+    border-bottom-left-radius: 0;
+    min-height: clamp(320px, 68vw, 460px);
+  }
+
+  .story-section-proposal {
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+  }
+
+  .story-section-duo .story-copy-block + .story-copy-block {
+    border-left: 0;
+    border-top: 1px solid var(--field-border);
+    padding-left: 0;
+    padding-top: 1.5rem;
+  }
+
   .registry-card-with-image {
     grid-template-columns: 1fr;
   }
@@ -643,6 +732,28 @@
 }
 
 @media (max-width: 560px) {
+  .hero {
+    min-height: 500px;
+    padding-inline: 1.25rem;
+  }
+
+  .hero-copy {
+    max-width: 100%;
+  }
+
+  .photo-caption-row,
+  .registry-callout,
+  .story-cta-band {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .story-cta-band :global(.secondary-button),
+  .story-cta-band :global(.icon-button) {
+    min-width: 0;
+    width: 100%;
+  }
+
   .registry-card-with-image .registry-card-body,
   .registry-card-with-image .registry-card-action {
     padding-left: 1.25rem;

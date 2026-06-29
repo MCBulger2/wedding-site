@@ -53,6 +53,44 @@ const secondGalleryPhoto = {
   caption: 'Alison & Matt after the proposal',
 };
 
+async function expectResponsiveImage(
+  locator: Locator,
+  {
+    sizes,
+    width,
+    height,
+    srcsetFragment,
+  }: {
+    sizes: string;
+    width: number;
+    height: number;
+    srcsetFragment: string;
+  },
+) {
+  await expect(locator).toBeVisible();
+  await expect(locator).toHaveAttribute('sizes', sizes);
+  await expect(locator).toHaveAttribute('srcset', new RegExp(srcsetFragment));
+  await expect(locator).toHaveAttribute('width', String(width));
+  await expect(locator).toHaveAttribute('height', String(height));
+  await expect
+    .poll(() =>
+      locator.evaluate((img) => {
+        const image = img as HTMLImageElement;
+
+        return {
+          currentSrc: image.currentSrc,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        };
+      }),
+    )
+    .toMatchObject({
+      currentSrc: expect.stringContaining('/images/'),
+      naturalWidth: expect.any(Number),
+      naturalHeight: expect.any(Number),
+    });
+}
+
 async function openHouseholdActions(card: Locator) {
   const trigger = card.getByRole('button', { name: 'Actions' });
   await trigger.evaluate((element) => {
@@ -80,6 +118,12 @@ async function clickHouseholdAction(card: Locator, actionName: string) {
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
+  await expectResponsiveImage(page.locator('.hero img').first(), {
+    sizes: '100vw',
+    width: 2054,
+    height: 1536,
+    srcsetFragment: 'hero-wedding-1280\\.jpg 1280w',
+  });
   await expect(
     page.getByRole('heading', { name: 'Matt & Alison' }),
   ).toBeVisible();
@@ -105,6 +149,17 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
       name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
+  await expectResponsiveImage(
+    page.getByRole('img', {
+      name: firstGalleryPhoto.alt,
+    }),
+    {
+      sizes: '(max-width: 980px) 100vw, 58vw',
+      width: 2048,
+      height: 1991,
+      srcsetFragment: 'ring-1536\\.jpg 1536w',
+    },
+  );
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toHaveAttribute('href', '/our-story');
@@ -226,9 +281,18 @@ test('our story page renders editorial sections and calls to action', async ({
 }) => {
   await page.goto('/our-story');
 
-  await expect(
-    page.getByRole('heading', { name: 'Our Story' }),
-  ).toBeVisible();
+  await expectResponsiveImage(
+    page.getByRole('img', {
+      name: 'Matt proposing to Alison by the lake',
+    }),
+    {
+      sizes: '(max-width: 980px) 100vw, 58vw',
+      width: 2054,
+      height: 1536,
+      srcsetFragment: 'hero-wedding-1600\\.jpg 1600w',
+    },
+  );
+  await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
   await expect(
     page.getByText('A few placeholder notes about who we are'),
   ).toBeVisible();
@@ -237,12 +301,32 @@ test('our story page renders editorial sections and calls to action', async ({
       name: 'Matt proposing to Alison by the lake',
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'How we met' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'How we met' })).toBeVisible();
+  await expectResponsiveImage(
+    page.getByRole('img', {
+      name: 'Temporary desert garden ceremony aisle placeholder',
+    }),
+    {
+      sizes: '(max-width: 980px) 100vw, 180px',
+      width: 2048,
+      height: 1991,
+      srcsetFragment: 'ring-1024\\.jpg 1024w',
+    },
+  );
   await expect(
     page.getByRole('heading', { name: 'The proposal' }),
   ).toBeVisible();
+  await expectResponsiveImage(
+    page.getByRole('img', {
+      name: 'Temporary outdoor wedding cocktail hour placeholder',
+    }),
+    {
+      sizes: '(max-width: 980px) 100vw, 56vw',
+      width: 1536,
+      height: 2304,
+      srcsetFragment: 'smile-1536\\.jpg 1536w',
+    },
+  );
   await expect(
     page.getByRole('heading', { name: 'What we love together' }),
   ).toBeVisible();
@@ -266,9 +350,7 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
       .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Our Story' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Our Story' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
   const mobileMeetLayout = await page
     .locator('.story-section-meet')
     .evaluate((section) => {
@@ -333,7 +415,9 @@ test('homepage map link opens Apple Maps on Apple devices', async ({
   ).toHaveAttribute('href', /maps\.apple\/p/);
 });
 
-test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
+test('photo carousel rate-limits horizontal wheel navigation', async ({
+  page,
+}) => {
   await page.goto('/');
 
   await expect(
@@ -580,7 +664,9 @@ test('guest can look up an invite code and submit an RSVP', async ({
   ).toBeVisible();
   await expect(page.getByLabel('Sam Example meal choice')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Taylor Example not attending' }).click();
+  await page
+    .getByRole('button', { name: 'Taylor Example not attending' })
+    .click();
   await page.getByRole('button', { name: 'Add plus-one' }).click();
   await page.getByRole('button', { name: 'Save RSVP' }).click();
 

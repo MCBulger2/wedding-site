@@ -1,4 +1,9 @@
 import type { CalendarEvent, HotelBlock } from './index.js';
+import {
+  heroWeddingImage,
+  ringImage,
+  smileImage,
+} from './responsiveImageAssets.js';
 
 interface RegistryLink {
   name: string;
@@ -27,18 +32,46 @@ interface GalleryPhoto {
   caption: string;
   detail?: string;
   objectPosition?: string;
+  width?: number;
+  height?: number;
+  fallbackSrc?: string;
+  avifSrcSet?: string;
+  webpSrcSet?: string;
+  jpegSrcSet?: string;
 }
 
 interface StorySection {
   title: string;
   body: string;
-  image?: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+  image?: Pick<
+    GalleryPhoto,
+    | 'src'
+    | 'alt'
+    | 'objectPosition'
+    | 'width'
+    | 'height'
+    | 'fallbackSrc'
+    | 'avifSrcSet'
+    | 'webpSrcSet'
+    | 'jpegSrcSet'
+  >;
 }
 
 interface OurStoryContent {
   title: string;
   intro: string;
-  heroImage: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+  heroImage: Pick<
+    GalleryPhoto,
+    | 'src'
+    | 'alt'
+    | 'objectPosition'
+    | 'width'
+    | 'height'
+    | 'fallbackSrc'
+    | 'avifSrcSet'
+    | 'webpSrcSet'
+    | 'jpegSrcSet'
+  >;
   sections: StorySection[];
   ctas: {
     detailsLabel: string;
@@ -115,10 +148,9 @@ const registry: RegistryContent = {
   ],
 };
 
-const contactEmail = resolveRuntimeValue(
-  'CONTACT_EMAIL_ADDRESS',
-  'VITE_CONTACT_EMAIL_ADDRESS',
-) ?? 'contact@matt-alison.com';
+const contactEmail =
+  resolveRuntimeValue('CONTACT_EMAIL_ADDRESS', 'VITE_CONTACT_EMAIL_ADDRESS') ??
+  'contact@matt-alison.com';
 
 const contact = {
   email: contactEmail,
@@ -129,41 +161,31 @@ const ourStory: OurStoryContent = {
   title: 'Our Story',
   intro:
     'A few placeholder notes about who we are, how we met, and the moments that brought us here.',
-  heroImage: {
-    src: '/hero-wedding.jpg',
-    alt: 'Matt proposing to Alison by the lake',
-    objectPosition: 'center',
-  },
+  heroImage: heroWeddingImage,
   sections: [
     {
       title: 'How we met',
-      body:
-        'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
+      body: 'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
       image: {
-        src: '/ring.jpg',
+        ...ringImage,
         alt: 'Temporary desert garden ceremony aisle placeholder',
-        objectPosition: 'center',
       },
     },
     {
       title: 'The proposal',
-      body:
-        'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
+      body: 'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
       image: {
-        src: '/smile.jpg',
+        ...smileImage,
         alt: 'Temporary outdoor wedding cocktail hour placeholder',
-        objectPosition: 'center',
       },
     },
     {
       title: 'What we love together',
-      body:
-        'Exploring new places, cooking at home, desert sunsets, morning coffee, live music, and time with family and friends. We balance each other, laugh a lot, and are always up for our next adventure.',
+      body: 'Exploring new places, cooking at home, desert sunsets, morning coffee, live music, and time with family and friends. We balance each other, laugh a lot, and are always up for our next adventure.',
     },
     {
       title: 'Looking ahead',
-      body:
-        'We are so excited to celebrate this next chapter with our favorite people. We cannot wait for a day filled with love, good food, and unforgettable memories in Mesa, Arizona. See you there!',
+      body: 'We are so excited to celebrate this next chapter with our favorite people. We cannot wait for a day filled with love, good food, and unforgettable memories in Mesa, Arizona. See you there!',
     },
   ],
   ctas: {
@@ -209,18 +231,14 @@ export const siteContent = {
   weddingEvent,
   photos: [
     {
-      src: '/ring.jpg',
-      alt: "A close up of Alison's engagement ring",
+      ...ringImage,
       caption: 'Engagement ring',
       detail: "Alison's beautiful engagement ring.",
-      objectPosition: 'center',
     },
     {
-      src: '/smile.jpg',
-      alt: 'Alison & Matt, shortly after the proposal',
+      ...smileImage,
       caption: 'Alison & Matt after the proposal',
       detail: 'Alison & Matt, shortly after the proposal.',
-      objectPosition: 'center',
     },
   ] satisfies GalleryPhoto[],
   faqs: [
@@ -257,9 +275,9 @@ export const siteContent = {
 type RuntimeEnv = Record<string, string | undefined>;
 
 function resolveRuntimeValue(...names: string[]): string | undefined {
-  const runtimeEnv =
-    (globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } })
-      .process?.env;
+  const runtimeEnv = (
+    globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } }
+  ).process?.env;
 
   for (const name of names) {
     const value = runtimeEnv?.[name]?.trim();
