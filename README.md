@@ -94,7 +94,7 @@ cp .env.staging.example .env.staging.local
 cp .env.production.example .env.production.local
 ```
 
-Local `.env*` files are ignored by Git. Do not commit real domains, notification recipients, secrets, guest data, or invite codes.
+Local `.env*` files are ignored by Git. Do not commit real domains, notification recipients, Twilio API key secrets, guest data, or invite codes. SMS delivery uses Twilio through the API Lambda. Store the Twilio API key secret value in AWS Secrets Manager and configure only the account/API key identifiers, sender identifier, and secret ARN in environment variables.
 
 You can still override any value with CDK context or environment variables. For example:
 
@@ -139,6 +139,11 @@ The deploy workflow expects these GitHub environment settings:
 - Variable `ALLOWED_ORIGINS`: optional comma-separated CORS origins for direct API access.
 - Variable `NOTIFICATION_SENDER_EMAIL`: optional SES sender override.
 - Variable `NOTIFICATION_RECIPIENT_EMAILS`: optional comma-separated notification recipients.
+- Variable `TWILIO_ACCOUNT_SID`: optional Twilio account SID for SMS delivery.
+- Variable `TWILIO_API_KEY_SID`: optional Twilio API key SID for SMS delivery.
+- Variable `TWILIO_API_KEY_SECRET_ARN`: optional AWS Secrets Manager ARN containing the Twilio API key secret.
+- Variable `TWILIO_MESSAGING_SERVICE_SID`: optional Twilio Messaging Service SID for SMS sender configuration.
+- Variable `TWILIO_FROM_PHONE_NUMBER`: optional Twilio sender phone number. Set this instead of `TWILIO_MESSAGING_SERVICE_SID` when not using a Messaging Service.
 - Variable `CONTACT_EMAIL_ADDRESS`: optional public contact email address, for example `contact@matt-alison.com`.
 - Variable `CONTACT_FORWARDING_RECIPIENT_EMAIL`: optional private forwarding recipient for inbound contact emails. Set this in GitHub environment variables or local env files; do not commit personal recipient addresses.
 - Variable `ENABLE_PASSKEYS`: optional `true` or `false` override.

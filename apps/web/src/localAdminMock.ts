@@ -259,6 +259,14 @@ export async function mockSendHouseholdNotification(
   payload: SendHouseholdNotificationInput,
 ): Promise<SendHouseholdNotificationResponse> {
   const record = requireRecord(householdId);
+  if (
+    payload.channel === 'sms' &&
+    (!record.household.phone ||
+      record.household.smsConsent?.status !== 'opted_in' ||
+      record.household.smsConsent.phone !== record.household.phone)
+  ) {
+    throw new Error('This household has not opted in to SMS updates');
+  }
   const deliveredTo =
     payload.channel === 'email'
       ? record.household.email
@@ -315,6 +323,13 @@ function createInitialRecords(): AdminHouseholdRecord[] {
     displayName: 'The Example Household',
     email: 'sam@example.com',
     phone: '+14805550100',
+    smsConsent: {
+      status: 'opted_in',
+      phone: '+14805550100',
+      source: 'rsvp_form',
+      consentedAt: baseTimestamp,
+      consentTextVersion: 'twilio-tollfree-v1',
+    },
     mailingAddress: {
       line1: '123 Main St',
       line2: '',

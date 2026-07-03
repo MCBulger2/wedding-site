@@ -42,6 +42,30 @@ export type HouseholdPhoneInput = z.infer<typeof HouseholdPhoneInputSchema>;
 export const RecoveryContactInputSchema = z.string().trim().min(3).max(320);
 export type RecoveryContactInput = z.infer<typeof RecoveryContactInputSchema>;
 
+export const SMS_CONSENT_TEXT_VERSION = 'twilio-tollfree-v1' as const;
+export const SMS_HELP_STOP_NOTICE = 'Reply HELP for help or STOP to opt out.';
+export const SMS_CONSENT_TEXT =
+  'I agree to receive SMS messages from Matt & Alison Wedding about RSVP recovery, schedule updates, and wedding logistics. Message frequency varies, typically fewer than 10 messages per month. Message and data rates may apply. Reply HELP for help or STOP to opt out. SMS consent is optional and is not shared with third parties. View our Terms and Privacy Policy.';
+
+export const SmsConsentSourceSchema = z.enum(['rsvp_form', 'recovery_form']);
+export type SmsConsentSource = z.infer<typeof SmsConsentSourceSchema>;
+
+export const SmsConsentTextVersionSchema = z.literal(
+  SMS_CONSENT_TEXT_VERSION,
+);
+export type SmsConsentTextVersion = z.infer<
+  typeof SmsConsentTextVersionSchema
+>;
+
+export const SmsConsentSchema = z.object({
+  status: z.literal('opted_in'),
+  phone: PhoneNumberSchema,
+  source: SmsConsentSourceSchema,
+  consentedAt: z.string().datetime(),
+  consentTextVersion: SmsConsentTextVersionSchema,
+});
+export type SmsConsent = z.infer<typeof SmsConsentSchema>;
+
 export const MailingAddressSchema = z.object({
   line1: z.string().trim().max(160).optional().default(''),
   line2: z.string().trim().max(160).optional().default(''),
@@ -68,6 +92,7 @@ export const HouseholdSchema = z.object({
   displayName: z.string().trim().min(1).max(160),
   email: z.string().email().optional(),
   phone: PhoneNumberSchema.optional(),
+  smsConsent: SmsConsentSchema.optional(),
   mailingAddress: MailingAddressSchema.optional(),
   members: z.array(HouseholdMemberSchema).min(1),
   maxPlusOnes: z.number().int().min(0).max(10).default(0),
@@ -108,6 +133,8 @@ const RsvpUpdateBaseSchema = z.object({
   plusOnes: z.array(PlusOneRsvpSchema).default([]),
   notes: z.string().trim().max(1000).optional().default(''),
   accessibilityNotes: z.string().trim().max(1000).optional().default(''),
+  smsPhone: HouseholdPhoneInputSchema.optional().or(z.literal('')),
+  smsConsentAccepted: z.boolean().optional(),
 });
 
 function validateMealChoices(
@@ -142,14 +169,33 @@ function validateMealChoices(
   }
 }
 
+function validateSmsConsentInput(
+  value: z.infer<typeof RsvpUpdateBaseSchema>,
+  ctx: z.RefinementCtx,
+) {
+  if (value.smsConsentAccepted && !value.smsPhone?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Enter a mobile number to receive text updates.',
+      path: ['smsPhone'],
+    });
+  }
+}
+
 export const RsvpUpdateSchema =
-  RsvpUpdateBaseSchema.superRefine(validateMealChoices);
+  RsvpUpdateBaseSchema.superRefine((value, ctx) => {
+    validateMealChoices(value, ctx);
+    validateSmsConsentInput(value, ctx);
+  });
 export type RsvpUpdate = z.infer<typeof RsvpUpdateSchema>;
 
 export const StoredRsvpSchema = RsvpUpdateBaseSchema.extend({
   submittedAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
-}).superRefine(validateMealChoices);
+}).superRefine((value, ctx) => {
+  validateMealChoices(value, ctx);
+  validateSmsConsentInput(value, ctx);
+});
 export type StoredRsvp = z.infer<typeof StoredRsvpSchema>;
 
 export const HouseholdImportRowSchema = z.object({
@@ -329,9 +375,23 @@ export type SendHouseholdNotificationResponse = z.infer<
   typeof SendHouseholdNotificationResponseSchema
 >;
 
-export const RsvpRecoveryRequestSchema = z.object({
-  contact: RecoveryContactInputSchema,
-});
+export const RsvpRecoveryRequestSchema = z
+  .object({
+    contact: RecoveryContactInputSchema,
+    smsConsentAccepted: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      inferRecoveryContactKind(value.contact) === 'phone' &&
+      value.smsConsentAccepted !== true
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please confirm SMS consent before requesting a texted RSVP link.',
+        path: ['smsConsentAccepted'],
+      });
+    }
+  });
 export type RsvpRecoveryRequest = z.infer<typeof RsvpRecoveryRequestSchema>;
 
 export const RsvpRecoveryAcceptedResponseSchema = z.object({
@@ -396,6 +456,23 @@ function escapeIcsText(value: string): string {
     .replace(/,/g, '\\,')
     .replace(/;/g, '\\;')
     .replace(/\r?\n/g, '\\n');
+}
+
+function inferRecoveryContactKind(
+  value: string,
+): 'email' | 'phone' | 'unknown' {
+  const trimmed = value.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return 'email';
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
+  const validPhone =
+    (trimmed.startsWith('+') && /^\+[1-9]\d{7,14}$/.test(`+${digits}`)) ||
+    digits.length === 10 ||
+    (digits.length === 11 && digits.startsWith('1'));
+
+  return validPhone ? 'phone' : 'unknown';
 }
 
 export { siteContent } from './siteContent.js';

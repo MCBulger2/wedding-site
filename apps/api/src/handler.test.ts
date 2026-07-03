@@ -100,12 +100,83 @@ describe('handleRequest', () => {
 
     const response = await handleRequest(
       service,
-      createEvent('/api/rsvp/recovery', 'POST', { contact: '(480) 555-0100' }),
+      createEvent('/api/rsvp/recovery', 'POST', {
+        contact: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }),
     );
 
     const httpResponse = response as Exclude<typeof response, string>;
     expect(httpResponse.statusCode).toBe(202);
-    expect(requestRsvpRecovery).toHaveBeenCalledOnce();
+    expect(requestRsvpRecovery).toHaveBeenCalledWith(
+      {
+        contact: '(480) 555-0100',
+        smsConsentAccepted: true,
+      },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://frontend.example.com',
+      },
+    );
+  });
+
+  it('passes RSVP SMS consent fields through on update requests', async () => {
+    const updateRsvp = vi.fn(async () => ({
+      household: {
+        householdId: 'h1',
+        displayName: 'Test Household',
+        members: [
+          {
+            id: 'h1-1',
+            firstName: 'Sam',
+            lastName: 'Example',
+            canBringPlusOne: false,
+          },
+        ],
+        maxPlusOnes: 0,
+        rsvpStatus: 'not_started' as const,
+        inviteLifecycleStatus: 'generated' as const,
+        createdAt: '2026-07-03T20:00:00.000Z',
+        updatedAt: '2026-07-03T20:00:00.000Z',
+      },
+      rsvp: {
+        members: [
+          {
+            memberId: 'h1-1',
+            attending: true,
+            mealChoice: 'buffet' as const,
+            dietaryNotes: '',
+          },
+        ],
+        plusOnes: [],
+        notes: '',
+        accessibilityNotes: '',
+        updatedAt: '2026-07-03T20:00:00.000Z',
+        submittedAt: '2026-07-03T20:00:00.000Z',
+      },
+    }));
+    const service = createServiceDouble({ updateRsvp });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/A2B3C4D5E6', 'PUT', {
+        members: [
+          { memberId: 'h1-1', attending: true, mealChoice: 'buffet' },
+        ],
+        plusOnes: [],
+        smsPhone: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(updateRsvp).toHaveBeenCalledWith('A2B3C4D5E6', {
+      members: [{ memberId: 'h1-1', attending: true, mealChoice: 'buffet' }],
+      plusOnes: [],
+      smsPhone: '(480) 555-0100',
+      smsConsentAccepted: true,
+    });
   });
 
   it('returns the same generic accepted shape for no-match recovery requests', async () => {

@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -10,15 +10,13 @@ const webDistIndexPath = path.join(webDistPath, 'index.html');
 let createdWebDistFixture = false;
 
 function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
-  const app = new cdk.App();
-  const stack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
+  const template = synthStackTemplate({
     env: { account: '123456789012', region: 'us-west-1' },
     envName,
     allowedOrigins: [],
     notificationRecipientEmails: [],
     enablePasskeys: false,
   });
-  const template = Template.fromStack(stack).toJSON();
   const inviteCodePepper = Object.values(template.Resources).find(
     (resource) =>
       resource &&
@@ -33,6 +31,12 @@ function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
     DeletionPolicy?: string;
     UpdateReplacePolicy?: string;
   };
+}
+
+function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
+  const app = new cdk.App();
+  const stack = new WeddingSiteStack(app, `WeddingSite-${props.envName}`, props);
+  return Template.fromStack(stack).toJSON();
 }
 
 describe('WeddingSiteStack invite code pepper retention', () => {
@@ -62,5 +66,57 @@ describe('WeddingSiteStack invite code pepper retention', () => {
 
     expect(inviteCodePepper.DeletionPolicy).not.toBe('Retain');
     expect(inviteCodePepper.UpdateReplacePolicy).not.toBe('Retain');
+  });
+
+  it('does not grant SNS publish permissions to the API handler', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    expect(JSON.stringify(template)).not.toContain('sns:Publish');
+  });
+
+  it('passes complete Twilio config as Lambda identifiers and grants secret read', () => {
+    const app = new cdk.App();
+    const stack = new WeddingSiteStack(app, 'WeddingSite-staging', {
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      twilioAccountSid: 'AC123',
+      twilioApiKeySid: 'SK123',
+      twilioApiKeySecretArn:
+        'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio-api-key-AbCdEf',
+      twilioMessagingServiceSid: 'MG123',
+      enablePasskeys: false,
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: Match.objectLike({
+          TWILIO_ACCOUNT_SID: 'AC123',
+          TWILIO_API_KEY_SID: 'SK123',
+          TWILIO_API_KEY_SECRET_ARN:
+            'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio-api-key-AbCdEf',
+          TWILIO_MESSAGING_SERVICE_SID: 'MG123',
+        }),
+      },
+    });
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['secretsmanager:GetSecretValue']),
+            Resource:
+              'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio-api-key-AbCdEf',
+          }),
+        ]),
+      },
+    });
   });
 });

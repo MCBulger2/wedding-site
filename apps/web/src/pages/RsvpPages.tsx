@@ -27,6 +27,11 @@ import {
   type RsvpPayload,
 } from '../api.js';
 import { cx, scoped } from '../classNames.js';
+import {
+  SmsConsentCheckboxField,
+  isLikelyPhoneRecoveryContact,
+  smsPhonePlaceholder,
+} from '../components/SmsConsentFields.js';
 import { siteContent } from '../siteContent.js';
 import styles from './RsvpPages.module.css';
 
@@ -41,8 +46,11 @@ export function RsvpLookupPage() {
     'idle' | 'submitting' | 'success'
   >('idle');
   const [recoveryError, setRecoveryError] = useState('');
+  const [recoveryConsentAccepted, setRecoveryConsentAccepted] = useState(false);
+  const [recoveryConsentError, setRecoveryConsentError] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const recoveryInputRef = useRef<HTMLInputElement | null>(null);
+  const showRecoverySmsConsent = isLikelyPhoneRecoveryContact(recoveryContact);
 
   useEffect(() => {
     if (!recoveryExpanded) {
@@ -68,6 +76,16 @@ export function RsvpLookupPage() {
     const validation = validateRecoveryContact(normalized);
     if (validation) {
       setRecoveryError(validation);
+      setRecoveryConsentError('');
+      setRecoveryMessage('');
+      setRecoveryStatus('idle');
+      return;
+    }
+    if (showRecoverySmsConsent && !recoveryConsentAccepted) {
+      setRecoveryError('');
+      setRecoveryConsentError(
+        'Please confirm SMS consent before requesting a texted RSVP link.',
+      );
       setRecoveryMessage('');
       setRecoveryStatus('idle');
       return;
@@ -75,19 +93,24 @@ export function RsvpLookupPage() {
 
     setRecoveryStatus('submitting');
     setRecoveryError('');
+    setRecoveryConsentError('');
     setRecoveryMessage('');
 
     try {
-      const response = await recoverRsvpLink({ contact: normalized });
+      const response = await recoverRsvpLink({
+        contact: normalized,
+        smsConsentAccepted: showRecoverySmsConsent
+          ? recoveryConsentAccepted
+          : undefined,
+      });
       setRecoveryStatus('success');
       setRecoveryMessage(response.message || GenericRecoverySuccessMessage);
     } catch (error) {
       setRecoveryStatus('idle');
       if (error instanceof ApiError && error.statusCode === 422) {
-        setRecoveryError(
-          error.details[0]?.replace(/^contact:\s*/i, '') ||
-            'Enter a valid email address or mobile number.',
-        );
+        const parsed = parseRecoveryApiError(error);
+        setRecoveryError(parsed.contactError);
+        setRecoveryConsentError(parsed.consentError);
         return;
       }
 
@@ -180,6 +203,8 @@ export function RsvpLookupPage() {
             onClick={() => {
               setRecoveryExpanded((current) => !current);
               setRecoveryError('');
+              setRecoveryConsentAccepted(false);
+              setRecoveryConsentError('');
               setRecoveryMessage('');
               setRecoveryStatus('idle');
             }}
@@ -209,6 +234,10 @@ export function RsvpLookupPage() {
                   onChange={(event) => {
                     setRecoveryContact(event.target.value);
                     setRecoveryError('');
+                    if (!isLikelyPhoneRecoveryContact(event.target.value)) {
+                      setRecoveryConsentAccepted(false);
+                      setRecoveryConsentError('');
+                    }
                     if (recoveryStatus !== 'submitting') {
                       setRecoveryMessage('');
                       setRecoveryStatus('idle');
@@ -234,6 +263,17 @@ export function RsvpLookupPage() {
                 Enter the email address or mobile number already saved with your
                 household.
               </p>
+              {showRecoverySmsConsent && (
+                <SmsConsentCheckboxField
+                  checked={recoveryConsentAccepted}
+                  error={recoveryConsentError}
+                  inputId="rsvp-recovery-sms-consent"
+                  onChange={(checked) => {
+                    setRecoveryConsentAccepted(checked);
+                    setRecoveryConsentError('');
+                  }}
+                />
+              )}
               <button
                 type="submit"
                 className={scoped(styles, 'recovery-submit-button')}
@@ -483,6 +523,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
   const activeMembers = household.members.filter(
     (member) => !member.archivedAt,
   );
+  const smsConsentRecorded = household.smsConsent?.status === 'opted_in';
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
@@ -909,9 +950,65 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             <FieldError path="notes" errors={fieldErrors} />
           </label>
         </section>
+        <section
+          className={scoped(styles, 'rsvp-form-section')}
+          aria-labelledby="rsvp-sms-heading"
+        >
+          <div className="section-heading">
+            <div>
+              <h2 id="rsvp-sms-heading">Text updates</h2>
+              <p className="form-message">
+                Optional. Add a mobile number only if you want RSVP recovery,
+                schedule updates, and wedding logistics by text.
+              </p>
+            </div>
+          </div>
+          {smsConsentRecorded && (
+            <p className={cx('form-message', scoped(styles, 'sms-status-note'))}>
+              SMS consent is already recorded for{' '}
+              {household.smsConsent?.phone ?? household.phone}.
+            </p>
+          )}
+          <label
+            className={fieldError('smsPhone') ? 'field-error' : undefined}
+          >
+            Mobile phone
+            <input
+              aria-label="Mobile phone"
+              aria-describedby={
+                fieldError('smsPhone') ? buildFieldErrorId('smsPhone') : undefined
+              }
+              aria-invalid={fieldError('smsPhone') ? 'true' : 'false'}
+              inputMode="tel"
+              maxLength={32}
+              placeholder={smsPhonePlaceholder}
+              value={form.smsPhone ?? ''}
+              onChange={(event) => {
+                clearFieldError('smsPhone');
+                clearFormMessage();
+                setForm({ ...form, smsPhone: event.target.value });
+              }}
+            />
+            <FieldError path="smsPhone" errors={fieldErrors} />
+          </label>
+          <SmsConsentCheckboxField
+            checked={Boolean(form.smsConsentAccepted)}
+            error={fieldError('smsConsentAccepted')}
+            inputId="rsvp-sms-consent"
+            onChange={(checked) => {
+              clearFieldError('smsConsentAccepted');
+              clearFormMessage();
+              setForm({ ...form, smsConsentAccepted: checked });
+            }}
+          />
+        </section>
         <div className={scoped(styles, 'rsvp-save-bar')}>
           <button type="submit" disabled={status === 'saving'}>
-            {status === 'saving' ? 'Saving...' : 'Save RSVP'}
+            {status === 'saving'
+              ? 'Saving...'
+              : form.smsConsentAccepted
+                ? 'Save RSVP and text preferences'
+                : 'Save RSVP'}
           </button>
         </div>
         {message && (
@@ -1112,6 +1209,8 @@ function toEditableRsvp(household: Household, rsvp?: StoredRsvp): RsvpPayload {
       plusOnes: rsvp.plusOnes.map((plusOne) => ({ ...plusOne })),
       notes: rsvp.notes,
       accessibilityNotes: rsvp.accessibilityNotes,
+      smsPhone: household.smsConsent?.phone ?? household.phone ?? '',
+      smsConsentAccepted: false,
     };
   }
 
@@ -1125,6 +1224,8 @@ function toEditableRsvp(household: Household, rsvp?: StoredRsvp): RsvpPayload {
     plusOnes: [],
     notes: '',
     accessibilityNotes: '',
+    smsPhone: household.smsConsent?.phone ?? household.phone ?? '',
+    smsConsentAccepted: false,
   };
 }
 
@@ -1305,10 +1406,43 @@ function parseRsvpApiError(error: ApiError): {
   };
 }
 
+function parseRecoveryApiError(error: ApiError): {
+  contactError: string;
+  consentError: string;
+} {
+  let contactError = '';
+  let consentError = '';
+
+  for (const detail of error.details) {
+    const separatorIndex = detail.indexOf(': ');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const path = detail.slice(0, separatorIndex);
+    const rawMessage = normalizeValidationMessage(
+      detail.slice(separatorIndex + 2),
+    );
+    if (path === 'contact' && !contactError) {
+      contactError = rawMessage;
+    }
+    if (path === 'smsConsentAccepted' && !consentError) {
+      consentError = rawMessage;
+    }
+  }
+
+  return {
+    contactError,
+    consentError,
+  };
+}
+
 function isRsvpFieldPath(path: string): boolean {
   return (
     path === 'notes' ||
     path === 'accessibilityNotes' ||
+    path === 'smsPhone' ||
+    path === 'smsConsentAccepted' ||
     path.startsWith('members.') ||
     path.startsWith('plusOnes.')
   );
