@@ -5,7 +5,9 @@ import {
   CreateHouseholdInputSchema,
   GenericRecoverySuccessMessage,
   HotelBlockSchema,
+  HouseholdSchema,
   InvitationDetailsSchema,
+  SMS_CONSENT_TEXT_VERSION,
   RsvpRecoveryAcceptedResponseSchema,
   RsvpRecoveryRequestSchema,
   RsvpUpdateSchema,
@@ -65,6 +67,28 @@ describe('RsvpUpdateSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('accepts RSVP payloads with SMS consent fields', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
+      plusOnes: [],
+      smsPhone: '(480) 555-0100',
+      smsConsentAccepted: true,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('requires a phone number when RSVP SMS consent is checked', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
+      plusOnes: [],
+      smsConsentAccepted: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['smsPhone']);
   });
 });
 
@@ -153,6 +177,53 @@ describe('RsvpRecovery schemas', () => {
         message: GenericRecoverySuccessMessage,
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts phone recovery requests only when SMS consent is checked', () => {
+    expect(
+      RsvpRecoveryRequestSchema.safeParse({
+        contact: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }).success,
+    ).toBe(true);
+
+    const rejected = RsvpRecoveryRequestSchema.safeParse({
+      contact: '(480) 555-0100',
+    });
+    expect(rejected.success).toBe(false);
+    expect(rejected.error?.issues[0]?.path).toEqual(['smsConsentAccepted']);
+  });
+});
+
+describe('SMS consent schema', () => {
+  it('validates stored SMS consent metadata', () => {
+    const result = HouseholdSchema.safeParse({
+      householdId: 'h1',
+      displayName: 'The Example Household',
+      email: 'sam@example.com',
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_in',
+        phone: '+14805550100',
+        source: 'rsvp_form',
+        consentedAt: '2026-07-03T20:00:00.000Z',
+        consentTextVersion: SMS_CONSENT_TEXT_VERSION,
+      },
+      members: [
+        {
+          id: 'm1',
+          firstName: 'Sam',
+          lastName: 'Example',
+        },
+      ],
+      maxPlusOnes: 0,
+      rsvpStatus: 'not_started',
+      inviteLifecycleStatus: 'generated',
+      createdAt: '2026-07-03T20:00:00.000Z',
+      updatedAt: '2026-07-03T20:00:00.000Z',
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

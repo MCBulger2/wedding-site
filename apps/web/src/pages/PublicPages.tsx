@@ -3,6 +3,10 @@ import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLin
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
+import {
+  SmsConsentCheckboxField,
+  smsPhonePlaceholder,
+} from '../components/SmsConsentFields.js';
 import { siteContent } from '../siteContent.js';
 import styles from './PublicPages.module.css';
 
@@ -379,6 +383,137 @@ export function OurStoryPage() {
           {ourStory.ctas.rsvpLabel}
           <ArrowRight aria-hidden="true" />
         </a>
+      </section>
+    </main>
+  );
+}
+
+export function PrivacyPage() {
+  return (
+    <main className={cx('narrow-page', scoped(styles, 'policy-page'))}>
+      <section className="lookup-card">
+        <p className="eyebrow">Privacy Policy</p>
+        <h1>Privacy</h1>
+        <div className={scoped(styles, 'policy-copy')}>
+          <p>
+            Matt &amp; Alison Wedding uses the contact details you provide to
+            manage RSVPs, share wedding logistics, and help invited guests
+            recover their private RSVP links.
+          </p>
+          <p>
+            SMS opt-in data and consent will not be shared with third parties.
+          </p>
+          <p>
+            We do not sell guest information, and we keep invitation links and
+            household details private to the invited household.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function TermsPage() {
+  return (
+    <main className={cx('narrow-page', scoped(styles, 'policy-page'))}>
+      <section className="lookup-card">
+        <p className="eyebrow">Terms</p>
+        <h1>Terms</h1>
+        <div className={scoped(styles, 'policy-copy')}>
+          <p>
+            Matt &amp; Alison Wedding SMS messages are only for invited-guest
+            wedding logistics, schedule updates, and RSVP recovery.
+          </p>
+          <p>
+            Message frequency varies, typically fewer than 10 messages per
+            month. Message and data rates may apply.
+          </p>
+          <p>Reply HELP for help or STOP to opt out.</p>
+          <p>
+            Email delivery and private RSVP links remain available whether or
+            not you choose SMS updates.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function SmsOptInProofPage() {
+  const [rsvpSmsPhone, setRsvpSmsPhone] = useState('');
+  const [rsvpSmsConsentAccepted, setRsvpSmsConsentAccepted] = useState(false);
+  const [recoveryContact, setRecoveryContact] = useState(smsPhonePlaceholder);
+  const [recoverySmsConsentAccepted, setRecoverySmsConsentAccepted] =
+    useState(false);
+
+  return (
+    <main className={cx('narrow-page', scoped(styles, 'policy-page'))}>
+      <section className="lookup-card">
+        <p className="eyebrow">SMS Proof</p>
+        <h1>SMS opt-in proof</h1>
+        <p className="page-lede">
+          This page mirrors the live RSVP and recovery SMS consent controls used
+          on matt-alison.com.
+        </p>
+      </section>
+      <section className={scoped(styles, 'proof-grid')}>
+        <article className="lookup-card">
+          <p className="eyebrow">RSVP form</p>
+          <h2>Save RSVP and text preferences</h2>
+          <form
+            className={scoped(styles, 'proof-form')}
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <label>
+              Mobile phone
+              <input
+                aria-label="Mobile phone"
+                inputMode="tel"
+                maxLength={32}
+                placeholder={smsPhonePlaceholder}
+                value={rsvpSmsPhone}
+                onChange={(event) => setRsvpSmsPhone(event.target.value)}
+              />
+            </label>
+            <SmsConsentCheckboxField
+              checked={rsvpSmsConsentAccepted}
+              inputId="proof-rsvp-sms-consent"
+              onChange={setRsvpSmsConsentAccepted}
+            />
+            <button type="submit">
+              {rsvpSmsConsentAccepted
+                ? 'Save RSVP and text preferences'
+                : 'Save RSVP'}
+            </button>
+          </form>
+        </article>
+        <article className="lookup-card">
+          <p className="eyebrow">Recovery form</p>
+          <h2>Send private RSVP link</h2>
+          <form
+            className={scoped(styles, 'proof-form')}
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <label>
+              Email or mobile number
+              <input
+                aria-label="Email or mobile number"
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="email"
+                placeholder={`name@example.com or ${smsPhonePlaceholder}`}
+                value={recoveryContact}
+                onChange={(event) => setRecoveryContact(event.target.value)}
+              />
+            </label>
+            <SmsConsentCheckboxField
+              checked={recoverySmsConsentAccepted}
+              inputId="proof-recovery-sms-consent"
+              onChange={setRecoverySmsConsentAccepted}
+            />
+            <button type="submit">Send private RSVP link</button>
+          </form>
+        </article>
       </section>
     </main>
   );

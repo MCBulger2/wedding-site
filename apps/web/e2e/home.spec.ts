@@ -11,6 +11,13 @@ const household = {
   displayName: 'The Example Household',
   email: 'sam@example.com',
   phone: '+14805550100',
+  smsConsent: {
+    status: 'opted_in',
+    phone: '+14805550100',
+    source: 'rsvp_form',
+    consentedAt: '2026-07-03T20:00:00.000Z',
+    consentTextVersion: 'twilio-tollfree-v1',
+  },
   members: [
     {
       id: 'h1-1',
@@ -506,6 +513,99 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(
     cardBounds!.x + cardBounds!.width + 1,
   );
+});
+
+test('phone recovery requires explicit SMS consent before submitting', async ({
+  page,
+}) => {
+  const recoveryRequests: Array<{
+    contact: string;
+    smsConsentAccepted?: boolean;
+  }> = [];
+  await page.route('**/api/rsvp/recovery', async (route) => {
+    const payload = route.request().postDataJSON() as {
+      contact: string;
+      smsConsentAccepted?: boolean;
+    };
+    recoveryRequests.push(payload);
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accepted: true,
+        message:
+          "If that matches our guest list, we'll send your private RSVP link.",
+      }),
+    });
+  });
+
+  await page.goto('/rsvp');
+  await page.getByRole('button', { name: "Don't have a code?" }).click();
+  await page.getByLabel('Email or mobile number').fill('(480) 555-0100');
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
+  await expect(
+    page.getByText(
+      'Please confirm SMS consent before requesting a texted RSVP link.',
+    ),
+  ).toBeVisible();
+  expect(recoveryRequests).toEqual([]);
+
+  await page.getByRole('checkbox').check();
+  await expect(page.getByRole('checkbox')).toBeChecked();
+  await Promise.all([
+    page.waitForResponse('**/api/rsvp/recovery'),
+    page.locator('#rsvp-recovery-form').evaluate((form) => {
+      if (!(form instanceof HTMLFormElement)) {
+        throw new Error('Recovery form not found');
+      }
+      form.requestSubmit();
+    }),
+  ]);
+  await expect(
+    page.getByText(
+      "If that matches our guest list, we'll send your private RSVP link.",
+    ),
+  ).toBeVisible();
+  expect(recoveryRequests).toEqual([
+    {
+      contact: '(480) 555-0100',
+      smsConsentAccepted: true,
+    },
+  ]);
+});
+
+test('privacy, terms, and SMS proof pages render public compliance content', async ({
+  page,
+}) => {
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
+  await expect(
+    page.getByText(
+      'SMS opt-in data and consent will not be shared with third parties.',
+    ),
+  ).toBeVisible();
+
+  await page.goto('/terms');
+  await expect(page.getByRole('heading', { name: 'Terms' })).toBeVisible();
+  await expect(
+    page.getByText('Reply HELP for help or STOP to opt out.'),
+  ).toBeVisible();
+
+  await page.goto('/sms-opt-in-proof');
+  await expect(
+    page.getByRole('heading', { name: 'SMS opt-in proof' }),
+  ).toBeVisible();
+  const proofRsvpCard = page.locator('article').filter({
+    has: page.getByRole('heading', {
+      name: 'Save RSVP and text preferences',
+    }),
+  });
+  await expect(
+    proofRsvpCard.getByText(
+      /I agree to receive SMS messages from Matt & Alison Wedding/i,
+    ),
+  ).toBeVisible();
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
@@ -1109,12 +1209,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('generated').first()).toBeVisible();
   await expect(page.getByText('Jamie Guest')).toBeVisible();
-  await expect(page.getByText('+14805550100')).toBeVisible();
 
   const exampleCard = page
     .getByLabel('Households')
     .locator('article')
     .filter({ hasText: 'The Example Household' });
+  await expect(
+    exampleCard.getByRole('link', { name: '+14805550100' }),
+  ).toBeVisible();
   await clickHouseholdAction(exampleCard, 'Notify');
   await page.getByLabel('Notification subject').fill('Travel update');
   await page

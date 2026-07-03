@@ -9,6 +9,8 @@ import {
   InviteLifecycleUpdateSchema,
   type InvitationDetails,
   type InvitationEmailResult,
+  SMS_CONSENT_TEXT_VERSION,
+  type SmsConsent,
   type RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequestSchema,
   RsvpUpdateSchema,
@@ -110,6 +112,12 @@ export class WeddingService {
     this.validateRsvpAgainstHousehold(household, parsed.data);
 
     const now = new Date().toISOString();
+    const optedInSmsPhone = parsed.data.smsConsentAccepted
+      ? normalizeRequiredPhoneNumber(
+          parsed.data.smsPhone,
+          'Enter a mobile number to receive text updates.',
+        )
+      : undefined;
     const existing = await this.getStoredRsvp(household.householdId);
     const rsvp: StoredRsvp = {
       ...parsed.data,
@@ -118,10 +126,15 @@ export class WeddingService {
     };
     const updatedHousehold: Household = {
       ...household,
+      phone: optedInSmsPhone ?? household.phone,
+      smsConsent: optedInSmsPhone
+        ? createSmsConsent(optedInSmsPhone, 'rsvp_form', now)
+        : household.smsConsent,
       rsvpStatus: deriveRsvpStatus(rsvp),
       updatedAt: now,
     };
 
+    await this.repository.saveHousehold(updatedHousehold);
     await this.repository.saveRsvp(household.householdId, rsvp);
     await this.notifyRsvpChanged(updatedHousehold, rsvp);
     return { household: updatedHousehold, rsvp };
@@ -133,9 +146,11 @@ export class WeddingService {
   ): Promise<RsvpRecoveryAcceptedResponse> {
     const parsed = RsvpRecoveryRequestSchema.safeParse(input);
     if (!parsed.success) {
-      throw new PublicError('Recovery contact is invalid', 422, [
-        'contact: Enter a valid email address or mobile number.',
-      ]);
+      throw new PublicError(
+        'Recovery contact is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
     }
 
     const contact = normalizeRecoveryContact(parsed.data.contact);
@@ -160,7 +175,7 @@ export class WeddingService {
         ? await this.repository.listHouseholdsByEmail(contact.value)
         : await this.repository.listHouseholdsByPhone(contact.value);
 
-    if (!this.householdMessenger || households.length === 0) {
+    if (households.length === 0) {
       return acceptedRecoveryResponse();
     }
 
@@ -171,6 +186,15 @@ export class WeddingService {
       ) {
         continue;
       }
+
+      const consentedHousehold =
+        contact.kind === 'phone'
+          ? await this.recordSmsConsentIfNeeded(
+              household,
+              contact.value,
+              'recovery_form',
+            )
+          : household;
 
       try {
         const inviteCode = await this.getRecoverableInviteCode(household);
@@ -183,14 +207,17 @@ export class WeddingService {
           inviteCode,
           requestContext.baseUrl,
         );
+        if (!this.householdMessenger) {
+          continue;
+        }
         if (contact.kind === 'email') {
           await this.householdMessenger.sendRecoveryEmail({
-            household,
+            household: consentedHousehold,
             invitation,
           });
         } else {
           await this.householdMessenger.sendRecoverySms({
-            household,
+            household: consentedHousehold,
             invitation,
           });
         }
@@ -664,16 +691,25 @@ export class WeddingService {
         422,
       );
     }
-    if (payload.channel === 'sms' && !household.phone) {
+    const smsDeliveryPhone =
+      payload.channel === 'sms'
+        ? resolveSmsDeliveryPhone(household)
+        : undefined;
+    if (payload.channel === 'sms' && !smsDeliveryPhone) {
       throw new PublicError(
-        'This household does not have a mobile number for SMS',
+        household.phone
+          ? 'This household has not opted in to SMS updates'
+          : 'This household does not have a mobile number for SMS',
         422,
       );
     }
 
     try {
       return await this.householdMessenger.sendHouseholdNotification({
-        household,
+        household:
+          payload.channel === 'sms' && smsDeliveryPhone
+            ? { ...household, phone: smsDeliveryPhone }
+            : household,
         ...payload,
       });
     } catch (error) {
@@ -1064,6 +1100,29 @@ export class WeddingService {
     }
   }
 
+  private async recordSmsConsentIfNeeded(
+    household: Household,
+    phone: string,
+    source: SmsConsent['source'],
+  ): Promise<Household> {
+    if (
+      household.phone === phone &&
+      household.smsConsent?.status === 'opted_in' &&
+      household.smsConsent.phone === phone
+    ) {
+      return household;
+    }
+
+    const updatedHousehold: Household = {
+      ...household,
+      phone,
+      smsConsent: createSmsConsent(phone, source, new Date().toISOString()),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.repository.saveHousehold(updatedHousehold);
+    return updatedHousehold;
+  }
+
   private async notifyRsvpChanged(
     household: Household,
     rsvp: StoredRsvp,
@@ -1313,6 +1372,18 @@ function normalizeOptionalPhoneNumber(
   return normalized;
 }
 
+function normalizeRequiredPhoneNumber(
+  value: string | undefined,
+  message: string,
+): string {
+  const normalized = normalizeOptionalPhoneNumber(value);
+  if (!normalized) {
+    throw new PublicError(message, 422, [`smsPhone: ${message}`]);
+  }
+
+  return normalized;
+}
+
 type RecoveryContact =
   | { kind: 'email'; value: string }
   | { kind: 'phone'; value: string };
@@ -1346,6 +1417,28 @@ function acceptedRecoveryResponse(): RsvpRecoveryAcceptedResponse {
     accepted: true,
     message: GenericRecoverySuccessMessage,
   };
+}
+
+function createSmsConsent(
+  phone: string,
+  source: SmsConsent['source'],
+  consentedAt: string,
+): SmsConsent {
+  return {
+    status: 'opted_in',
+    phone,
+    source,
+    consentedAt,
+    consentTextVersion: SMS_CONSENT_TEXT_VERSION,
+  };
+}
+
+function resolveSmsDeliveryPhone(household: Household): string | undefined {
+  return household.phone &&
+    household.smsConsent?.status === 'opted_in' &&
+    household.smsConsent.phone === household.phone
+    ? household.phone
+    : undefined;
 }
 
 function summarizeAttendance(

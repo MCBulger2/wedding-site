@@ -103,6 +103,12 @@ button svg,
   padding: 1rem 5vw 1.35rem;
 }
 
+.footer-links {
+  align-items: center;
+  display: flex;
+  gap: 0.85rem;
+}
+
 .footer-admin-link {
   letter-spacing: 0.04em;
   text-decoration: none;

@@ -17,7 +17,7 @@ cp .env.staging.example .env.staging.local
 cp .env.production.example .env.production.local
 ```
 
-The local files should contain the real domain, hosted zone, API domain, auth domain, CORS origins, SES sender, notification recipients, and passkey setting. They are ignored by Git and must stay out of source control.
+The local files should contain the real domain, hosted zone, API domain, auth domain, CORS origins, SES sender, notification recipients, Twilio SMS identifiers, and passkey setting. They are ignored by Git and must stay out of source control. Store the Twilio API key secret value in AWS Secrets Manager and put only its secret ARN in local or CI configuration.
 
 Use CDK context values only when you need to override those defaults:
 
@@ -39,6 +39,10 @@ npm run deploy:infra:production -- \
   -c allowedOrigins=https://www.example.com \
   -c notificationSenderEmail=wedding@example.com \
   -c notificationRecipientEmails=admin1@example.com,admin2@example.com \
+  -c twilioAccountSid=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  -c twilioApiKeySid=SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+  -c twilioApiKeySecretArn=arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio-api-key-AbCdEf \
+  -c twilioMessagingServiceSid=MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   -c contactEmailAddress=contact@matt-alison.com \
   -c contactForwardingRecipientEmail=admin@example.com
 ```
@@ -54,6 +58,12 @@ Notifications are best-effort. Guest RSVP saves continue even if SES delivery fa
 The public contact address is `contact@matt-alison.com`. When the production deploy provides `CONTACT_EMAIL_ADDRESS=contact@matt-alison.com`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN=matt-alison.com`, CDK also configures SES receiving for the hosted zone, creates the SES MX record, stores raw inbound messages in a private S3 bucket with 30-day expiration, and forwards messages to the configured recipient. Do not commit the real forwarding recipient to source control. Replying from the recipient mailbox should go to the original sender through the forwarded email's `Reply-To` header; Gmail alias or SMTP send-as setup can be handled manually later if true replies from `contact@matt-alison.com` become required.
 
 Leave `CONTACT_EMAIL_ADDRESS` and `CONTACT_FORWARDING_RECIPIENT_EMAIL` unset in staging unless inbound contact forwarding is being tested deliberately. Staging can still display the public contact address through the shared site-content default without creating an SES receipt rule set for the apex domain.
+
+## Twilio SMS Verification
+
+Household SMS notifications and RSVP recovery SMS messages use Twilio's REST Messages API through the API Lambda. Production auth should use a Twilio API key SID plus API key secret. The secret value must live in AWS Secrets Manager; Lambda environment variables should contain only `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET_ARN`, and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`.
+
+Before launch, verify the Twilio sender or Messaging Service can send to the expected guest phone numbers, that opt-out/compliance settings are acceptable for event notifications, and that incomplete Twilio configuration fails SMS sends without affecting SES email delivery.
 
 ## Public RSVP Abuse Protection
 
@@ -76,7 +86,7 @@ References:
 
 Before printing invitations:
 
-- Deploy staging with the intended domain, auth domain, and SES notification settings.
+- Deploy staging with the intended domain, auth domain, SES notification settings, and Twilio SMS settings.
 - Create test households, generate/reveal/export invitation URLs and QR codes, and verify old URLs are not rotated after export or sent status.
 - Verify invitation email send and re-send reuse the same RSVP URL.
 - Submit and update RSVP responses from invite links.
