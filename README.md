@@ -99,7 +99,7 @@ Local `.env*` files are ignored by Git. Do not commit real domains, notification
 You can still override any value with CDK context or environment variables. For example:
 
 ```bash
-npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging -c envName=staging -c frontendDomainName=example.com -c hostedZoneDomain=example.com
+npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging -c envName=staging -c hostedZoneDomain=matt-alison.com -c frontendDomainName=staging.matt-alison.com -c apiDomainName=api.staging.matt-alison.com -c authDomainName=login.staging.matt-alison.com -c allowedOrigins=https://staging.matt-alison.com
 ```
 
 Destroy infrastructure with the matching commands when you intentionally want to tear an environment down:
@@ -147,6 +147,8 @@ The deploy workflow expects these GitHub environment settings:
 - Variable `CONTACT_EMAIL_ADDRESS`: optional public contact email address, for example `contact@matt-alison.com`.
 - Variable `CONTACT_FORWARDING_RECIPIENT_EMAIL`: optional private forwarding recipient for inbound contact emails. Set this in GitHub environment variables or local env files; do not commit personal recipient addresses.
 - Variable `ENABLE_PASSKEYS`: optional `true` or `false` override.
+
+The staging environment should use `staging.matt-alison.com`, `api.staging.matt-alison.com`, and `login.staging.matt-alison.com` under the `matt-alison.com` hosted zone. Leave staging contact email forwarding unset unless it is intentionally being tested; production owns the public `contact@matt-alison.com` mailbox flow.
 
 When `CONTACT_EMAIL_ADDRESS`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN` are all configured and the contact address domain matches the hosted zone, CDK enables SES inbound email for the domain, creates an MX record for SES receiving, stores raw inbound mail in a private expiring S3 bucket, and forwards messages to the configured recipient from the public contact address. The forwarding email sets `Reply-To` to the original sender when it can be parsed safely, so replies from the recipient mailbox go back to the guest. If SES is still in sandbox, the forwarding recipient must be verified or SES production sending must be enabled before live forwarding works.
 

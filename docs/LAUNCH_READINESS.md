@@ -22,6 +22,15 @@ The local files should contain the real domain, hosted zone, API domain, auth do
 Use CDK context values only when you need to override those defaults:
 
 ```bash
+npm run deploy:infra:staging -- \
+  -c hostedZoneDomain=matt-alison.com \
+  -c frontendDomainName=staging.matt-alison.com \
+  -c apiDomainName=api.staging.matt-alison.com \
+  -c authDomainName=login.staging.matt-alison.com \
+  -c allowedOrigins=https://staging.matt-alison.com \
+  -c notificationSenderEmail=staging-rsvp@matt-alison.com \
+  -c notificationRecipientEmails=admin@example.com
+
 npm run deploy:infra:production -- \
   -c hostedZoneDomain=example.com \
   -c frontendDomainName=www.example.com \
@@ -47,6 +56,8 @@ RSVP notifications and invitation emails use SES through the API Lambda. If the 
 Notifications are best-effort. Guest RSVP saves continue even if SES delivery fails, and failures are logged with household ID and RSVP update time.
 
 The public contact address is `contact@matt-alison.com`. When the production deploy provides `CONTACT_EMAIL_ADDRESS=contact@matt-alison.com`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN=matt-alison.com`, CDK also configures SES receiving for the hosted zone, creates the SES MX record, stores raw inbound messages in a private S3 bucket with 30-day expiration, and forwards messages to the configured recipient. Do not commit the real forwarding recipient to source control. Replying from the recipient mailbox should go to the original sender through the forwarded email's `Reply-To` header; Gmail alias or SMTP send-as setup can be handled manually later if true replies from `contact@matt-alison.com` become required.
+
+Leave `CONTACT_EMAIL_ADDRESS` and `CONTACT_FORWARDING_RECIPIENT_EMAIL` unset in staging unless inbound contact forwarding is being tested deliberately. Staging can still display the public contact address through the shared site-content default without creating an SES receipt rule set for the apex domain.
 
 ## Twilio SMS Verification
 

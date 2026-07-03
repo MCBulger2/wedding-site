@@ -3,7 +3,10 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { WeddingSiteStack, type WeddingSiteStackProps } from './wedding-site-stack.js';
+import {
+  WeddingSiteStack,
+  type WeddingSiteStackProps,
+} from './wedding-site-stack.js';
 
 const webDistPath = path.resolve('apps/web/dist');
 const webDistIndexPath = path.join(webDistPath, 'index.html');
@@ -34,8 +37,20 @@ function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
 }
 
 function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
-  const app = new cdk.App();
-  const stack = new WeddingSiteStack(app, `WeddingSite-${props.envName}`, props);
+  const app = new cdk.App({
+    context: {
+      'hosted-zone:account=123456789012:domainName=matt-alison.com:region=us-west-1':
+        {
+          Id: 'Z1234567890',
+          Name: 'matt-alison.com.',
+        },
+    },
+  });
+  const stack = new WeddingSiteStack(
+    app,
+    `WeddingSite-${props.envName}`,
+    props,
+  );
   return Template.fromStack(stack).toJSON();
 }
 
@@ -81,6 +96,45 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(inviteCodePepper.UpdateReplacePolicy).not.toBe('Retain');
   });
 
+  it('creates nested auth domains after the frontend alias record exists', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'staging.matt-alison.com',
+      authDomainName: 'login.staging.matt-alison.com',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: true,
+    });
+    const resources = Object.entries(template.Resources) as Array<
+      [
+        string,
+        {
+          Type?: string;
+          Properties?: {
+            Name?: unknown;
+          };
+          DependsOn?: unknown;
+        },
+      ]
+    >;
+    const siteAliasRecordLogicalId = resources.find(
+      ([, resource]) =>
+        resource.Type === 'AWS::Route53::RecordSet' &&
+        resource.Properties?.Name === 'staging.matt-alison.com.',
+    )?.[0];
+    const userPoolDomain = resources
+      .map(([, resource]) => resource)
+      .find((resource) => resource.Type === 'AWS::Cognito::UserPoolDomain');
+
+    expect(siteAliasRecordLogicalId).toBeDefined();
+    expect(userPoolDomain).toBeDefined();
+    expect(userPoolDomain).toMatchObject({
+      DependsOn: expect.arrayContaining([siteAliasRecordLogicalId]),
+    });
+  });
+
   it('does not grant SNS publish permissions to the API handler', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
@@ -105,7 +159,9 @@ describe('WeddingSiteStack infrastructure', () => {
       enablePasskeys: false,
     });
 
-    expect(templateResourcesOfType(template, 'AWS::SES::EmailIdentity')).toHaveLength(0);
+    expect(
+      templateResourcesOfType(template, 'AWS::SES::EmailIdentity'),
+    ).toHaveLength(0);
     expect(JSON.stringify(template)).toContain('identity/matt-alison.com');
     expect(JSON.stringify(template)).toContain('staging-rsvp@matt-alison.com');
   });
@@ -121,7 +177,10 @@ describe('WeddingSiteStack infrastructure', () => {
       notificationRecipientEmails: ['guest@example.com'],
       enablePasskeys: false,
     });
-    const sesIdentities = templateResourcesOfType(template, 'AWS::SES::EmailIdentity');
+    const sesIdentities = templateResourcesOfType(
+      template,
+      'AWS::SES::EmailIdentity',
+    );
 
     expect(sesIdentities).toHaveLength(1);
     expect(sesIdentities[0].Properties).toEqual(
