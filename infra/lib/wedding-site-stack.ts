@@ -362,6 +362,7 @@ export class WeddingSiteStack extends Stack {
           })
         : undefined;
     const domainSesIdentities = new Map<string, ses.IEmailIdentity>();
+    const manageHostedZoneSesIdentities = props.envName === 'production';
     const getSesIdentity = (
       id: string,
       emailAddress: string,
@@ -378,9 +379,11 @@ export class WeddingSiteStack extends Stack {
           return existingIdentity;
         }
 
-        const identity = new ses.EmailIdentity(this, id, {
-          identity: ses.Identity.publicHostedZone(hostedZone),
-        });
+        const identity = manageHostedZoneSesIdentities
+          ? new ses.EmailIdentity(this, id, {
+              identity: ses.Identity.publicHostedZone(hostedZone),
+            })
+          : ses.EmailIdentity.fromEmailIdentityName(this, id, domainKey);
         domainSesIdentities.set(domainKey, identity);
         return identity;
       }

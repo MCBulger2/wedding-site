@@ -39,7 +39,20 @@ function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
   return Template.fromStack(stack).toJSON();
 }
 
-describe('WeddingSiteStack invite code pepper retention', () => {
+function templateResourcesOfType(
+  template: Record<string, any>,
+  type: string,
+): Array<Record<string, any>> {
+  return Object.values(template.Resources).filter(
+    (resource): resource is Record<string, any> =>
+      typeof resource === 'object' &&
+      resource !== null &&
+      'Type' in resource &&
+      resource.Type === type,
+  );
+}
+
+describe('WeddingSiteStack infrastructure', () => {
   beforeAll(() => {
     if (!fs.existsSync(webDistPath)) {
       fs.mkdirSync(webDistPath, { recursive: true });
@@ -78,6 +91,42 @@ describe('WeddingSiteStack invite code pepper retention', () => {
     });
 
     expect(JSON.stringify(template)).not.toContain('sns:Publish');
+  });
+
+  it('imports the shared hosted-zone SES identity outside production', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'staging.matt-alison.com',
+      notificationSenderEmail: 'staging-rsvp@matt-alison.com',
+      notificationRecipientEmails: ['guest@example.com'],
+      enablePasskeys: false,
+    });
+
+    expect(templateResourcesOfType(template, 'AWS::SES::EmailIdentity')).toHaveLength(0);
+    expect(JSON.stringify(template)).toContain('identity/matt-alison.com');
+    expect(JSON.stringify(template)).toContain('staging-rsvp@matt-alison.com');
+  });
+
+  it('manages the hosted-zone SES identity in production', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'matt-alison.com',
+      notificationSenderEmail: 'rsvp@matt-alison.com',
+      notificationRecipientEmails: ['guest@example.com'],
+      enablePasskeys: false,
+    });
+    const sesIdentities = templateResourcesOfType(template, 'AWS::SES::EmailIdentity');
+
+    expect(sesIdentities).toHaveLength(1);
+    expect(sesIdentities[0].Properties).toEqual(
+      expect.objectContaining({ EmailIdentity: 'matt-alison.com' }),
+    );
   });
 
   it('passes complete Twilio config as Lambda identifiers and grants secret read', () => {
