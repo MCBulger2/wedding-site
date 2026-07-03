@@ -431,6 +431,14 @@ export class WeddingSiteStack extends Stack {
     if (props.cloudFrontWebAclArn) {
       distribution.attachWebAclId(props.cloudFrontWebAclArn);
     }
+    const siteAliasRecord =
+      frontendDomainName && hostedZone
+        ? new route53.ARecord(this, 'SiteAliasRecord', {
+            zone: hostedZone,
+            recordName: frontendDomainName,
+            target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
+          })
+        : undefined;
 
     const deployedFrontendBaseUrl = frontendDomainName
       ? `https://${frontendDomainName}`
@@ -457,6 +465,14 @@ export class WeddingSiteStack extends Stack {
             props.authDomainName,
           ])
         : undefined;
+    const authParentDomainName = props.authDomainName ? getParentDomainName(props.authDomainName) : undefined;
+    const authParentAliasRecord =
+      authParentDomainName &&
+      frontendDomainName &&
+      siteAliasRecord &&
+      normalizeDomainName(authParentDomainName) === normalizeDomainName(frontendDomainName)
+        ? siteAliasRecord
+        : undefined;
     const userPoolDomain =
       props.authDomainName && authCertificate
         ? userPool.addDomain('AdminCustomDomain', {
@@ -474,6 +490,9 @@ export class WeddingSiteStack extends Stack {
           });
     if (authParentValidationRecord) {
       userPoolDomain.node.addDependency(authParentValidationRecord);
+    }
+    if (authParentAliasRecord) {
+      userPoolDomain.node.addDependency(authParentAliasRecord);
     }
 
     const userPoolClient = userPool.addClient('AdminWebClient', {
@@ -718,14 +737,6 @@ export class WeddingSiteStack extends Stack {
       distributionPaths: ['/*'],
       prune: true,
     });
-
-    if (frontendDomainName && hostedZone) {
-      new route53.ARecord(this, 'SiteAliasRecord', {
-        zone: hostedZone,
-        recordName: frontendDomainName,
-        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
-      });
-    }
 
     if (props.apiDomainName && hostedZone) {
       const apiCertificate = new acm.Certificate(this, 'ApiCertificate', {
