@@ -1232,6 +1232,14 @@ export function AdminPage() {
                             <a href={`tel:${record.household.phone}`}>{record.household.phone}</a>
                           </span>
                         )}
+                        {(record.household.phone || record.household.smsConsent) && (
+                          <span>
+                            <MessageSquare aria-hidden="true" />
+                            {hasRecordedSmsConsent(record.household)
+                              ? `SMS consent on file for ${record.household.smsConsent?.phone}`
+                              : 'SMS consent not recorded'}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="toolbar-actions">
@@ -1239,7 +1247,7 @@ export function AdminPage() {
                         household={record.household}
                         canNotify={
                           Boolean(record.household.email) ||
-                          Boolean(record.household.phone)
+                          hasRecordedSmsConsent(record.household)
                         }
                         canEmailInvitation={Boolean(record.household.email) && !isHouseholdArchived(record.household)}
                         onNotify={() => openNotificationModal(record.household)}
@@ -1811,13 +1819,21 @@ function defaultNotificationFormState(
   household: Household,
 ): HouseholdNotificationFormState {
   const channel =
-    household.email || !household.phone ? 'email' : 'sms';
+    household.email || !hasRecordedSmsConsent(household) ? 'email' : 'sms';
 
   return {
     channel,
     subject: `Wedding update for ${household.displayName}`,
     message: '',
   };
+}
+
+function hasRecordedSmsConsent(household: Household): boolean {
+  return Boolean(
+    household.phone &&
+      household.smsConsent?.status === 'opted_in' &&
+      household.smsConsent.phone === household.phone,
+  );
 }
 
 function inviteStatusLabel(household: Household): string {
@@ -2282,7 +2298,7 @@ function HouseholdForm({
   );
 }
 
-function HouseholdNotificationForm({
+export function HouseholdNotificationForm({
   household,
   form,
   setForm,
@@ -2298,7 +2314,7 @@ function HouseholdNotificationForm({
   onCancel: () => void;
 }) {
   const canEmail = Boolean(household.email);
-  const canSms = Boolean(household.phone);
+  const canSms = hasRecordedSmsConsent(household);
 
   return (
     <form className="modal-form" onSubmit={onSubmit}>
@@ -2315,6 +2331,12 @@ function HouseholdNotificationForm({
           </p>
         </div>
       </div>
+      {!canSms && household.phone && (
+        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
+          SMS delivery stays disabled until this household opts in through the
+          RSVP or recovery form.
+        </p>
+      )}
       <label>
         Delivery channel
         <select
@@ -2362,7 +2384,8 @@ function HouseholdNotificationForm({
       </label>
       {form.channel === 'sms' && (
         <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-          SMS is delivered through Twilio and should stay concise.
+          SMS is delivered through Twilio, requires recorded consent, and
+          includes HELP and STOP instructions automatically.
         </p>
       )}
       <div className="toolbar-actions">

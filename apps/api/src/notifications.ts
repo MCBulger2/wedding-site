@@ -1,6 +1,6 @@
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
-import { siteContent } from '@matt-alison-wedding/shared';
+import { SMS_HELP_STOP_NOTICE, siteContent } from '@matt-alison-wedding/shared';
 import type {
   Household,
   InvitationEmailResult,
@@ -159,7 +159,10 @@ export class AwsWeddingNotificationsClient
       throw new Error('Household does not have a contact mobile number');
     }
 
-    await this.sendTwilioSms(input.household.phone, input.message);
+    await this.sendTwilioSms(
+      input.household.phone,
+      appendSmsComplianceNotice(input.message),
+    );
 
     return {
       channel: 'sms',
@@ -522,11 +525,11 @@ export function buildRecoverySms({
   household,
   invitation,
 }: RecoveryMessageInput): string {
-  return [
+  return appendSmsComplianceNotice([
     `${household.displayName}: your private RSVP link for Matt & Alison's wedding:`,
     invitation.rsvpUrl,
     'Please do not forward this link.',
-  ].join(' ');
+  ].join(' '));
 }
 
 export function createNotifierFromEnvironment(): RsvpNotifier | undefined {
@@ -750,4 +753,15 @@ function readTwilioConfigFromEnvironment(): TwilioSmsConfig {
 
 function decodeSecretBinary(secretBinary: Uint8Array | undefined): string | undefined {
   return secretBinary ? Buffer.from(secretBinary).toString('utf8') : undefined;
+}
+
+function appendSmsComplianceNotice(message: string): string {
+  const trimmed = message.trim();
+  if (
+    trimmed.toLowerCase().includes(SMS_HELP_STOP_NOTICE.toLowerCase())
+  ) {
+    return trimmed;
+  }
+
+  return `${trimmed} ${SMS_HELP_STOP_NOTICE}`.trim();
 }

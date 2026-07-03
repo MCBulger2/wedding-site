@@ -106,6 +106,49 @@ describe('WeddingService', () => {
     expect((await repository.getHousehold('h1'))?.rsvpStatus).toBe('partial');
   });
 
+  it('records normalized SMS consent metadata when RSVP text consent is checked', async () => {
+    const { service, repository } = await createSeededService();
+
+    await service.updateRsvp(inviteCode, {
+      members: [
+        { memberId: 'h1-1', attending: true, mealChoice: 'chicken' },
+        { memberId: 'h1-2', attending: true, mealChoice: 'vegetarian' },
+      ],
+      plusOnes: [],
+      notes: '',
+      accessibilityNotes: '',
+      smsPhone: '(480) 555-0100',
+      smsConsentAccepted: true,
+    });
+
+    expect((await repository.getHousehold('h1'))).toMatchObject({
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_in',
+        phone: '+14805550100',
+        source: 'rsvp_form',
+        consentTextVersion: 'twilio-tollfree-v1',
+      },
+    });
+  });
+
+  it('does not create SMS consent when RSVP is saved without the checkbox', async () => {
+    const { service, repository } = await createSeededService();
+
+    await service.updateRsvp(inviteCode, {
+      members: [
+        { memberId: 'h1-1', attending: true, mealChoice: 'fish' },
+        { memberId: 'h1-2', attending: true, mealChoice: 'vegetarian' },
+      ],
+      plusOnes: [],
+      notes: '',
+      accessibilityNotes: '',
+      smsPhone: '(480) 555-0100',
+    });
+
+    expect((await repository.getHousehold('h1'))?.smsConsent).toBeUndefined();
+  });
+
   it('notifies admins after RSVP updates are persisted', async () => {
     const notifier = new RecordingNotifier();
     const { service, repository } = await createSeededService({}, notifier);
@@ -624,7 +667,10 @@ describe('WeddingService', () => {
   it('sends household SMS notifications to the saved mobile number', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
     const { service } = await createSeededService(
-      { phone: '+14805550100' },
+      {
+        phone: '+14805550100',
+        smsConsent: createSmsConsentRecord('+14805550100', 'rsvp_form'),
+      },
       undefined,
       householdMessenger,
     );
@@ -643,6 +689,27 @@ describe('WeddingService', () => {
       household: { phone: '+14805550100' },
       message: 'Ceremony starts at 3:00 PM.',
     });
+  });
+
+  it('rejects admin SMS notifications when a phone exists but consent is missing', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      { phone: '+14805550100' },
+      undefined,
+      householdMessenger,
+    );
+
+    await expect(
+      service.sendHouseholdNotification('h1', {
+        channel: 'sms',
+        message: 'Ceremony starts at 3:00 PM.',
+      }),
+    ).rejects.toMatchObject({
+      message: 'This household has not opted in to SMS updates',
+      statusCode: 422,
+    });
+
+    expect(householdMessenger.calls).toHaveLength(0);
   });
 
   it('rejects household notifications when the requested contact channel is missing', async () => {
@@ -723,7 +790,7 @@ describe('WeddingService', () => {
     );
 
     await service.requestRsvpRecovery(
-      { contact: '(480) 555-0100' },
+      { contact: '(480) 555-0100', smsConsentAccepted: true },
       {
         sourceIp: '203.0.113.10',
         baseUrl: 'https://wedding.example.com',
@@ -734,6 +801,40 @@ describe('WeddingService', () => {
     expect(householdMessenger.recoverySmsCalls[0].household.phone).toBe(
       '+14805550100',
     );
+    expect(householdMessenger.recoverySmsCalls[0].household.smsConsent).toMatchObject(
+      {
+        status: 'opted_in',
+        phone: '+14805550100',
+        source: 'recovery_form',
+      },
+    );
+  });
+
+  it('rejects phone recovery requests when SMS consent is not checked', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      { phone: '+14805550100' },
+      undefined,
+      householdMessenger,
+    );
+
+    await expect(
+      service.requestRsvpRecovery(
+        { contact: '(480) 555-0100' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      ),
+    ).rejects.toMatchObject({
+      message: 'Recovery contact is invalid',
+      statusCode: 422,
+      details: [
+        'smsConsentAccepted: Please confirm SMS consent before requesting a texted RSVP link.',
+      ],
+    });
+
+    expect(householdMessenger.recoverySmsCalls).toHaveLength(0);
   });
 
   it('skips archived or non-recoverable households while keeping the public recovery response generic', async () => {
@@ -920,6 +1021,19 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
       throw this.failure;
     }
   }
+}
+
+function createSmsConsentRecord(
+  phone: string,
+  source: 'rsvp_form' | 'recovery_form',
+) {
+  return {
+    status: 'opted_in' as const,
+    phone,
+    source,
+    consentedAt: '2026-07-03T20:00:00.000Z',
+    consentTextVersion: 'twilio-tollfree-v1' as const,
+  };
 }
 
 async function createSeededService(

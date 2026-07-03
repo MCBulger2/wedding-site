@@ -394,6 +394,7 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
     displayName: item.displayName,
     email: item.email,
     phone: item.phone,
+    smsConsent: item.smsConsent,
     mailingAddress: item.mailingAddress,
     members: item.members,
     maxPlusOnes: item.maxPlusOnes,

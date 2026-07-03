@@ -158,6 +158,44 @@ describe('RsvpLookupPage', () => {
     ).not.toBeNull();
   });
 
+  it('requires explicit SMS consent before phone recovery submits', async () => {
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
+    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
+      target: { value: '(480) 555-0100' },
+    });
+
+    expect(
+      await screen.findByText(/I agree to receive SMS messages from Matt & Alison Wedding/i),
+    ).not.toBeNull();
+    const consentCheckbox = screen.getByRole('checkbox');
+    expect((consentCheckbox as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send private RSVP link' }),
+    );
+
+    expect(recoverRsvpLink).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        'Please confirm SMS consent before requesting a texted RSVP link.',
+      ),
+    ).not.toBeNull();
+
+    fireEvent.click(consentCheckbox);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send private RSVP link' }),
+    );
+
+    await waitFor(() =>
+      expect(recoverRsvpLink).toHaveBeenCalledWith({
+        contact: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }),
+    );
+  });
+
   it('preserves the invitation-code submit flow', () => {
     render(<RsvpLookupPage />);
 
@@ -234,6 +272,29 @@ describe('RsvpPage', () => {
       ],
       accessibilityNotes: '',
     });
+  });
+
+  it('shows an unchecked SMS consent checkbox and updates the submit label when selected', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: 'The Example Household' });
+    expect(
+      screen.getByText(/I agree to receive SMS messages from Matt & Alison Wedding/i),
+    ).not.toBeNull();
+
+    const consentCheckbox = screen.getByRole('checkbox');
+    expect((consentCheckbox as HTMLInputElement).checked).toBe(false);
+    expect(
+      screen.getByRole('button', { name: 'Save RSVP' }),
+    ).not.toBeNull();
+
+    fireEvent.click(consentCheckbox);
+
+    expect(
+      screen.getByRole('button', { name: 'Save RSVP and text preferences' }),
+    ).not.toBeNull();
   });
 });
 

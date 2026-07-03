@@ -247,7 +247,9 @@ describe('notifications', () => {
 
     const body = fetchRecorder.requests[0].init.body as URLSearchParams;
     expect(body.get('To')).toBe('+14805550100');
-    expect(body.get('Body')).toBe('Please RSVP this week.');
+    expect(body.get('Body')).toBe(
+      'Please RSVP this week. Reply HELP for help or STOP to opt out.',
+    );
     expect(body.get('MessagingServiceSid')).toBe('MG123');
     expect(body.toString()).not.toContain('twilio-secret-value');
   });
@@ -285,6 +287,7 @@ describe('notifications', () => {
     expect(body.get('From')).toBe('+18005550100');
     expect(body.get('Body')).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(body.get('Body')).not.toContain('Invitation code');
+    expect(body.get('Body')).toContain('Reply HELP for help or STOP to opt out.');
   });
 
   it('fails SMS sends with a sanitized error when Twilio is incomplete', async () => {
