@@ -3,69 +3,171 @@ name: Deploy
 on:
   push:
     branches:
-      - develop
       - main
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      ref:
+        description: Branch, tag, or SHA to deploy. Production refs must be on main or a v* tag.
+        required: false
+        type: string
 
 permissions:
   contents: read
   id-token: write
 
-concurrency:
-  group: deploy-${{ github.ref_name }}
-  cancel-in-progress: true
-
 env:
-  APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-  API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
-  AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
-  FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
-  HOSTED_ZONE_DOMAIN: ${{ vars.HOSTED_ZONE_DOMAIN }}
-  ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-  NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
-  NOTIFICATION_RECIPIENT_EMAILS: ${{ vars.NOTIFICATION_RECIPIENT_EMAILS }}
-  OPERATIONS_ALERT_EMAILS: ${{ vars.OPERATIONS_ALERT_EMAILS }}
-  TWILIO_ACCOUNT_SID: ${{ vars.TWILIO_ACCOUNT_SID }}
-  TWILIO_API_KEY_SID: ${{ vars.TWILIO_API_KEY_SID }}
-  TWILIO_API_KEY_SECRET_ARN: ${{ vars.TWILIO_API_KEY_SECRET_ARN }}
-  TWILIO_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_MESSAGING_SERVICE_SID }}
-  TWILIO_FROM_PHONE_NUMBER: ${{ vars.TWILIO_FROM_PHONE_NUMBER }}
-  CONTACT_EMAIL_ADDRESS: ${{ vars.CONTACT_EMAIL_ADDRESS }}
-  CONTACT_FORWARDING_RECIPIENT_EMAIL: ${{ vars.CONTACT_FORWARDING_RECIPIENT_EMAIL }}
-  ENABLE_PASSKEYS: ${{ vars.ENABLE_PASSKEYS }}
-  DEPLOY_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+  NODE_VERSION: 24
 
 jobs:
-  verify:
+  resolve-deploy:
+    name: resolve-deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      target-environment: ${{ steps.resolve.outputs.target_environment }}
+      target-ref: ${{ steps.resolve.outputs.target_ref }}
+      target-sha: ${{ steps.resolve.outputs.target_sha }}
+      deploy-staging: ${{ steps.resolve.outputs.deploy_staging }}
+      deploy-production: ${{ steps.resolve.outputs.deploy_production }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            target_environment="staging"
+            target_ref="${GITHUB_REF_NAME}"
+          else
+            target_environment="${{ inputs.environment }}"
+            target_ref="${{ inputs.ref }}"
+            if [[ -z "${target_ref}" ]]; then
+              target_ref="${GITHUB_REF_NAME}"
+            fi
+          fi
+
+          case "${target_environment}" in
+            staging|production) ;;
+            *)
+              echo "::error::Unsupported deployment environment: ${target_environment}"
+              exit 1
+              ;;
+          esac
+
+          target_sha="$(git rev-parse HEAD)"
+          deploy_staging="true"
+          deploy_production="false"
+
+          if [[ "${target_environment}" == "production" ]]; then
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+              echo "::error::Production deploys must be started manually."
+              exit 1
+            fi
+
+            git fetch --no-tags origin main
+            release_tag="false"
+            if [[ "${target_ref}" == refs/tags/v* ]]; then
+              release_tag="true"
+            elif [[ "${target_ref}" == v* ]] && git show-ref --verify --quiet "refs/tags/${target_ref}"; then
+              release_tag="true"
+            fi
+
+            if [[ "${release_tag}" != "true" ]] && ! git merge-base --is-ancestor "${target_sha}" origin/main; then
+              echo "::error::Production deploy ref must resolve to a commit already on main or to a v* tag."
+              exit 1
+            fi
+
+            deploy_production="true"
+          fi
+
+          {
+            echo "target_environment=${target_environment}"
+            echo "target_ref=${target_ref}"
+            echo "target_sha=${target_sha}"
+            echo "deploy_staging=${deploy_staging}"
+            echo "deploy_production=${deploy_production}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "### Deployment target"
+            echo "- Environment: ${target_environment}"
+            echo "- Ref: ${target_ref}"
+            echo "- SHA: ${target_sha}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy-verify:
+    name: deploy-verify
+    needs: resolve-deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-deploy.outputs.target-sha }}
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build:deploy:${DEPLOY_ENV}
+      - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --project=chromium
-      - run: npm run synth -w infra -- -c envName=${DEPLOY_ENV}
 
-  deploy:
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
-    needs: verify
+  deploy-staging:
+    name: deploy-staging
+    needs:
+      - resolve-deploy
+      - deploy-verify
+    if: needs.resolve-deploy.outputs.deploy-staging == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    env:
+      APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
+      AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
+      FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
+      HOSTED_ZONE_DOMAIN: ${{ vars.HOSTED_ZONE_DOMAIN }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAILS: ${{ vars.NOTIFICATION_RECIPIENT_EMAILS }}
+      OPERATIONS_ALERT_EMAILS: ${{ vars.OPERATIONS_ALERT_EMAILS }}
+      TWILIO_ACCOUNT_SID: ${{ vars.TWILIO_ACCOUNT_SID }}
+      TWILIO_API_KEY_SID: ${{ vars.TWILIO_API_KEY_SID }}
+      TWILIO_API_KEY_SECRET_ARN: ${{ vars.TWILIO_API_KEY_SECRET_ARN }}
+      TWILIO_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_MESSAGING_SERVICE_SID }}
+      TWILIO_FROM_PHONE_NUMBER: ${{ vars.TWILIO_FROM_PHONE_NUMBER }}
+      CONTACT_EMAIL_ADDRESS: ${{ vars.CONTACT_EMAIL_ADDRESS }}
+      CONTACT_FORWARDING_RECIPIENT_EMAIL: ${{ vars.CONTACT_FORWARDING_RECIPIENT_EMAIL }}
+      ENABLE_PASSKEYS: ${{ vars.ENABLE_PASSKEYS }}
+      DEPLOY_ENV: staging
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-deploy.outputs.target-sha }}
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - uses: aws-actions/configure-aws-credentials@v6
@@ -74,3 +176,72 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - run: npm run check:cdk-bootstrap
       - run: npm run deploy:infra:${DEPLOY_ENV} -- --require-approval never
+      - name: Smoke test staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${FRONTEND_DOMAIN_NAME}" ]]; then
+            curl --fail --silent --show-error --retry 5 --retry-delay 10 "https://${FRONTEND_DOMAIN_NAME}/" > /dev/null
+          fi
+          if [[ -n "${API_DOMAIN_NAME}" ]]; then
+            curl --fail --silent --show-error --retry 5 --retry-delay 10 "https://${API_DOMAIN_NAME}/api/admin/auth/config" > /dev/null
+          fi
+
+  deploy-production:
+    name: deploy-production
+    needs:
+      - resolve-deploy
+      - deploy-verify
+      - deploy-staging
+    if: needs.resolve-deploy.outputs.deploy-production == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
+      AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
+      FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
+      HOSTED_ZONE_DOMAIN: ${{ vars.HOSTED_ZONE_DOMAIN }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      NOTIFICATION_SENDER_EMAIL: ${{ vars.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAILS: ${{ vars.NOTIFICATION_RECIPIENT_EMAILS }}
+      OPERATIONS_ALERT_EMAILS: ${{ vars.OPERATIONS_ALERT_EMAILS }}
+      TWILIO_ACCOUNT_SID: ${{ vars.TWILIO_ACCOUNT_SID }}
+      TWILIO_API_KEY_SID: ${{ vars.TWILIO_API_KEY_SID }}
+      TWILIO_API_KEY_SECRET_ARN: ${{ vars.TWILIO_API_KEY_SECRET_ARN }}
+      TWILIO_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_MESSAGING_SERVICE_SID }}
+      TWILIO_FROM_PHONE_NUMBER: ${{ vars.TWILIO_FROM_PHONE_NUMBER }}
+      CONTACT_EMAIL_ADDRESS: ${{ vars.CONTACT_EMAIL_ADDRESS }}
+      CONTACT_FORWARDING_RECIPIENT_EMAIL: ${{ vars.CONTACT_FORWARDING_RECIPIENT_EMAIL }}
+      ENABLE_PASSKEYS: ${{ vars.ENABLE_PASSKEYS }}
+      DEPLOY_ENV: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-deploy.outputs.target-sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: npm run check:cdk-bootstrap
+      - run: npm run deploy:infra:${DEPLOY_ENV} -- --require-approval never
+      - name: Smoke test production
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${FRONTEND_DOMAIN_NAME}" ]]; then
+            curl --fail --silent --show-error --retry 5 --retry-delay 10 "https://${FRONTEND_DOMAIN_NAME}/" > /dev/null
+          fi
+          if [[ -n "${API_DOMAIN_NAME}" ]]; then
+            curl --fail --silent --show-error --retry 5 --retry-delay 10 "https://${API_DOMAIN_NAME}/api/admin/auth/config" > /dev/null
+          fi

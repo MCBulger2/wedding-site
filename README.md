@@ -1,7 +1,7 @@
 # Matt and Alison Wedding Website
 
-[![develop](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml/badge.svg?branch=develop)](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml)
-[![main](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml)
+[![CI](https://github.com/MCBulger2/wedding-site/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MCBulger2/wedding-site/actions/workflows/ci.yml)
+[![Deploy](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/MCBulger2/wedding-site/actions/workflows/deploy.yml)
 
 This repository will contain the wedding announcement and RSVP website for Matt and Alison's 2027 wedding.
 
@@ -113,7 +113,9 @@ Production resources use retain policies where appropriate, so a production dest
 
 ## Deployment Overview
 
-Production should be deployed through GitHub Actions after required checks pass. The deployment should synthesize and deploy CDK stacks for:
+The repository uses `main` as the only long-lived branch. Feature pull requests target `main`; after a merge, GitHub Actions automatically deploys that commit to staging. Production is promoted manually by running the Deploy workflow from `main`, choosing `environment=production`, and, when needed, setting `ref` to a `main` SHA or `v*` tag. The workflow deploys the selected source to staging first, then waits on the production GitHub environment before deploying production.
+
+Deployment should synthesize and deploy CDK stacks for:
 
 - Route 53 DNS records.
 - ACM certificates for HTTPS.
@@ -128,7 +130,7 @@ Production should be deployed through GitHub Actions after required checks pass.
 - CloudWatch dashboard and alarms for API, Lambda, DynamoDB, CloudFront, and optional WAF/contact-forwarding signals.
 - A us-east-1 edge observability stack for CloudFront alarms, because CloudFront metrics are global.
 
-Use separate staging and production environments so risky changes can be tested before guests use the site.
+Use separate staging and production AWS/GitHub environments so risky changes can be tested before guests use the site.
 
 The deploy workflow expects these GitHub environment settings:
 
