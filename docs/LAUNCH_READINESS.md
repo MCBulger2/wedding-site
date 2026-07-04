@@ -6,7 +6,7 @@ This project now has code support for the remaining launch phases. The items bel
 
 Deployment settings are intentionally split between committed safe defaults and untracked or CI-provided environment values.
 
-- `infra/config/deployment-config.ts` keeps deployable fallback values only: app region, localhost CORS origins, no custom domains, no notification recipients, and passkeys enabled.
+- `infra/config/deployment-config.ts` keeps deployable fallback values only: app region, no custom domains, no committed extra CORS origins, no notification recipients, passkeys enabled, staging local browser trust enabled, and production local browser trust disabled.
 - Local deploys load `.env`, `.env.local`, `.env.<environment>`, and `.env.<environment>.local` before build and CDK synth.
 - GitHub Actions deploys use GitHub environment variables and secrets instead of committed `.env` files.
 
@@ -25,7 +25,7 @@ cp .env.staging.example .env.staging.local
 cp .env.production.example .env.production.local
 ```
 
-The local files should contain the real domain, hosted zone, API domain, auth domain, CORS origins, SES sender, notification recipients, Twilio SMS identifiers, and passkey setting. They are ignored by Git and must stay out of source control. Store the Twilio API key secret value in AWS Secrets Manager and put only its secret ARN in local or CI configuration.
+The local files should contain the real domain, hosted zone, API domain, auth domain, any additional trusted browser origins, SES sender, notification recipients, Twilio SMS identifiers, passkey setting, and the local-browser-trust flag when needed. They are ignored by Git and must stay out of source control. Store the Twilio API key secret value in AWS Secrets Manager and put only its secret ARN in local or CI configuration.
 
 Use CDK context values only when you need to override those defaults:
 
@@ -36,6 +36,7 @@ npm run deploy:infra:staging -- \
   -c apiDomainName=api.staging.matt-alison.com \
   -c authDomainName=login.staging.matt-alison.com \
   -c allowedOrigins=https://staging.matt-alison.com \
+  -c enableLocalBrowserTrust=true \
   -c notificationSenderEmail=staging-rsvp@matt-alison.com \
   -c notificationRecipientEmails=admin@example.com
 
@@ -56,6 +57,8 @@ npm run deploy:infra:production -- \
 ```
 
 `domainName` is still accepted as a shorthand for the frontend domain, but `frontendDomainName` is clearer for production.
+
+Loopback origins such as `http://localhost:5173` and `http://127.0.0.1:5173` are rejected unless `enableLocalBrowserTrust` or `ENABLE_LOCAL_BROWSER_TRUST` is set to `true`. Production should normally leave local browser trust disabled.
 
 ## SES Verification
 
@@ -102,4 +105,4 @@ Before printing invitations:
 - Verify lost-code recovery email and SMS messages only include the private RSVP link, are sent only to stored household contacts, and do not include a separate plaintext invite-code field.
 - Confirm invite codes are stored only as hashes and KMS-encrypted ciphertext, not raw plaintext DynamoDB attributes or logs.
 - Verify admin dashboard login, household editing, archive behavior, invitation CSV export, RSVP CSV export, and SPA routing.
-- Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, DynamoDB PITR, KMS key access, CloudWatch retention, and Secrets Manager invite-code pepper.
+- Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, local-browser-trust defaults, DynamoDB PITR, KMS key access, CloudWatch retention, and Secrets Manager invite-code pepper.

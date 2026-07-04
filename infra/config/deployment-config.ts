@@ -4,6 +4,7 @@ export interface DeploymentConfig {
   frontendDomainName?: string;
   apiDomainName?: string;
   authDomainName?: string;
+  enableLocalBrowserTrust: boolean;
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
@@ -21,14 +22,16 @@ export interface DeploymentConfig {
 export const deploymentConfigs: Record<string, DeploymentConfig> = {
   staging: {
     appRegion: 'us-west-1',
-    allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    enableLocalBrowserTrust: true,
+    allowedOrigins: [],
     notificationRecipientEmails: [],
     operationsAlertEmails: [],
     enablePasskeys: true,
   },
   production: {
     appRegion: 'us-west-1',
-    allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    enableLocalBrowserTrust: false,
+    allowedOrigins: [],
     notificationRecipientEmails: [],
     operationsAlertEmails: [],
     enablePasskeys: true,
