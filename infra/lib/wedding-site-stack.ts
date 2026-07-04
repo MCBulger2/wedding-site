@@ -298,27 +298,25 @@ export class WeddingSiteStack extends Stack {
       integration: apiIntegration,
     });
 
-    const apiDefaultStage = api.defaultStage?.node.defaultChild as apigwv2.CfnStage | undefined;
-    if (apiDefaultStage) {
-      apiDefaultStage.defaultRouteSettings = {
-        throttlingBurstLimit: 100,
-        throttlingRateLimit: 50,
-      };
-      apiDefaultStage.routeSettings = {
-        'GET /api/rsvp/{inviteCode}': {
-          throttlingBurstLimit: 20,
-          throttlingRateLimit: 10,
-        },
-        'PUT /api/rsvp/{inviteCode}': {
-          throttlingBurstLimit: 10,
-          throttlingRateLimit: 5,
-        },
-        'POST /api/rsvp/recovery': {
-          throttlingBurstLimit: 5,
-          throttlingRateLimit: 2,
-        },
-      };
-    }
+    defaultApiStage.defaultRouteSettings = {
+      throttlingBurstLimit: 100,
+      throttlingRateLimit: 50,
+    };
+    // CfnStage routeSettings values must use CloudFormation's PascalCase keys.
+    defaultApiStage.addPropertyOverride('RouteSettings', {
+      'GET /api/rsvp/{inviteCode}': {
+        ThrottlingBurstLimit: 20,
+        ThrottlingRateLimit: 10,
+      },
+      'PUT /api/rsvp/{inviteCode}': {
+        ThrottlingBurstLimit: 10,
+        ThrottlingRateLimit: 5,
+      },
+      'POST /api/rsvp/recovery': {
+        ThrottlingBurstLimit: 5,
+        ThrottlingRateLimit: 2,
+      },
+    });
 
     const siteBucket = new s3.Bucket(this, 'FrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
