@@ -216,6 +216,11 @@ export class WeddingSiteStack extends Stack {
       removalPolicy,
     });
 
+    const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogGroup', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy,
+    });
+
     const apiHandler = new lambdaNode.NodejsFunction(this, 'ApiHandler', {
       entry: path.join(repoRoot, 'apps/api/src/handler.ts'),
       environment: {
@@ -302,6 +307,11 @@ export class WeddingSiteStack extends Stack {
     const defaultApiStage = new apigwv2.CfnStage(api, 'DefaultStage', {
       apiId: api.apiId,
       autoDeploy: true,
+      accessLogSettings: {
+        destinationArn: apiAccessLogGroup.logGroupArn,
+        format:
+          '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLatency":"$context.responseLatency","integrationLatency":"$context.integrationLatency","protocol":"$context.protocol","responseLength":"$context.responseLength"}',
+      },
       stageName: defaultApiStageName,
     });
     // Preserve the logical ID of the previous HttpApi auto-created stage.
@@ -962,6 +972,7 @@ export class WeddingSiteStack extends Stack {
       apiStage: defaultHttpStage,
       apiHandler,
       apiHandlerLogGroup,
+      apiAccessLogGroup,
       table,
       distribution,
       contactForwarder,
@@ -990,6 +1001,7 @@ interface ObservabilityConfig {
   apiStage: apigwv2.IHttpStage;
   apiHandler: lambda.IFunction;
   apiHandlerLogGroup: logs.ILogGroup;
+  apiAccessLogGroup: logs.ILogGroup;
   table: dynamodb.ITable;
   distribution: cloudfront.IDistribution;
   contactForwarder?: lambda.IFunction;
@@ -1300,6 +1312,50 @@ function createObservability(
       width: 12,
       height: 6,
     }),
+    createRequestTimelineLogQueryWidget(
+      'API Request Timeline',
+      config.apiAccessLogGroup.logGroupName,
+    ),
+    createLogQueryWidget(
+      'Recent API Application Events',
+      config.apiHandlerLogGroup.logGroupName,
+      [
+        'fields @timestamp, event, level, message',
+        'filter ispresent(event)',
+        'sort @timestamp desc',
+        'limit 20',
+      ],
+    ),
+    createLogQueryWidget(
+      'Public RSVP And Recovery Activity',
+      config.apiHandlerLogGroup.logGroupName,
+      [
+        'fields @timestamp, event, level, message, householdId, contactKind, outcome',
+        'filter event like /^rsvp\\./ or event like /^recovery\\./',
+        'sort @timestamp desc',
+        'limit 20',
+      ],
+    ),
+    createLogQueryWidget(
+      'Admin Activity',
+      config.apiHandlerLogGroup.logGroupName,
+      [
+        'fields @timestamp, event, level, message, householdId, outcome',
+        'filter event like /^admin\\./ or event like /^invitation\\./',
+        'sort @timestamp desc',
+        'limit 20',
+      ],
+    ),
+    createLogQueryWidget(
+      'Notification Delivery',
+      config.apiHandlerLogGroup.logGroupName,
+      [
+        'fields @timestamp, event, level, message, householdId, channel, provider, outcome',
+        'filter event like /^notification\\./ or event like /^invitation\\./ or event like /^recovery\\.delivery\\./',
+        'sort @timestamp desc',
+        'limit 20',
+      ],
+    ),
     createErrorLogQueryWidget(
       'Recent API Errors',
       config.apiHandlerLogGroup.logGroupName,
@@ -1330,6 +1386,16 @@ function createObservability(
         width: 12,
         height: 6,
       }),
+      createLogQueryWidget(
+        'Contact Forwarding Activity',
+        config.contactForwarderLogGroup.logGroupName,
+        [
+          'fields @timestamp, event, level, message, bucketName, objectKey, messageId, processedCount',
+          'filter event like /^contact\\./ or @message like /Forwarded contact email/',
+          'sort @timestamp desc',
+          'limit 20',
+        ],
+      ),
       createErrorLogQueryWidget(
         'Recent Contact Forwarder Errors',
         config.contactForwarderLogGroup.logGroupName,
@@ -1439,23 +1505,48 @@ function publicRsvpWafMetric(
   });
 }
 
-function createErrorLogQueryWidget(
+function createLogQueryWidget(
   title: string,
   logGroupName: string,
+  queryLines: string[],
+  view: cloudwatch.LogQueryVisualizationType = cloudwatch.LogQueryVisualizationType.TABLE,
 ): cloudwatch.LogQueryWidget {
   return new cloudwatch.LogQueryWidget({
     title,
     logGroupNames: [logGroupName],
-    queryLines: [
-      'fields @timestamp, @message',
-      'filter @message like /ERROR|Error|error|Exception|exception|Task timed out|Failed|failed/',
-      'sort @timestamp desc',
-      'limit 20',
-    ],
-    view: cloudwatch.LogQueryVisualizationType.TABLE,
+    queryLines,
+    view,
     width: 24,
     height: 6,
   });
+}
+
+function createRequestTimelineLogQueryWidget(
+  title: string,
+  logGroupName: string,
+): cloudwatch.LogQueryWidget {
+  return createLogQueryWidget(
+    title,
+    logGroupName,
+    [
+      'fields @timestamp, routeKey, status, responseLatency, integrationLatency, protocol, responseLength',
+      'stats count(*) as requests, avg(responseLatency) as avgResponseLatency, avg(integrationLatency) as avgIntegrationLatency by bin(5m)',
+      'sort bin(5m) desc',
+    ],
+    cloudwatch.LogQueryVisualizationType.LINE,
+  );
+}
+
+function createErrorLogQueryWidget(
+  title: string,
+  logGroupName: string,
+): cloudwatch.LogQueryWidget {
+  return createLogQueryWidget(title, logGroupName, [
+    'fields @timestamp, event, level, message, errorName, errorType, errorMessage',
+    'filter level = "error" or @message like /ERROR|Error|error|Exception|exception|Task timed out|Failed|failed/',
+    'sort @timestamp desc',
+    'limit 20',
+  ]);
 }
 function buildAllowedOrigins(
   configuredOrigins: string[],

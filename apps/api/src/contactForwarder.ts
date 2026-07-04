@@ -1,6 +1,7 @@
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import type { S3Event } from 'aws-lambda';
+import { describeError, getErrorStatusCode, logStructured } from './logger.js';
 
 export interface ContactForwardingConfig {
   contactEmailAddress?: string;
@@ -46,51 +47,94 @@ export async function forwardContactEmails(
     dependencies.config.forwardingRecipientEmail?.trim();
 
   if (!contactEmailAddress || !forwardingRecipientEmail) {
+    logStructured({
+      level: 'error',
+      event: 'contact.forwarding.configMissing',
+      message: 'Contact forwarding configuration is missing',
+      outcome: 'failed',
+    });
     throw new Error(missingConfigMessage);
   }
 
+  logStructured({
+    level: 'info',
+    event: 'contact.forwarding.started',
+    message: 'Contact forwarding started',
+    recordCount: event.Records.length,
+  });
+
+  let processedCount = 0;
   for (const record of event.Records) {
     const bucketName = record.s3.bucket.name;
     const objectKey = decodeS3ObjectKey(record.s3.object.key);
-    const rawMessage = await readS3ObjectAsString(
-      dependencies.s3Client,
-      bucketName,
-      objectKey,
-    );
-    const email = buildForwardedContactEmail(rawMessage);
+    try {
+      const rawMessage = await readS3ObjectAsString(
+        dependencies.s3Client,
+        bucketName,
+        objectKey,
+      );
+      const email = buildForwardedContactEmail(rawMessage);
 
-    await dependencies.sesClient.send(
-      new SendEmailCommand({
-        FromEmailAddress: contactEmailAddress,
-        Destination: {
-          ToAddresses: [forwardingRecipientEmail],
-        },
-        ReplyToAddresses: email.replyToAddress
-          ? [email.replyToAddress]
-          : undefined,
-        Content: {
-          Simple: {
-            Subject: {
-              Charset: 'UTF-8',
-              Data: email.subject,
-            },
-            Body: {
-              Text: {
+      await dependencies.sesClient.send(
+        new SendEmailCommand({
+          FromEmailAddress: contactEmailAddress,
+          Destination: {
+            ToAddresses: [forwardingRecipientEmail],
+          },
+          ReplyToAddresses: email.replyToAddress
+            ? [email.replyToAddress]
+            : undefined,
+          Content: {
+            Simple: {
+              Subject: {
                 Charset: 'UTF-8',
-                Data: email.text,
+                Data: email.subject,
+              },
+              Body: {
+                Text: {
+                  Charset: 'UTF-8',
+                  Data: email.text,
+                },
               },
             },
           },
-        },
-      }),
-    );
+        }),
+      );
 
-    console.log('Forwarded contact email', {
-      bucketName,
-      objectKey,
-      messageId: email.messageId,
-    });
+      processedCount += 1;
+      logStructured({
+        level: 'info',
+        event: 'contact.forwarded',
+        message: 'Contact email forwarded',
+        outcome: 'success',
+        bucketName,
+        objectKey,
+        messageId: email.messageId,
+        processedCount,
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'contact.forwarding.failed',
+        message: 'Contact email forwarding failed',
+        outcome: 'failed',
+        bucketName,
+        objectKey,
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
   }
+
+  logStructured({
+    level: 'info',
+    event: 'contact.forwarding.completed',
+    message: 'Contact forwarding completed',
+    outcome: 'success',
+    recordCount: event.Records.length,
+    processedCount,
+  });
 }
 
 export function buildForwardedContactEmail(rawMessage: string): ForwardedEmail {

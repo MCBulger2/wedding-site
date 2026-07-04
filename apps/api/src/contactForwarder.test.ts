@@ -1,13 +1,25 @@
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { SendEmailCommand } from '@aws-sdk/client-sesv2';
 import type { S3Event } from 'aws-lambda';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildForwardedContactEmail,
   forwardContactEmails,
 } from './contactForwarder.js';
 
 describe('contactForwarder', () => {
+  let consoleLog: ReturnType<typeof vi.spyOn>;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('forwards contact email to the configured recipient with Reply-To', async () => {
     const s3Client = new RecordingS3Client(
       [
@@ -52,6 +64,21 @@ describe('contactForwarder', () => {
     expect(simple?.Body?.Text?.Data).toContain(
       'Can you confirm the hotel block code?',
     );
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        event: 'contact.forwarded',
+        bucketName: 'contact-bucket',
+        objectKey: 'inbound/contact-1.eml',
+        outcome: 'success',
+      }),
+    );
+    const serialized = JSON.stringify(logs);
+    expect(serialized).not.toContain('guest@example.com');
+    expect(serialized).not.toContain('Hotel question');
+    expect(serialized).not.toContain('Can you confirm the hotel block code?');
+    expect(serialized).not.toContain('matt.alison.2020@gmail.com');
   });
 
   it('handles malformed or missing headers without setting Reply-To', async () => {
@@ -77,6 +104,13 @@ describe('contactForwarder', () => {
       }),
     ).rejects.toThrow(
       'CONTACT_EMAIL_ADDRESS and CONTACT_FORWARDING_RECIPIENT_EMAIL must be configured',
+    );
+    expect(parseConsoleJson(consoleError)).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        event: 'contact.forwarding.configMissing',
+        outcome: 'failed',
+      }),
     );
   });
 });
@@ -120,4 +154,8 @@ function createS3Event(objectKey: string): S3Event {
       },
     ],
   } as S3Event;
+}
+
+function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+  return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }

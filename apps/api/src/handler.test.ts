@@ -9,12 +9,18 @@ const acceptedRecoveryResponse = {
 };
 
 describe('handleRequest', () => {
+  let consoleLog: ReturnType<typeof vi.spyOn>;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.stubEnv('FRONTEND_BASE_URL', 'https://frontend.example.com');
+    consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it('returns 422 for invalid recovery contact input', async () => {
@@ -177,6 +183,78 @@ describe('handleRequest', () => {
       smsPhone: '(480) 555-0100',
       smsConsentAccepted: true,
     });
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        event: 'api.request.completed',
+        routeName: 'PUT /rsvp/{inviteCode}',
+        method: 'PUT',
+        statusCode: 200,
+        isAdminRoute: false,
+      }),
+    );
+    expect(JSON.stringify(logs)).not.toContain('A2B3C4D5E6');
+    expect(JSON.stringify(logs)).not.toContain('(480) 555-0100');
+    expect(JSON.stringify(logs)).not.toContain('203.0.113.10');
+  });
+
+  it('logs public request errors without raw request details', async () => {
+    vi.stubEnv('FRONTEND_BASE_URL', '');
+    const requestRsvpRecovery = vi.fn(async () => acceptedRecoveryResponse);
+    const service = createServiceDouble({ requestRsvpRecovery });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/recovery', 'POST', {
+        contact: 'guest@example.com',
+      }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(503);
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        event: 'api.request.publicError',
+        routeName: 'POST /rsvp/recovery',
+        statusCode: 503,
+      }),
+    );
+    expect(JSON.stringify(logs)).not.toContain('guest@example.com');
+    expect(JSON.stringify(logs)).not.toContain('203.0.113.10');
+  });
+
+  it('logs internal request errors with redacted error details', async () => {
+    const getRsvp = vi.fn(async () => {
+      throw new Error(
+        'Database failed for guest@example.com and https://wedding.example.com/rsvp/A2B3C4D5E6',
+      );
+    });
+    const service = createServiceDouble({ getRsvp });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/A2B3C4D5E6', 'GET'),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(500);
+    const errorLogs = parseConsoleJson(consoleError);
+    expect(errorLogs).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        event: 'api.request.failed',
+        routeName: 'GET /rsvp/{inviteCode}',
+        statusCode: 500,
+        errorName: 'Error',
+      }),
+    );
+    const serialized = JSON.stringify(errorLogs);
+    expect(serialized).toContain('errorStack');
+    expect(serialized).not.toContain('guest@example.com');
+    expect(serialized).not.toContain('/rsvp/A2B3C4D5E6');
   });
 
   it('returns the same generic accepted shape for no-match recovery requests', async () => {
@@ -367,4 +445,8 @@ function createServiceDouble(
     removeHouseholdMember: notUsed,
     ...overrides,
   };
+}
+
+function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+  return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }

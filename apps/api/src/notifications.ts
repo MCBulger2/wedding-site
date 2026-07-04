@@ -9,6 +9,7 @@ import type {
   SendHouseholdNotificationResponse,
   StoredRsvp,
 } from '@matt-alison-wedding/shared';
+import { describeError, getErrorStatusCode, logStructured } from './logger.js';
 
 export interface RsvpNotificationInput {
   household: Household;
@@ -58,6 +59,16 @@ export interface TwilioSmsConfig {
   fromPhoneNumber?: string;
 }
 
+class NotificationProviderError extends Error {
+  constructor(
+    message: string,
+    readonly provider: 'ses' | 'twilio',
+    readonly statusCode?: number,
+  ) {
+    super(message);
+  }
+}
+
 export class AwsWeddingNotificationsClient
   implements RsvpNotifier, HouseholdMessenger
 {
@@ -80,33 +91,54 @@ export class AwsWeddingNotificationsClient
     }
 
     const email = buildRsvpNotificationEmail(input, this.config.adminDashboardUrl);
-
-    await this.sesClient.send(
-      new SendEmailCommand({
-        FromEmailAddress: this.config.senderEmail,
-        Destination: {
-          ToAddresses: this.config.recipientEmails,
-        },
-        Content: {
-          Simple: {
-            Subject: {
-              Charset: 'UTF-8',
-              Data: email.subject,
-            },
-            Body: {
-              Text: {
+    try {
+      await this.sesClient.send(
+        new SendEmailCommand({
+          FromEmailAddress: this.config.senderEmail,
+          Destination: {
+            ToAddresses: this.config.recipientEmails,
+          },
+          Content: {
+            Simple: {
+              Subject: {
                 Charset: 'UTF-8',
-                Data: email.text,
+                Data: email.subject,
               },
-              Html: {
-                Charset: 'UTF-8',
-                Data: email.html,
+              Body: {
+                Text: {
+                  Charset: 'UTF-8',
+                  Data: email.text,
+                },
+                Html: {
+                  Charset: 'UTF-8',
+                  Data: email.html,
+                },
               },
             },
           },
-        },
-      }),
-    );
+        }),
+      );
+      logStructured({
+        level: 'info',
+        event: 'notification.rsvpAdmin.completed',
+        message: 'RSVP admin notification delivered',
+        householdId: input.household.householdId,
+        outcome: 'success',
+        provider: 'ses',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'notification.rsvpAdmin.failed',
+        message: 'RSVP admin notification failed',
+        householdId: input.household.householdId,
+        outcome: 'failed',
+        provider: 'ses',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
   }
 
   async sendHouseholdNotification(
@@ -122,6 +154,112 @@ export class AwsWeddingNotificationsClient
 
       const email = buildHouseholdNotificationEmail(input, this.config.publicWebsiteUrl);
 
+      try {
+        await this.sesClient.send(
+          new SendEmailCommand({
+            FromEmailAddress: this.config.senderEmail,
+            Destination: {
+              ToAddresses: [input.household.email],
+            },
+            Content: {
+              Simple: {
+                Subject: {
+                  Charset: 'UTF-8',
+                  Data: email.subject,
+                },
+                Body: {
+                  Text: {
+                    Charset: 'UTF-8',
+                    Data: email.text,
+                  },
+                  Html: {
+                    Charset: 'UTF-8',
+                    Data: email.html,
+                  },
+                },
+              },
+            },
+          }),
+        );
+        logStructured({
+          level: 'info',
+          event: 'notification.household.deliveryCompleted',
+          message: 'Household notification delivered',
+          householdId: input.household.householdId,
+          channel: 'email',
+          outcome: 'success',
+          provider: 'ses',
+        });
+      } catch (error) {
+        logStructured({
+          level: 'error',
+          event: 'notification.household.deliveryFailed',
+          message: 'Household notification failed',
+          householdId: input.household.householdId,
+          channel: 'email',
+          outcome: 'failed',
+          provider: 'ses',
+          statusCode: getErrorStatusCode(error),
+          ...describeError(error),
+        });
+        throw error;
+      }
+
+      return {
+        channel: 'email',
+        deliveredTo: input.household.email,
+      };
+    }
+
+    if (!input.household.phone) {
+      throw new Error('Household does not have a contact mobile number');
+    }
+
+    try {
+      await this.sendTwilioSms(
+        input.household.phone,
+        appendSmsComplianceNotice(input.message),
+      );
+      logStructured({
+        level: 'info',
+        event: 'notification.household.deliveryCompleted',
+        message: 'Household notification delivered',
+        householdId: input.household.householdId,
+        channel: 'sms',
+        outcome: 'success',
+        provider: 'twilio',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'notification.household.deliveryFailed',
+        message: 'Household notification failed',
+        householdId: input.household.householdId,
+        channel: 'sms',
+        outcome: 'failed',
+        provider: 'twilio',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
+
+    return {
+      channel: 'sms',
+      deliveredTo: input.household.phone,
+    };
+  }
+
+  async sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult> {
+    if (!this.config.senderEmail) {
+      throw new Error('Email notifications are not configured');
+    }
+    if (!input.household.email) {
+      throw new Error('Household does not have a contact email address');
+    }
+
+    const email = buildInvitationEmail(input);
+    try {
       await this.sesClient.send(
         new SendEmailCommand({
           FromEmailAddress: this.config.senderEmail,
@@ -148,63 +286,29 @@ export class AwsWeddingNotificationsClient
           },
         }),
       );
-
-      return {
+      logStructured({
+        level: 'info',
+        event: 'invitation.email.deliveryCompleted',
+        message: 'Invitation email delivered',
+        householdId: input.household.householdId,
         channel: 'email',
-        deliveredTo: input.household.email,
-      };
+        outcome: 'success',
+        provider: 'ses',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'invitation.email.deliveryFailed',
+        message: 'Invitation email failed',
+        householdId: input.household.householdId,
+        channel: 'email',
+        outcome: 'failed',
+        provider: 'ses',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
     }
-
-    if (!input.household.phone) {
-      throw new Error('Household does not have a contact mobile number');
-    }
-
-    await this.sendTwilioSms(
-      input.household.phone,
-      appendSmsComplianceNotice(input.message),
-    );
-
-    return {
-      channel: 'sms',
-      deliveredTo: input.household.phone,
-    };
-  }
-
-  async sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult> {
-    if (!this.config.senderEmail) {
-      throw new Error('Email notifications are not configured');
-    }
-    if (!input.household.email) {
-      throw new Error('Household does not have a contact email address');
-    }
-
-    const email = buildInvitationEmail(input);
-    await this.sesClient.send(
-      new SendEmailCommand({
-        FromEmailAddress: this.config.senderEmail,
-        Destination: {
-          ToAddresses: [input.household.email],
-        },
-        Content: {
-            Simple: {
-              Subject: {
-                Charset: 'UTF-8',
-                Data: email.subject,
-              },
-              Body: {
-                Text: {
-                  Charset: 'UTF-8',
-                  Data: email.text,
-                },
-                Html: {
-                  Charset: 'UTF-8',
-                  Data: email.html,
-                },
-              },
-            },
-        },
-      }),
-    );
 
     return {
       householdId: input.household.householdId,
@@ -224,32 +328,56 @@ export class AwsWeddingNotificationsClient
     }
 
     const email = buildRecoveryEmail(input);
-    await this.sesClient.send(
-      new SendEmailCommand({
-        FromEmailAddress: this.config.senderEmail,
-        Destination: {
-          ToAddresses: [input.household.email],
-        },
-        Content: {
-          Simple: {
-            Subject: {
-              Charset: 'UTF-8',
-              Data: email.subject,
-            },
-            Body: {
-              Text: {
+    try {
+      await this.sesClient.send(
+        new SendEmailCommand({
+          FromEmailAddress: this.config.senderEmail,
+          Destination: {
+            ToAddresses: [input.household.email],
+          },
+          Content: {
+            Simple: {
+              Subject: {
                 Charset: 'UTF-8',
-                Data: email.text,
+                Data: email.subject,
               },
-              Html: {
-                Charset: 'UTF-8',
-                Data: email.html,
+              Body: {
+                Text: {
+                  Charset: 'UTF-8',
+                  Data: email.text,
+                },
+                Html: {
+                  Charset: 'UTF-8',
+                  Data: email.html,
+                },
               },
             },
           },
-        },
-      }),
-    );
+        }),
+      );
+      logStructured({
+        level: 'info',
+        event: 'recovery.delivery.completed',
+        message: 'Recovery email delivered',
+        householdId: input.household.householdId,
+        channel: 'email',
+        outcome: 'success',
+        provider: 'ses',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'recovery.delivery.failed',
+        message: 'Recovery email failed',
+        householdId: input.household.householdId,
+        channel: 'email',
+        outcome: 'failed',
+        provider: 'ses',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
   }
 
   async sendRecoverySms(input: RecoveryMessageInput): Promise<void> {
@@ -257,7 +385,31 @@ export class AwsWeddingNotificationsClient
       throw new Error('Household does not have a contact mobile number');
     }
 
-    await this.sendTwilioSms(input.household.phone, buildRecoverySms(input));
+    try {
+      await this.sendTwilioSms(input.household.phone, buildRecoverySms(input));
+      logStructured({
+        level: 'info',
+        event: 'recovery.delivery.completed',
+        message: 'Recovery SMS delivered',
+        householdId: input.household.householdId,
+        channel: 'sms',
+        outcome: 'success',
+        provider: 'twilio',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'recovery.delivery.failed',
+        message: 'Recovery SMS failed',
+        householdId: input.household.householdId,
+        channel: 'sms',
+        outcome: 'failed',
+        provider: 'twilio',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
   }
 
   private async sendTwilioSms(to: string, body: string): Promise<void> {
@@ -295,7 +447,11 @@ export class AwsWeddingNotificationsClient
     );
 
     if (!response.ok) {
-      throw new Error(`SMS notification delivery failed with status ${response.status}`);
+      throw new NotificationProviderError(
+        'SMS notification delivery failed',
+        'twilio',
+        response.status,
+      );
     }
   }
 
