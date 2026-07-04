@@ -227,7 +227,7 @@ export function AdminPage() {
   const [qrCodeStatus, setQrCodeStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
-  const pendingBulkActionRef = useRef<BulkAdminAction | undefined>();
+  const pendingBulkActionRef = useRef<BulkAdminAction | undefined>(undefined);
   const qrCodeRequestId = useRef(0);
 
   const load = async (
