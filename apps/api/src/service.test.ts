@@ -787,6 +787,26 @@ describe('WeddingService', () => {
     expect(householdMessenger.recoveryEmailCalls).toHaveLength(0);
   });
 
+  it('delivers the first recovery request within a fresh rate-limit window', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    const response = await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(response.accepted).toBe(true);
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(1);
+  });
+
   it('sends recovery emails for matching eligible households', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
     const { service } = await createSeededService(
@@ -963,6 +983,168 @@ describe('WeddingService', () => {
         },
       );
     }
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
+  });
+
+  it('blocks recovery only after the contact limit boundary is crossed', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await service.requestRsvpRecovery(
+        { contact: 'sam@example.com' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+    }
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
+
+    await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
+  });
+
+  it('blocks recovery after the ip limit boundary is crossed', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    for (let index = 2; index <= 11; index += 1) {
+      const uniqueInviteCode = `invite-code-${index}`;
+      const household: Household = {
+        householdId: `h${index}`,
+        displayName: `Household ${index}`,
+        email: `guest${index}@example.com`,
+        members: [
+          {
+            id: `h${index}-1`,
+            firstName: `Guest${index}`,
+            lastName: 'Example',
+            canBringPlusOne: false,
+          },
+        ],
+        maxPlusOnes: 0,
+        rsvpStatus: 'not_started',
+        inviteLifecycleStatus: 'generated',
+        inviteCodeHash: hashInviteCode(uniqueInviteCode, pepper),
+        inviteCodeGeneratedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await repository.saveHousehold(household);
+      await repository.saveInviteCodeLookup({
+        householdId: household.householdId,
+        inviteCodeHash: household.inviteCodeHash!,
+        createdAt: new Date().toISOString(),
+      });
+      await repository.saveInviteCodeSecret({
+        householdId: household.householdId,
+        inviteCodeHash: household.inviteCodeHash!,
+        inviteCodeCiphertext: await new Base64InviteCodeProtector().encryptInviteCode(
+          uniqueInviteCode,
+        ),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.77',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    for (let index = 2; index <= 11; index += 1) {
+      await service.requestRsvpRecovery(
+        { contact: `guest${index}@example.com` },
+        {
+          sourceIp: '203.0.113.77',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+    }
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(10);
+    expect(
+      householdMessenger.recoveryEmailCalls.map(
+        (call) => call.household.householdId,
+      ),
+    ).not.toContain('h11');
+  });
+
+  it('resets recovery rate limits when the fixed window rolls over', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-04T12:00:00.000Z'));
+
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await service.requestRsvpRecovery(
+        { contact: 'sam@example.com' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+    }
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
+
+    vi.setSystemTime(new Date('2026-07-04T12:15:00.000Z'));
+
+    await service.requestRsvpRecovery(
+      { contact: 'sam@example.com' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    );
+
+    expect(householdMessenger.recoveryEmailCalls).toHaveLength(4);
+  });
+
+  it('enforces the contact limit across concurrent recovery requests', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        service.requestRsvpRecovery(
+          { contact: 'sam@example.com' },
+          {
+            sourceIp: '203.0.113.10',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ),
+    );
 
     expect(householdMessenger.recoveryEmailCalls).toHaveLength(3);
   });
