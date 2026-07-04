@@ -199,6 +199,36 @@ describe('WeddingService', () => {
     );
   });
 
+  it('does not partially update household metadata when RSVP persistence fails', async () => {
+    const notifier = new RecordingNotifier();
+    const repository = new FailingRsvpUpdateRepository();
+    const { service } = await createSeededService(
+      {},
+      notifier,
+      undefined,
+      { repository },
+    );
+    const originalHousehold = await repository.getHousehold('h1');
+
+    await expect(
+      service.updateRsvp(inviteCode, {
+        members: [
+          { memberId: 'h1-1', attending: true, mealChoice: 'chicken' },
+          { memberId: 'h1-2', attending: true, mealChoice: 'vegetarian' },
+        ],
+        plusOnes: [],
+        notes: '',
+        accessibilityNotes: '',
+        smsPhone: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }),
+    ).rejects.toThrow('saveRsvpUpdate failed');
+
+    expect(await repository.getHousehold('h1')).toEqual(originalHousehold);
+    expect(await repository.getRsvp('h1')).toBeUndefined();
+    expect(notifier.calls).toHaveLength(0);
+  });
+
   it('keeps guest RSVP saves successful when notification delivery fails', async () => {
     const notifier = new RecordingNotifier(new Error('SES unavailable'));
     const { service, repository } = await createSeededService({}, notifier);
@@ -1165,6 +1195,12 @@ class RecordingNotifier implements RsvpNotifier {
   }
 }
 
+class FailingRsvpUpdateRepository extends InMemoryWeddingRepository {
+  async saveRsvpUpdate(): Promise<void> {
+    throw new Error('saveRsvpUpdate failed');
+  }
+}
+
 class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly calls: Parameters<
     HouseholdMessenger['sendHouseholdNotification']
@@ -1254,9 +1290,10 @@ async function createSeededService(
   options: {
     saveRecoverableInviteCode?: boolean;
     legacyInviteCodeHash?: boolean;
+    repository?: InMemoryWeddingRepository;
   } = {},
 ) {
-  const repository = new InMemoryWeddingRepository();
+  const repository = options.repository ?? new InMemoryWeddingRepository();
   const inviteCodeProtector = new Base64InviteCodeProtector();
   const inviteCodeHash = options.legacyInviteCodeHash
     ? hashLegacyInviteCode(inviteCode, pepper)

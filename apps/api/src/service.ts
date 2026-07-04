@@ -143,8 +143,7 @@ export class WeddingService {
       updatedAt: now,
     };
 
-    await this.repository.saveHousehold(updatedHousehold);
-    await this.repository.saveRsvp(household.householdId, rsvp);
+    await this.repository.saveRsvpUpdate(updatedHousehold, rsvp);
     await this.notifyRsvpChanged(updatedHousehold, rsvp);
     const counts = summarizeRsvpCounts(rsvp);
     logStructured({
