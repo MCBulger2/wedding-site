@@ -53,12 +53,12 @@ npm run dev
 
 The frontend uses `/api` as its default API base path for local development. Staging and production deployment builds load environment-specific config before building the Vite bundle. If `API_DOMAIN_NAME` is configured, the bundle uses `https://API_DOMAIN_NAME/api`; otherwise it keeps `/api` and relies on the CloudFront `/api/*` proxy. For local API experiments, you can still set `VITE_API_BASE_URL` to a deployed API Gateway URL or a local Lambda adapter.
 
-Admin authentication uses the Cognito Hosted UI. The stack now configures `/admin` as an OAuth callback URL for:
+Admin authentication uses the Cognito Hosted UI. Browser trust is now explicit:
 
-- `http://localhost:5173/admin`
-- `http://127.0.0.1:5173/admin`
-- the deployed CloudFront domain
-- the configured custom domain, when present
+- Staging defaults `enableLocalBrowserTrust` to `true`, so local `/admin` redirects stay enabled alongside the deployed site.
+- Production defaults `enableLocalBrowserTrust` to `false`, so only deployed HTTPS origins are trusted unless you opt in.
+- When `enableLocalBrowserTrust=true`, the stack adds `http://localhost:5173` and `http://127.0.0.1:5173` for API CORS and `/admin` OAuth redirects.
+- Production with a custom frontend domain uses `https://<frontend>/admin` by default. If there is no custom frontend domain, production falls back to the generated CloudFront `/admin` URL.
 
 To use admin login after deployment:
 
@@ -85,7 +85,7 @@ Deployment config can come from three places, in this order:
 - Shell or GitHub Actions environment variables.
 - Local env files loaded from `.env`, `.env.local`, `.env.<environment>`, and `.env.<environment>.local`.
 
-The committed fallback settings in [infra/config/deployment-config.ts](infra/config/deployment-config.ts) are intentionally safe: no placeholder custom domains, no placeholder notification recipients, and passkeys enabled. That means a local deploy can fall back to the generated CloudFront and API Gateway domains instead of failing on example Route 53 lookups.
+The committed fallback settings in [infra/config/deployment-config.ts](infra/config/deployment-config.ts) are intentionally safe: no placeholder custom domains, no placeholder notification recipients, no committed extra CORS origins, passkeys enabled, staging local browser trust enabled, and production local browser trust disabled. That means a local deploy can fall back to the generated CloudFront and API Gateway domains instead of failing on example Route 53 lookups.
 
 For local staging or production deploys with custom domains and notifications, copy the matching template and fill in local values:
 
@@ -101,6 +101,8 @@ You can still override any value with CDK context or environment variables. For 
 ```bash
 npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging WeddingSiteEdgeObservability-staging -c envName=staging -c hostedZoneDomain=matt-alison.com -c frontendDomainName=staging.matt-alison.com -c apiDomainName=api.staging.matt-alison.com -c authDomainName=login.staging.matt-alison.com -c allowedOrigins=https://staging.matt-alison.com
 ```
+
+Only set `ALLOWED_ORIGINS` or `-c allowedOrigins=...` for additional trusted browser origins. Loopback origins such as `localhost` and `127.0.0.1` are rejected unless `ENABLE_LOCAL_BROWSER_TRUST=true` or `-c enableLocalBrowserTrust=true` is set explicitly.
 
 Destroy infrastructure with the matching commands when you intentionally want to tear an environment down:
 
@@ -140,6 +142,7 @@ The deploy workflow expects these GitHub environment settings:
 - Variable `API_DOMAIN_NAME`: optional API domain override.
 - Variable `AUTH_DOMAIN_NAME`: optional Cognito custom domain override.
 - Variable `HOSTED_ZONE_DOMAIN`: optional hosted-zone lookup domain override.
+- Variable `ENABLE_LOCAL_BROWSER_TRUST`: optional `true` or `false` override for localhost/127.0.0.1 API CORS and admin OAuth redirects.
 - Variable `ALLOWED_ORIGINS`: optional comma-separated CORS origins for direct API access.
 - Variable `NOTIFICATION_SENDER_EMAIL`: optional SES sender override.
 - Variable `NOTIFICATION_RECIPIENT_EMAILS`: optional comma-separated RSVP/admin notification recipients.

@@ -84,6 +84,10 @@ const allowedOrigins =
   parseStringList(app.node.tryGetContext('allowedOrigins')) ??
   parseStringList(process.env.ALLOWED_ORIGINS) ??
   deploymentConfig.allowedOrigins;
+const enableLocalBrowserTrust =
+  parseBoolean(app.node.tryGetContext('enableLocalBrowserTrust')) ??
+  parseBoolean(process.env.ENABLE_LOCAL_BROWSER_TRUST) ??
+  deploymentConfig.enableLocalBrowserTrust;
 const notificationSenderEmail =
   readString(app.node.tryGetContext('notificationSenderEmail')) ??
   readString(process.env.NOTIFICATION_SENDER_EMAIL) ??
@@ -158,6 +162,7 @@ const siteStack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   authCertificate: certificateStack?.authCertificate,
   hostedZoneDomain,
   allowedOrigins,
+  enableLocalBrowserTrust,
   notificationSenderEmail,
   notificationRecipientEmails,
   twilioAccountSid,
