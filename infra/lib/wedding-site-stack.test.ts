@@ -80,7 +80,16 @@ function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
   };
 }
 
-function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
+type TestWeddingSiteStackProps = Omit<
+  WeddingSiteStackProps,
+  'enableLocalBrowserTrust'
+> & {
+  enableLocalBrowserTrust?: boolean;
+};
+
+function synthStackTemplate(
+  props: TestWeddingSiteStackProps,
+): Record<string, any> {
   const app = new cdk.App({
     context: {
       'hosted-zone:account=123456789012:domainName=matt-alison.com:region=us-west-1':
@@ -95,17 +104,16 @@ function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
         },
     },
   });
-  const stack = new WeddingSiteStack(
-    app,
-    `WeddingSite-${props.envName}`,
-    {
-      ...props,
-      tags: {
-        ...resourceTagsForEnv(props.envName),
-        ...props.tags,
-      },
+  const { enableLocalBrowserTrust, ...stackProps } = props;
+  const stack = new WeddingSiteStack(app, `WeddingSite-${props.envName}`, {
+    enableLocalBrowserTrust:
+      enableLocalBrowserTrust ?? props.envName !== 'production',
+    ...(stackProps as Omit<WeddingSiteStackProps, 'enableLocalBrowserTrust'>),
+    tags: {
+      ...resourceTagsForEnv(props.envName),
+      ...props.tags,
     },
-  );
+  });
   applyResourceTags(stack, props.envName);
   return Template.fromStack(stack).toJSON();
 }
@@ -194,6 +202,29 @@ function dashboardBodyText(template: Record<string, any>): string {
   expect(dashboards).toHaveLength(1);
 
   return JSON.stringify(dashboards[0].Properties?.DashboardBody);
+}
+
+function httpApiResource(template: Record<string, any>): SynthesizedResource {
+  const api = templateResourcesOfType(template, 'AWS::ApiGatewayV2::Api').find(
+    (resource) => resource.Properties?.ProtocolType === 'HTTP',
+  );
+  expect(api).toBeDefined();
+  return api as SynthesizedResource;
+}
+
+function userPoolClientResource(
+  template: Record<string, any>,
+): SynthesizedResource {
+  const userPoolClient = templateResourcesOfType(
+    template,
+    'AWS::Cognito::UserPoolClient',
+  ).find((resource) =>
+    Array.isArray(resource.Properties?.AllowedOAuthFlows)
+      ? resource.Properties.AllowedOAuthFlows.includes('code')
+      : false,
+  );
+  expect(userPoolClient).toBeDefined();
+  return userPoolClient as SynthesizedResource;
 }
 
 function expectTaggedResourceTypes(
@@ -336,6 +367,128 @@ describe('WeddingSiteStack infrastructure', () => {
     });
   });
 
+  it('defaults production CORS to the deployed frontend origin only', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      frontendDomainName: 'matt-alison.com',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    expect(
+      httpApiResource(template).Properties?.CorsConfiguration,
+    ).toMatchObject({
+      AllowOrigins: ['https://matt-alison.com'],
+    });
+  });
+
+  it('omits production API CORS when no trusted browser origins are available', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    expect(
+      httpApiResource(template).Properties?.CorsConfiguration,
+    ).toBeUndefined();
+  });
+
+  it('keeps production admin redirects on the custom deployed frontend only', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      frontendDomainName: 'matt-alison.com',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    expect(userPoolClientResource(template).Properties).toMatchObject({
+      CallbackURLs: ['https://matt-alison.com/admin'],
+      LogoutURLs: ['https://matt-alison.com/admin'],
+    });
+  });
+
+  it('keeps staging local browser trust for CORS and admin redirects', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      frontendDomainName: 'staging.matt-alison.com',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+      enableLocalBrowserTrust: true,
+    });
+    const corsConfig = httpApiResource(template).Properties?.CorsConfiguration;
+    const userPoolClient = userPoolClientResource(template).Properties;
+
+    expect(corsConfig).toMatchObject({
+      AllowOrigins: expect.arrayContaining([
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://staging.matt-alison.com',
+      ]),
+    });
+    expect(userPoolClient?.CallbackURLs).toEqual(
+      expect.arrayContaining([
+        'http://localhost:5173/admin',
+        'http://127.0.0.1:5173/admin',
+        'https://staging.matt-alison.com/admin',
+      ]),
+    );
+    expect(userPoolClient?.CallbackURLs).toHaveLength(4);
+    expect(userPoolClient?.LogoutURLs).toEqual(userPoolClient?.CallbackURLs);
+  });
+
+  it('rejects local configured origins in production without explicit local browser trust', () => {
+    expect(() =>
+      synthStackTemplate({
+        env: { account: '123456789012', region: 'us-west-1' },
+        envName: 'production',
+        frontendDomainName: 'matt-alison.com',
+        allowedOrigins: ['http://localhost:5173'],
+        notificationRecipientEmails: [],
+        enablePasskeys: false,
+      }),
+    ).toThrow(/localhost|127\.0\.0\.1/i);
+  });
+
+  it('permits local configured origins and redirects when explicit local browser trust is enabled', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      frontendDomainName: 'matt-alison.com',
+      allowedOrigins: ['http://localhost:4173'],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+      enableLocalBrowserTrust: true,
+    });
+    const corsConfig = httpApiResource(template).Properties?.CorsConfiguration;
+    const userPoolClient = userPoolClientResource(template).Properties;
+
+    expect(corsConfig?.AllowOrigins).toEqual(
+      expect.arrayContaining([
+        'http://localhost:4173',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://matt-alison.com',
+      ]),
+    );
+    expect(userPoolClient?.CallbackURLs).toEqual(
+      expect.arrayContaining([
+        'http://localhost:5173/admin',
+        'http://127.0.0.1:5173/admin',
+        'https://matt-alison.com/admin',
+      ]),
+    );
+    expect(userPoolClient?.CallbackURLs).toHaveLength(4);
+  });
+
   it('does not grant SNS publish permissions to the API handler', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
@@ -396,6 +549,7 @@ describe('WeddingSiteStack infrastructure', () => {
       envName: 'staging',
       allowedOrigins: [],
       notificationRecipientEmails: [],
+      enableLocalBrowserTrust: true,
       twilioAccountSid: 'AC123',
       twilioApiKeySid: 'SK123',
       twilioApiKeySecretArn:
@@ -474,9 +628,10 @@ describe('WeddingSiteStack infrastructure', () => {
         logicalId.includes('ApiHandlerLogGroup') &&
         resource.Type === 'AWS::Logs::LogGroup',
     );
-    const stage = templateResourcesOfType(template, 'AWS::ApiGatewayV2::Stage').find(
-      (resource) => resource.Properties?.AccessLogSettings,
-    );
+    const stage = templateResourcesOfType(
+      template,
+      'AWS::ApiGatewayV2::Stage',
+    ).find((resource) => resource.Properties?.AccessLogSettings);
 
     expect(apiAccessLogGroupEntry).toBeDefined();
     expect(apiAccessLogGroupEntry?.[1]).toMatchObject({
@@ -499,9 +654,7 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(stage?.Properties?.AccessLogSettings?.DestinationArn).toEqual({
       'Fn::GetAtt': [apiAccessLogGroupEntry?.[0], 'Arn'],
     });
-    expect(stage?.Properties?.AccessLogSettings?.Format).toContain(
-      'routeKey',
-    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).toContain('routeKey');
     expect(stage?.Properties?.AccessLogSettings?.Format).toContain(
       'responseLatency',
     );

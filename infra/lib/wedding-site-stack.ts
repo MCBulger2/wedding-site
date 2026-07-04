@@ -40,6 +40,7 @@ export interface WeddingSiteStackProps extends StackProps {
   frontendCertificate?: acm.ICertificate;
   authCertificate?: acm.ICertificate;
   hostedZoneDomain?: string;
+  enableLocalBrowserTrust: boolean;
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
@@ -181,6 +182,15 @@ export class WeddingSiteStack extends Stack {
         ? RemovalPolicy.RETAIN
         : RemovalPolicy.DESTROY;
     const frontendDomainName = props.frontendDomainName ?? props.domainName;
+    const allowedOrigins = buildAllowedOrigins(
+      props.allowedOrigins,
+      frontendDomainName,
+      props.enableLocalBrowserTrust,
+    );
+    validateConfiguredOrigins(
+      props.allowedOrigins,
+      props.enableLocalBrowserTrust,
+    );
 
     const table = new dynamodb.Table(this, 'WeddingTable', {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -286,21 +296,21 @@ export class WeddingSiteStack extends Stack {
     }
 
     const api = new apigwv2.HttpApi(this, 'HttpApi', {
-      corsPreflight: {
-        allowHeaders: ['authorization', 'content-type'],
-        allowMethods: [
-          apigwv2.CorsHttpMethod.GET,
-          apigwv2.CorsHttpMethod.POST,
-          apigwv2.CorsHttpMethod.PUT,
-          apigwv2.CorsHttpMethod.DELETE,
-          apigwv2.CorsHttpMethod.OPTIONS,
-        ],
-        allowOrigins: buildAllowedOrigins(
-          props.allowedOrigins,
-          frontendDomainName,
-        ),
-        maxAge: Duration.days(1),
-      },
+      corsPreflight:
+        allowedOrigins.length > 0
+          ? {
+              allowHeaders: ['authorization', 'content-type'],
+              allowMethods: [
+                apigwv2.CorsHttpMethod.GET,
+                apigwv2.CorsHttpMethod.POST,
+                apigwv2.CorsHttpMethod.PUT,
+                apigwv2.CorsHttpMethod.DELETE,
+                apigwv2.CorsHttpMethod.OPTIONS,
+              ],
+              allowOrigins: allowedOrigins,
+              maxAge: Duration.days(1),
+            }
+          : undefined,
       createDefaultStage: false,
     });
     const defaultApiStageName = '$default';
@@ -521,10 +531,12 @@ export class WeddingSiteStack extends Stack {
       );
     }
 
-    const adminRedirectUris = buildAdminRedirectUris(
+    const adminRedirectUris = buildAdminRedirectUris({
+      envName: props.envName,
       frontendDomainName,
-      distribution.distributionDomainName,
-    );
+      distributionDomainName: distribution.distributionDomainName,
+      enableLocalBrowserTrust: props.enableLocalBrowserTrust,
+    });
     const authCertificate = props.authDomainName
       ? (props.authCertificate ??
         new acm.Certificate(this, 'AdminAuthCertificate', {
@@ -1509,7 +1521,8 @@ function createLogQueryWidget(
   title: string,
   logGroupName: string,
   queryLines: string[],
-  view: cloudwatch.LogQueryVisualizationType = cloudwatch.LogQueryVisualizationType.TABLE,
+  view: cloudwatch.LogQueryVisualizationType = cloudwatch
+    .LogQueryVisualizationType.TABLE,
 ): cloudwatch.LogQueryWidget {
   return new cloudwatch.LogQueryWidget({
     title,
@@ -1550,33 +1563,72 @@ function createErrorLogQueryWidget(
 function buildAllowedOrigins(
   configuredOrigins: string[],
   frontendDomainName: string | undefined,
+  enableLocalBrowserTrust: boolean,
 ): string[] {
-  const origins = new Set(
-    configuredOrigins.length > 0
-      ? configuredOrigins
-      : ['http://localhost:5173'],
-  );
+  const origins = new Set(configuredOrigins);
   if (frontendDomainName) {
     origins.add(`https://${frontendDomainName}`);
+  }
+  if (enableLocalBrowserTrust) {
+    origins.add('http://localhost:5173');
+    origins.add('http://127.0.0.1:5173');
   }
   return [...origins];
 }
 
-function buildAdminRedirectUris(
-  domainName: string | undefined,
-  distributionDomainName: string,
-): string[] {
-  const uris = [
-    'http://localhost:5173/admin',
-    'http://127.0.0.1:5173/admin',
-    `https://${distributionDomainName}/admin`,
-  ];
+function buildAdminRedirectUris(props: {
+  envName: string;
+  frontendDomainName: string | undefined;
+  distributionDomainName: string;
+  enableLocalBrowserTrust: boolean;
+}): string[] {
+  const uris = new Set<string>();
 
-  if (domainName) {
-    uris.push(`https://${domainName}/admin`);
+  if (props.frontendDomainName) {
+    uris.add(`https://${props.frontendDomainName}/admin`);
   }
 
-  return uris;
+  if (
+    !props.frontendDomainName ||
+    props.envName !== 'production' ||
+    props.enableLocalBrowserTrust
+  ) {
+    uris.add(`https://${props.distributionDomainName}/admin`);
+  }
+
+  if (props.enableLocalBrowserTrust) {
+    uris.add('http://localhost:5173/admin');
+    uris.add('http://127.0.0.1:5173/admin');
+  }
+
+  return [...uris];
+}
+
+function validateConfiguredOrigins(
+  configuredOrigins: string[],
+  enableLocalBrowserTrust: boolean,
+): void {
+  if (enableLocalBrowserTrust) {
+    return;
+  }
+
+  const invalidOrigins = configuredOrigins.filter(isLocalBrowserOrigin);
+  if (invalidOrigins.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Local browser origins require enableLocalBrowserTrust=true: ${invalidOrigins.join(', ')}`,
+  );
+}
+
+function isLocalBrowserOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
 }
 
 function buildCognitoDomainPrefix(

@@ -1,5 +1,11 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  ScanCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import type { Household, StoredRsvp } from '@matt-alison-wedding/shared';
 
 export interface InviteCodeLookup {
@@ -18,6 +24,7 @@ export interface InviteCodeSecret {
 export interface RecoveryRateLimitRecord {
   scope: 'contact' | 'ip';
   keyHash: string;
+  windowStartsAt: number;
   attempts: number;
   windowExpiresAt: number;
   updatedAt: string;
@@ -29,17 +36,13 @@ export interface WeddingRepository {
   listHouseholdsByEmail(email: string): Promise<Household[]>;
   listHouseholdsByPhone(phone: string): Promise<Household[]>;
   getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined>;
-  getRecoveryRateLimitRecord(
-    scope: RecoveryRateLimitRecord['scope'],
-    keyHash: string,
-  ): Promise<RecoveryRateLimitRecord | undefined>;
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
-  saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void>;
+  recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number>;
   saveHousehold(household: Household): Promise<void>;
+  saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
   saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void>;
-  saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void>;
 }
 
 interface StoredHouseholdItem extends Household {
@@ -152,31 +155,6 @@ export class DynamoWeddingRepository implements WeddingRepository {
     };
   }
 
-  async getRecoveryRateLimitRecord(
-    scope: RecoveryRateLimitRecord['scope'],
-    keyHash: string,
-  ): Promise<RecoveryRateLimitRecord | undefined> {
-    const result = await this.client.send(
-      new GetCommand({
-        TableName: this.tableName,
-        Key: recoveryRateLimitKey(scope, keyHash),
-      }),
-    );
-
-    if (!result.Item) {
-      return undefined;
-    }
-
-    const item = result.Item as StoredRecoveryRateLimitItem;
-    return {
-      scope: item.scope,
-      keyHash: item.keyHash,
-      attempts: item.attempts,
-      windowExpiresAt: item.windowExpiresAt,
-      updatedAt: item.updatedAt,
-    };
-  }
-
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
     const result = await this.client.send(
       new GetCommand({
@@ -204,34 +182,38 @@ export class DynamoWeddingRepository implements WeddingRepository {
 
   async saveHousehold(household: Household): Promise<void> {
     const existingRsvp = await this.getRsvp(household.householdId);
-    const item: StoredHouseholdItem = {
-      ...household,
-      rsvp: existingRsvp,
-      rsvpStatus: existingRsvp ? deriveRsvpStatus(existingRsvp) : household.rsvpStatus,
-      ...householdKey(household.householdId),
-      entityType: 'Household',
-    };
-
-    await this.client.send(
-      new PutCommand({
-        TableName: this.tableName,
-        Item: item,
-      }),
-    );
+    await this.putHouseholdItem(household, existingRsvp);
   }
 
-  async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
-    await this.client.send(
-      new PutCommand({
+  async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
+    const result = await this.client.send(
+      new UpdateCommand({
         TableName: this.tableName,
-        Item: {
-          ...record,
-          ...recoveryRateLimitKey(record.scope, record.keyHash),
-          entityType: 'RecoveryRateLimit',
-          ttl: Math.ceil(record.windowExpiresAt / 1000),
-        } satisfies StoredRecoveryRateLimitItem,
+        Key: recoveryRateLimitKey(
+          record.scope,
+          record.keyHash,
+          record.windowStartsAt,
+        ),
+        UpdateExpression:
+          'SET entityType = :entityType, ttl = :ttl, #scope = :scope, keyHash = :keyHash, windowStartsAt = :windowStartsAt, windowExpiresAt = :windowExpiresAt, updatedAt = :updatedAt ADD attempts :attemptIncrement',
+        ExpressionAttributeNames: {
+          '#scope': 'scope',
+        },
+        ExpressionAttributeValues: {
+          ':attemptIncrement': 1,
+          ':entityType': 'RecoveryRateLimit',
+          ':ttl': Math.ceil(record.windowExpiresAt / 1000),
+          ':scope': record.scope,
+          ':keyHash': record.keyHash,
+          ':windowStartsAt': record.windowStartsAt,
+          ':windowExpiresAt': record.windowExpiresAt,
+          ':updatedAt': record.updatedAt,
+        },
+        ReturnValues: 'ALL_NEW',
       }),
     );
+
+    return (result.Attributes as StoredRecoveryRateLimitItem).attempts;
   }
 
   async saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void> {
@@ -260,24 +242,32 @@ export class DynamoWeddingRepository implements WeddingRepository {
     );
   }
 
-  async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
-    const household = await this.getHousehold(householdId);
-    if (!household) {
-      throw new Error('Household not found');
-    }
+  async saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void> {
+    await this.putHouseholdItem(household, rsvp, 'attribute_exists(pk) AND attribute_exists(sk)');
+  }
+
+  private async putHouseholdItem(
+    household: Household,
+    rsvp?: StoredRsvp,
+    conditionExpression?: string,
+  ): Promise<void> {
+    const putInput = {
+      TableName: this.tableName,
+      Item: {
+        ...household,
+        rsvp,
+        rsvpStatus: rsvp ? deriveRsvpStatus(rsvp) : household.rsvpStatus,
+        updatedAt: rsvp?.updatedAt ?? household.updatedAt,
+        ...householdKey(household.householdId),
+        entityType: 'Household',
+      } satisfies StoredHouseholdItem,
+      ...(conditionExpression
+        ? { ConditionExpression: conditionExpression }
+        : {}),
+    };
 
     await this.client.send(
-      new PutCommand({
-        TableName: this.tableName,
-        Item: {
-          ...household,
-          rsvp,
-          rsvpStatus: deriveRsvpStatus(rsvp),
-          updatedAt: rsvp.updatedAt,
-          ...householdKey(householdId),
-          entityType: 'Household',
-        } satisfies StoredHouseholdItem,
-      }),
+      new PutCommand(putInput),
     );
   }
 }
@@ -312,13 +302,6 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     return this.inviteCodeSecrets.get(householdId);
   }
 
-  async getRecoveryRateLimitRecord(
-    scope: RecoveryRateLimitRecord['scope'],
-    keyHash: string,
-  ): Promise<RecoveryRateLimitRecord | undefined> {
-    return this.recoveryRateLimits.get(`${scope}:${keyHash}`);
-  }
-
   async getRsvp(householdId: string): Promise<StoredRsvp | undefined> {
     return this.rsvps.get(householdId);
   }
@@ -335,8 +318,26 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     });
   }
 
-  async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
-    this.recoveryRateLimits.set(`${record.scope}:${record.keyHash}`, record);
+  async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
+    const mapKey = `${record.scope}:${record.keyHash}:${record.windowStartsAt}`;
+    const nextAttempts = (this.recoveryRateLimits.get(mapKey)?.attempts ?? 0) + 1;
+    this.recoveryRateLimits.set(mapKey, {
+      ...record,
+      attempts: nextAttempts,
+    });
+    return nextAttempts;
+  }
+
+  async saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void> {
+    if (!this.households.has(household.householdId)) {
+      throw new Error('Household not found');
+    }
+    this.rsvps.set(household.householdId, rsvp);
+    this.households.set(household.householdId, {
+      ...household,
+      rsvpStatus: deriveRsvpStatus(rsvp),
+      updatedAt: rsvp.updatedAt,
+    });
   }
 
   async saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void> {
@@ -347,18 +348,6 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     this.inviteCodeSecrets.set(secret.householdId, secret);
   }
 
-  async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
-    const household = this.households.get(householdId);
-    if (!household) {
-      throw new Error('Household not found');
-    }
-    this.rsvps.set(householdId, rsvp);
-    this.households.set(householdId, {
-      ...household,
-      rsvpStatus: deriveRsvpStatus(rsvp),
-      updatedAt: rsvp.updatedAt,
-    });
-  }
 }
 
 export function deriveRsvpStatus(rsvp: Pick<StoredRsvp, 'members'>): Household['rsvpStatus'] {
@@ -384,8 +373,15 @@ function inviteCodeSecretKey(householdId: string) {
   return { pk: `HOUSEHOLD#${householdId}`, sk: 'INVITE_CODE_SECRET' };
 }
 
-function recoveryRateLimitKey(scope: RecoveryRateLimitRecord['scope'], keyHash: string) {
-  return { pk: `RECOVERY_RATE_LIMIT#${scope}#${keyHash}`, sk: 'WINDOW' };
+function recoveryRateLimitKey(
+  scope: RecoveryRateLimitRecord['scope'],
+  keyHash: string,
+  windowStartsAt: number,
+) {
+  return {
+    pk: `RECOVERY_RATE_LIMIT#${scope}#${keyHash}`,
+    sk: `WINDOW#${windowStartsAt}`,
+  };
 }
 
 function fromHouseholdItem(item: StoredHouseholdItem): Household {
