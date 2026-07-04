@@ -5,11 +5,15 @@ import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
 import { deploymentConfigs } from '../config/deployment-config.js';
 import { CertificateStack } from '../lib/certificate-stack.js';
+import { EdgeObservabilityStack } from '../lib/edge-observability-stack.js';
 import { WeddingSiteStack } from '../lib/wedding-site-stack.js';
 
 const app = new cdk.App();
 
-const envName = readString(app.node.tryGetContext('envName')) ?? process.env.ENV_NAME ?? 'staging';
+const envName =
+  readString(app.node.tryGetContext('envName')) ??
+  process.env.ENV_NAME ??
+  'staging';
 loadEnvFiles(envName);
 
 const deploymentConfig = deploymentConfigs[envName];
@@ -24,7 +28,9 @@ const appRegion =
   deploymentConfig.appRegion ??
   process.env.CDK_DEFAULT_REGION;
 const account = process.env.CDK_DEFAULT_ACCOUNT;
-const domainName = readString(app.node.tryGetContext('domainName')) ?? readString(process.env.DOMAIN_NAME);
+const domainName =
+  readString(app.node.tryGetContext('domainName')) ??
+  readString(process.env.DOMAIN_NAME);
 const frontendDomainName =
   readString(app.node.tryGetContext('frontendDomainName')) ??
   readString(process.env.FRONTEND_DOMAIN_NAME) ??
@@ -83,13 +89,18 @@ const contactForwardingRecipientEmail =
   readString(app.node.tryGetContext('contactForwardingRecipientEmail')) ??
   readString(process.env.CONTACT_FORWARDING_RECIPIENT_EMAIL) ??
   deploymentConfig.contactForwardingRecipientEmail;
+const operationsAlertEmails =
+  parseStringList(app.node.tryGetContext('operationsAlertEmails')) ??
+  parseStringList(process.env.OPERATIONS_ALERT_EMAILS) ??
+  deploymentConfig.operationsAlertEmails;
 const enablePasskeys =
   parseBoolean(app.node.tryGetContext('enablePasskeys')) ??
   parseBoolean(process.env.ENABLE_PASSKEYS) ??
   deploymentConfig.enablePasskeys;
 
 const certificateStack =
-  envName === 'production' || (hostedZoneDomain && (frontendDomainName || authDomainName))
+  envName === 'production' ||
+  (hostedZoneDomain && (frontendDomainName || authDomainName))
     ? new CertificateStack(app, `WeddingSiteCertificates-${envName}`, {
         env: { account, region: 'us-east-1' },
         crossRegionReferences: true,
@@ -100,7 +111,7 @@ const certificateStack =
       })
     : undefined;
 
-new WeddingSiteStack(app, `WeddingSite-${envName}`, {
+const siteStack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   env: { account, region: appRegion },
   crossRegionReferences: true,
   envName,
@@ -122,7 +133,16 @@ new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   twilioFromPhoneNumber,
   contactEmailAddress,
   contactForwardingRecipientEmail,
+  operationsAlertEmails,
   enablePasskeys,
+});
+
+new EdgeObservabilityStack(app, `WeddingSiteEdgeObservability-${envName}`, {
+  env: { account, region: 'us-east-1' },
+  crossRegionReferences: true,
+  envName,
+  distributionId: siteStack.distributionId,
+  operationsAlertEmails,
 });
 
 function readString(value: unknown): string | undefined {
@@ -168,15 +188,27 @@ function parseBoolean(value: unknown): boolean | undefined {
 function loadEnvFiles(envName: string): void {
   const protectedKeys = new Set(Object.keys(process.env));
   const loadedEnv: Record<string, string> = {};
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const repoRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+  );
 
-  for (const fileName of ['.env', '.env.local', `.env.${envName}`, `.env.${envName}.local`]) {
+  for (const fileName of [
+    '.env',
+    '.env.local',
+    `.env.${envName}`,
+    `.env.${envName}.local`,
+  ]) {
     const filePath = path.join(repoRoot, fileName);
     if (!fs.existsSync(filePath)) {
       continue;
     }
 
-    Object.assign(loadedEnv, parseEnvFile(fs.readFileSync(filePath, 'utf8'), fileName));
+    Object.assign(
+      loadedEnv,
+      parseEnvFile(fs.readFileSync(filePath, 'utf8'), fileName),
+    );
   }
 
   for (const [key, value] of Object.entries(loadedEnv)) {
@@ -186,7 +218,10 @@ function loadEnvFiles(envName: string): void {
   }
 }
 
-function parseEnvFile(contents: string, fileName: string): Record<string, string> {
+function parseEnvFile(
+  contents: string,
+  fileName: string,
+): Record<string, string> {
   const values: Record<string, string> = {};
   const lines = contents.split(/\r?\n/);
 
@@ -197,7 +232,9 @@ function parseEnvFile(contents: string, fileName: string): Record<string, string
     }
 
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(parsed.key)) {
-      throw new Error(`${fileName}:${index + 1} has an invalid environment variable name: ${parsed.key}`);
+      throw new Error(
+        `${fileName}:${index + 1} has an invalid environment variable name: ${parsed.key}`,
+      );
     }
 
     values[parsed.key] = parsed.value;
@@ -206,13 +243,17 @@ function parseEnvFile(contents: string, fileName: string): Record<string, string
   return values;
 }
 
-function parseEnvLine(line: string): { key: string; value: string } | undefined {
+function parseEnvLine(
+  line: string,
+): { key: string; value: string } | undefined {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('#')) {
     return undefined;
   }
 
-  const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trimStart() : trimmed;
+  const normalized = trimmed.startsWith('export ')
+    ? trimmed.slice(7).trimStart()
+    : trimmed;
   const separatorIndex = normalized.indexOf('=');
   if (separatorIndex === -1) {
     return undefined;
@@ -226,7 +267,11 @@ function parseEnvLine(line: string): { key: string; value: string } | undefined 
 
 function parseEnvValue(rawValue: string): string {
   if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
-    return rawValue.slice(1, -1).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    return rawValue
+      .slice(1, -1)
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
   }
 
   if (rawValue.startsWith("'") && rawValue.endsWith("'")) {

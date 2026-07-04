@@ -3,6 +3,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { EdgeObservabilityStack } from './edge-observability-stack.js';
 import {
   WeddingSiteStack,
   type WeddingSiteStackProps,
@@ -54,6 +55,24 @@ function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
   return Template.fromStack(stack).toJSON();
 }
 
+function synthEdgeObservabilityTemplate(props: {
+  envName: string;
+  operationsAlertEmails?: string[];
+}): Record<string, any> {
+  const app = new cdk.App();
+  const stack = new EdgeObservabilityStack(
+    app,
+    `WeddingSiteEdgeObservability-${props.envName}`,
+    {
+      env: { account: '123456789012', region: 'us-east-1' },
+      envName: props.envName,
+      distributionId: 'E1234567890ABC',
+      operationsAlertEmails: props.operationsAlertEmails,
+    },
+  );
+  return Template.fromStack(stack).toJSON();
+}
+
 function templateResourcesOfType(
   template: Record<string, any>,
   type: string,
@@ -65,6 +84,16 @@ function templateResourcesOfType(
       'Type' in resource &&
       resource.Type === type,
   );
+}
+
+function dashboardBodyText(template: Record<string, any>): string {
+  const dashboards = templateResourcesOfType(
+    template,
+    'AWS::CloudWatch::Dashboard',
+  );
+  expect(dashboards).toHaveLength(1);
+
+  return JSON.stringify(dashboards[0].Properties?.DashboardBody);
 }
 
 describe('WeddingSiteStack infrastructure', () => {
@@ -253,5 +282,165 @@ describe('WeddingSiteStack infrastructure', () => {
       },
     });
     expect(JSON.stringify(stage)).not.toContain('throttlingBurstLimit');
+  });
+
+  it('creates a dashboard and baseline alarms without notification wiring by default', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const dashboardBody = dashboardBodyText(template);
+    const alarms = templateResourcesOfType(template, 'AWS::CloudWatch::Alarm');
+
+    expect(alarms).toHaveLength(6);
+    expect(templateResourcesOfType(template, 'AWS::SNS::Topic')).toHaveLength(
+      0,
+    );
+    expect(
+      templateResourcesOfType(template, 'AWS::SNS::Subscription'),
+    ).toHaveLength(0);
+    expect(dashboardBody).toContain('Wedding Site staging Operations');
+    expect(dashboardBody).toContain('API Gateway Traffic');
+    expect(dashboardBody).toContain('API Lambda Health');
+    expect(dashboardBody).toContain('DynamoDB Throttles');
+    expect(dashboardBody).toContain('DynamoDB System Errors');
+    expect(dashboardBody).toContain('CloudFront Error Rates');
+    expect(dashboardBody).toContain('Recent API Errors');
+    expect(dashboardBody).not.toContain('Contact Forwarder Lambda Health');
+    expect(dashboardBody).not.toContain('WAF Public RSVP Requests');
+  });
+
+  it('wires configured operations alert emails to alarm actions', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      operationsAlertEmails: ['ops@example.com', 'ops2@example.com'],
+      enablePasskeys: false,
+    });
+    const alarms = templateResourcesOfType(template, 'AWS::CloudWatch::Alarm');
+    const subscriptions = templateResourcesOfType(
+      template,
+      'AWS::SNS::Subscription',
+    );
+
+    expect(templateResourcesOfType(template, 'AWS::SNS::Topic')).toHaveLength(
+      1,
+    );
+    expect(subscriptions).toHaveLength(2);
+    expect(
+      subscriptions.map((subscription) => subscription.Properties.Endpoint),
+    ).toEqual(expect.arrayContaining(['ops@example.com', 'ops2@example.com']));
+    expect(alarms).toHaveLength(6);
+    expect(
+      alarms.every((alarm) => Array.isArray(alarm.Properties.AlarmActions)),
+    ).toBe(true);
+  });
+
+  it('adds contact-forwarder dashboard widgets and alarms only when contact forwarding is configured', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'staging.matt-alison.com',
+      contactEmailAddress: 'contact@matt-alison.com',
+      contactForwardingRecipientEmail: 'admin@example.com',
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const dashboardBody = dashboardBodyText(template);
+
+    expect(
+      templateResourcesOfType(template, 'AWS::CloudWatch::Alarm'),
+    ).toHaveLength(8);
+    expect(dashboardBody).toContain('Contact Forwarder Lambda Health');
+    expect(dashboardBody).toContain('Recent Contact Forwarder Errors');
+  });
+
+  it('includes WAF widgets only for production stacks with a CloudFront web ACL', () => {
+    const productionTemplate = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      cloudFrontWebAclArn:
+        'arn:aws:wafv2:us-east-1:123456789012:global/webacl/wedding-site-production-public-rsvp/11111111-1111-1111-1111-111111111111',
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const stagingTemplate = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      cloudFrontWebAclArn:
+        'arn:aws:wafv2:us-east-1:123456789012:global/webacl/wedding-site-staging-public-rsvp/11111111-1111-1111-1111-111111111111',
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    expect(dashboardBodyText(productionTemplate)).toContain(
+      'WAF Public RSVP Requests',
+    );
+    expect(dashboardBodyText(productionTemplate)).toContain('publicRsvpWebAcl');
+    expect(dashboardBodyText(stagingTemplate)).not.toContain(
+      'WAF Public RSVP Requests',
+    );
+  });
+
+  it('creates the edge CloudFront 5xx alarm in us-east-1 without notification wiring by default', () => {
+    const template = synthEdgeObservabilityTemplate({ envName: 'staging' });
+    const alarms = templateResourcesOfType(template, 'AWS::CloudWatch::Alarm');
+
+    expect(alarms).toHaveLength(1);
+    expect(alarms[0]).toMatchObject({
+      Properties: {
+        AlarmName: 'wedding-site-staging-cloudfront-5xx-error-rate',
+        Metrics: [
+          expect.objectContaining({
+            MetricStat: {
+              Metric: {
+                MetricName: '5xxErrorRate',
+                Namespace: 'AWS/CloudFront',
+                Dimensions: expect.arrayContaining([
+                  { Name: 'DistributionId', Value: 'E1234567890ABC' },
+                  { Name: 'Region', Value: 'Global' },
+                ]),
+              },
+              Period: 300,
+              Stat: 'Average',
+            },
+          }),
+        ],
+      },
+    });
+    expect(templateResourcesOfType(template, 'AWS::SNS::Topic')).toHaveLength(
+      0,
+    );
+    expect(
+      templateResourcesOfType(template, 'AWS::SNS::Subscription'),
+    ).toHaveLength(0);
+  });
+
+  it('wires edge CloudFront alarm notifications when operations emails are configured', () => {
+    const template = synthEdgeObservabilityTemplate({
+      envName: 'production',
+      operationsAlertEmails: ['ops@example.com'],
+    });
+    const alarms = templateResourcesOfType(template, 'AWS::CloudWatch::Alarm');
+    const subscriptions = templateResourcesOfType(
+      template,
+      'AWS::SNS::Subscription',
+    );
+
+    expect(templateResourcesOfType(template, 'AWS::SNS::Topic')).toHaveLength(
+      1,
+    );
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0].Properties.Endpoint).toBe('ops@example.com');
+    expect(alarms[0].Properties.AlarmActions).toBeDefined();
   });
 });
