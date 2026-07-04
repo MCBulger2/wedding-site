@@ -341,6 +341,16 @@ test('homepage map link opens Apple Maps on Apple devices', async ({
 });
 
 test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const testWindow = window as Window & {
+      __photoCarouselTestNow?: number;
+    };
+    const originalDateNow = Date.now;
+
+    testWindow.__photoCarouselTestNow = 1_000;
+    Date.now = () => testWindow.__photoCarouselTestNow ?? originalDateNow();
+  });
+
   await page.goto('/');
 
   await expect(
@@ -359,26 +369,48 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
       deltaY: 0,
     });
   };
+  const setWheelClock = async (now: number) => {
+    await page.evaluate((nextNow) => {
+      (
+        window as Window & {
+          __photoCarouselTestNow?: number;
+        }
+      ).__photoCarouselTestNow = nextNow;
+    }, now);
+  };
+  const wheelUntilCaption = async (caption: string) => {
+    await expect
+      .poll(
+        async () => {
+          const currentCaption = await activeCaption.textContent();
+          if (currentCaption !== caption) {
+            await wheelHorizontally(300);
+          }
+          return activeCaption.textContent();
+        },
+        { intervals: [100], timeout: 5_000 },
+      )
+      .toBe(caption);
+  };
   await carousel.scrollIntoViewIfNeeded();
 
   await wheelHorizontally(20);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 
-  await wheelHorizontally(300);
-
-  for (let i = 0; i < 3; i += 1) {
-    await page.waitForTimeout(50);
-    await wheelHorizontally(300);
-  }
-
-  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+  await wheelUntilCaption(secondGalleryPhoto.caption);
   await expect(
     page.getByRole('img', {
       name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
 
-  await page.waitForTimeout(500);
+  for (let i = 0; i < 3; i += 1) {
+    await page.waitForTimeout(50);
+    await wheelHorizontally(300);
+  }
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+
+  await setWheelClock(1_500);
   await wheelHorizontally(300);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
