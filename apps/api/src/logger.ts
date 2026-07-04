@@ -153,11 +153,7 @@ export function getErrorStatusCode(error: unknown): number | undefined {
 }
 
 function scrubLogString(value: string): string {
-  return value
-    .replace(
-      /https?:\/\/[^\s"'<>]*\/rsvp\/[^\s"'<>]*/gi,
-      '[redacted-rsvp-url]',
-    )
+  return redactRsvpUrls(value)
     .replace(/\b[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10,}\b/g, '[redacted-invite-code]')
     .replace(/\b[a-f0-9]{64}\b/gi, '[redacted-hash]')
     .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[redacted-ip]')
@@ -166,4 +162,64 @@ function scrubLogString(value: string): string {
       '[redacted-email]',
     )
     .replace(/\+?\d[\d(). -]{7,}\d/g, '[redacted-phone]');
+}
+
+function redactRsvpUrls(value: string): string {
+  let result = '';
+  let index = 0;
+  const lowerValue = value.toLowerCase();
+
+  while (index < value.length) {
+    const httpIndex = lowerValue.indexOf('http://', index);
+    const httpsIndex = lowerValue.indexOf('https://', index);
+    const nextUrlIndex = nextFoundIndex(httpIndex, httpsIndex);
+
+    if (nextUrlIndex === -1) {
+      result += value.slice(index);
+      break;
+    }
+
+    result += value.slice(index, nextUrlIndex);
+    const urlEndIndex = findUrlTokenEnd(value, nextUrlIndex);
+    const urlToken = value.slice(nextUrlIndex, urlEndIndex);
+    result += lowerValue.slice(nextUrlIndex, urlEndIndex).includes('/rsvp/')
+      ? '[redacted-rsvp-url]'
+      : urlToken;
+    index = urlEndIndex;
+  }
+
+  return result;
+}
+
+function nextFoundIndex(first: number, second: number): number {
+  if (first === -1) {
+    return second;
+  }
+  if (second === -1) {
+    return first;
+  }
+  return Math.min(first, second);
+}
+
+function findUrlTokenEnd(value: string, startIndex: number): number {
+  let index = startIndex;
+  while (index < value.length && !isUrlTokenDelimiter(value[index])) {
+    index += 1;
+  }
+  return index;
+}
+
+function isUrlTokenDelimiter(value: string): boolean {
+  return (
+    value === '"' ||
+    value === "'" ||
+    value === '<' ||
+    value === '>' ||
+    value === ' ' ||
+    value === '\t' ||
+    value === '\r' ||
+    value === '\n' ||
+    value === '\f' ||
+    value === '\v'
+  );
 }

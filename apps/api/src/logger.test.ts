@@ -51,4 +51,19 @@ describe('structured logger', () => {
     expect(described.errorStack).not.toContain('guest@example.com');
     expect(described.errorStack).not.toContain('/rsvp/ABCDEF234567');
   });
+
+  it('redacts RSVP URLs without a backtracking-prone URL regex', () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const repeatedUrlPrefix = 'http://'.repeat(200);
+
+    logStructured({
+      level: 'info',
+      event: 'test.rsvpUrlRedaction',
+      message: `${repeatedUrlPrefix} HTTPS://wedding.example.com/RSVP/A2B3C4D5E6 next`,
+    });
+
+    const line = consoleLog.mock.calls[0][0] as string;
+    expect(line).toContain('[redacted-rsvp-url]');
+    expect(line).not.toContain('HTTPS://wedding.example.com/RSVP/A2B3C4D5E6');
+  });
 });
