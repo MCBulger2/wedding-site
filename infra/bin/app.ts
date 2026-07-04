@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
+import type { IConstruct } from 'constructs';
 import { deploymentConfigs } from '../config/deployment-config.js';
 import { CertificateStack } from '../lib/certificate-stack.js';
 import { EdgeObservabilityStack } from '../lib/edge-observability-stack.js';
@@ -19,6 +20,36 @@ loadEnvFiles(envName);
 const deploymentConfig = deploymentConfigs[envName];
 if (!deploymentConfig) {
   throw new Error(`Unknown deployment environment: ${envName}`);
+}
+const resourceTags = {
+  Project: 'Wedding Site',
+  Environment: envName === 'production' ? 'Production' : 'Staging',
+};
+
+class LambdaFunctionTagAspect implements cdk.IAspect {
+  constructor(private readonly tags: Record<string, string>) {}
+
+  visit(node: IConstruct): void {
+    if (
+      !cdk.CfnResource.isCfnResource(node) ||
+      node.cfnResourceType !== 'AWS::Lambda::Function'
+    ) {
+      return;
+    }
+
+    const tagManager = (node as unknown as { tags?: cdk.TagManager }).tags;
+    if (tagManager) {
+      for (const [key, value] of Object.entries(this.tags)) {
+        tagManager.setTag(key, value);
+      }
+      return;
+    }
+
+    node.addPropertyOverride(
+      'Tags',
+      Object.entries(this.tags).map(([Key, Value]) => ({ Key, Value })),
+    );
+  }
 }
 
 const appRegion =
@@ -103,6 +134,7 @@ const certificateStack =
   (hostedZoneDomain && (frontendDomainName || authDomainName))
     ? new CertificateStack(app, `WeddingSiteCertificates-${envName}`, {
         env: { account, region: 'us-east-1' },
+        tags: resourceTags,
         crossRegionReferences: true,
         envName,
         hostedZoneDomain,
@@ -110,9 +142,11 @@ const certificateStack =
         authDomainName,
       })
     : undefined;
+applyResourceTags(certificateStack);
 
 const siteStack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   env: { account, region: appRegion },
+  tags: resourceTags,
   crossRegionReferences: true,
   envName,
   domainName,
@@ -136,14 +170,21 @@ const siteStack = new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   operationsAlertEmails,
   enablePasskeys,
 });
+applyResourceTags(siteStack);
 
-new EdgeObservabilityStack(app, `WeddingSiteEdgeObservability-${envName}`, {
-  env: { account, region: 'us-east-1' },
-  crossRegionReferences: true,
-  envName,
-  distributionId: siteStack.distributionId,
-  operationsAlertEmails,
-});
+const edgeObservabilityStack = new EdgeObservabilityStack(
+  app,
+  `WeddingSiteEdgeObservability-${envName}`,
+  {
+    env: { account, region: 'us-east-1' },
+    tags: resourceTags,
+    crossRegionReferences: true,
+    envName,
+    distributionId: siteStack.distributionId,
+    operationsAlertEmails,
+  },
+);
+applyResourceTags(edgeObservabilityStack);
 
 function readString(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -166,6 +207,17 @@ function parseStringList(value: unknown): string[] | undefined {
     .filter((item) => item.length > 0);
 
   return items.length > 0 ? items : undefined;
+}
+
+function applyResourceTags(stack: cdk.Stack | undefined): void {
+  if (!stack) {
+    return;
+  }
+
+  for (const [key, value] of Object.entries(resourceTags)) {
+    cdk.Tags.of(stack).add(key, value);
+  }
+  cdk.Aspects.of(stack).add(new LambdaFunctionTagAspect(resourceTags));
 }
 
 function parseBoolean(value: unknown): boolean | undefined {
