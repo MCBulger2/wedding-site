@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Household } from '@matt-alison-wedding/shared';
 import { hashInviteCode, hashLegacyInviteCode } from './inviteCodes.js';
 import { Base64InviteCodeProtector } from './inviteCodeProtector.js';
@@ -15,6 +15,18 @@ const pepper = 'unit-test-pepper';
 const inviteCode = 'test-invite-code-123';
 
 describe('WeddingService', () => {
+  let consoleLog: ReturnType<typeof vi.spyOn>;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('looks up RSVP households by hashed invite code only', async () => {
     const { service, repository } = await createSeededService();
 
@@ -130,6 +142,23 @@ describe('WeddingService', () => {
         consentTextVersion: 'twilio-tollfree-v1',
       },
     });
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        event: 'rsvp.update.completed',
+        householdId: 'h1',
+        outcome: 'success',
+        rsvpStatus: 'attending',
+        attendingCount: 2,
+        declinedCount: 0,
+        plusOneCount: 0,
+      }),
+    );
+    const serialized = JSON.stringify(logs);
+    expect(serialized).not.toContain(inviteCode);
+    expect(serialized).not.toContain('+14805550100');
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('does not create SMS consent when RSVP is saved without the checkbox', async () => {
@@ -1106,4 +1135,8 @@ async function createSeededService(
       inviteCodeProtector,
     ),
   };
+}
+
+function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+  return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }

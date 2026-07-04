@@ -41,6 +41,7 @@ import {
 import type { InviteCodeProtector } from './inviteCodeProtector.js';
 import type { HouseholdMessenger, RsvpNotifier } from './notifications.js';
 import { deriveRsvpStatus, type WeddingRepository } from './repository.js';
+import { describeError, getErrorStatusCode, logStructured } from './logger.js';
 
 const RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RSVP_RECOVERY_CONTACT_LIMIT = 3;
@@ -89,10 +90,18 @@ export class WeddingService {
     inviteCode: string,
   ): Promise<{ household: Household; rsvp?: StoredRsvp }> {
     const household = await this.findHouseholdByInviteCode(inviteCode);
-    return {
+    const result = {
       household,
       rsvp: await this.getStoredRsvp(household.householdId),
     };
+    logStructured({
+      level: 'info',
+      event: 'rsvp.lookup.completed',
+      message: 'RSVP lookup completed',
+      householdId: household.householdId,
+      outcome: 'success',
+    });
+    return result;
   }
 
   async updateRsvp(
@@ -137,6 +146,18 @@ export class WeddingService {
     await this.repository.saveHousehold(updatedHousehold);
     await this.repository.saveRsvp(household.householdId, rsvp);
     await this.notifyRsvpChanged(updatedHousehold, rsvp);
+    const counts = summarizeRsvpCounts(rsvp);
+    logStructured({
+      level: 'info',
+      event: 'rsvp.update.completed',
+      message: 'RSVP update saved',
+      householdId: household.householdId,
+      outcome: 'success',
+      rsvpStatus: updatedHousehold.rsvpStatus,
+      attendingCount: counts.attendingCount,
+      declinedCount: counts.declinedCount,
+      plusOneCount: counts.plusOneCount,
+    });
     return { household: updatedHousehold, rsvp };
   }
 
@@ -167,6 +188,13 @@ export class WeddingService {
       sourceIpHash,
     );
     if (rateLimited) {
+      logStructured({
+        level: 'warn',
+        event: 'recovery.request.rateLimited',
+        message: 'RSVP recovery rate limited',
+        contactKind: contact.kind,
+        outcome: 'rate_limited',
+      });
       return acceptedRecoveryResponse();
     }
 
@@ -176,6 +204,13 @@ export class WeddingService {
         : await this.repository.listHouseholdsByPhone(contact.value);
 
     if (households.length === 0) {
+      logStructured({
+        level: 'info',
+        event: 'recovery.request.accepted',
+        message: 'RSVP recovery accepted',
+        contactKind: contact.kind,
+        outcome: 'accepted',
+      });
       return acceptedRecoveryResponse();
     }
 
@@ -215,27 +250,58 @@ export class WeddingService {
             household: consentedHousehold,
             invitation,
           });
+          logStructured({
+            level: 'info',
+            event: 'recovery.delivery.completed',
+            message: 'RSVP recovery delivery succeeded',
+            householdId: household.householdId,
+            contactKind: contact.kind,
+            channel: 'email',
+            outcome: 'success',
+          });
         } else {
           await this.householdMessenger.sendRecoverySms({
             household: consentedHousehold,
             invitation,
           });
+          logStructured({
+            level: 'info',
+            event: 'recovery.delivery.completed',
+            message: 'RSVP recovery delivery succeeded',
+            householdId: household.householdId,
+            contactKind: contact.kind,
+            channel: 'sms',
+            outcome: 'success',
+          });
         }
       } catch (error) {
-        console.error('RSVP recovery delivery failed', {
+        logStructured({
+          level: 'error',
+          event: 'recovery.delivery.failed',
+          message: 'RSVP recovery delivery failed',
           householdId: household.householdId,
           contactKind: contact.kind,
-          error,
+          channel: contact.kind === 'email' ? 'email' : 'sms',
+          outcome: 'failed',
+          ...describeError(error),
+          statusCode: getErrorStatusCode(error),
         });
       }
     }
 
+    logStructured({
+      level: 'info',
+      event: 'recovery.request.accepted',
+      message: 'RSVP recovery accepted',
+      contactKind: contact.kind,
+      outcome: 'accepted',
+    });
     return acceptedRecoveryResponse();
   }
 
   async listHouseholds(): Promise<AdminHouseholdRecord[]> {
     const households = await this.repository.listHouseholds();
-    return Promise.all(
+    const result = await Promise.all(
       households.map(async (household) => {
         const rsvp = await this.getStoredRsvp(household.householdId);
         return {
@@ -248,6 +314,14 @@ export class WeddingService {
         };
       }),
     );
+    logStructured({
+      level: 'info',
+      event: 'admin.households.listed',
+      message: 'Households listed',
+      outcome: 'success',
+      recordCount: result.length,
+    });
+    return result;
   }
 
   async createHousehold(input: unknown): Promise<Household> {
@@ -284,6 +358,14 @@ export class WeddingService {
     };
 
     await this.repository.saveHousehold(household);
+    logStructured({
+      level: 'info',
+      event: 'admin.household.created',
+      message: 'Household created',
+      householdId,
+      outcome: 'success',
+      memberCount: household.members.length,
+    });
     return household;
   }
 
@@ -318,7 +400,16 @@ export class WeddingService {
       await this.repository.saveHousehold(household);
     }
 
-    return { imported: ids.size, households };
+    const result = { imported: ids.size, households };
+    logStructured({
+      level: 'info',
+      event: 'admin.households.imported',
+      message: 'Households imported',
+      outcome: 'success',
+      recordCount: rawRows.length,
+      importedCount: ids.size,
+    });
+    return result;
   }
 
   async updateHousehold(
@@ -347,6 +438,14 @@ export class WeddingService {
     };
 
     await this.repository.saveHousehold(updated);
+    logStructured({
+      level: 'info',
+      event: 'admin.household.updated',
+      message: 'Household updated',
+      householdId,
+      outcome: 'success',
+      memberCount: updated.members.length,
+    });
     return updated;
   }
 
@@ -379,6 +478,14 @@ export class WeddingService {
     };
 
     await this.repository.saveHousehold(updated);
+    logStructured({
+      level: 'info',
+      event: 'admin.householdMember.updated',
+      message: 'Household member updated',
+      householdId,
+      outcome: 'success',
+      memberCount: updated.members.length,
+    });
     return updated;
   }
 
@@ -406,6 +513,14 @@ export class WeddingService {
         updatedAt: now,
       };
       await this.repository.saveHousehold(updated);
+      logStructured({
+        level: 'info',
+        event: 'admin.householdMember.removed',
+        message: 'Household member archived',
+        householdId,
+        outcome: 'success',
+        memberCount: updated.members.length,
+      });
       return updated;
     }
 
@@ -422,6 +537,14 @@ export class WeddingService {
       updatedAt: now,
     };
     await this.repository.saveHousehold(updated);
+    logStructured({
+      level: 'info',
+      event: 'admin.householdMember.removed',
+      message: 'Household member removed',
+      householdId,
+      outcome: 'success',
+      memberCount: updated.members.length,
+    });
     return updated;
   }
 
@@ -441,6 +564,14 @@ export class WeddingService {
       updatedAt: now,
     };
     await this.repository.saveHousehold(updated);
+    logStructured({
+      level: 'info',
+      event: 'admin.household.archived',
+      message: 'Household archived',
+      householdId,
+      outcome: 'success',
+      lifecycleStatus: 'archived',
+    });
     return updated;
   }
 
@@ -502,6 +633,16 @@ export class WeddingService {
       updatedAt: now,
     };
     await this.repository.saveHousehold(updated);
+    logStructured({
+      level: 'info',
+      event: 'admin.inviteLifecycle.updated',
+      message: 'Invite lifecycle updated',
+      householdId,
+      outcome: 'success',
+      fromStatus: household.inviteLifecycleStatus,
+      toStatus: parsed.data.status,
+      lifecycleStatus: parsed.data.status,
+    });
     return updated;
   }
 
@@ -535,6 +676,16 @@ export class WeddingService {
       inviteCodeLastRotatedAt: rotatedAt,
       updatedAt: rotatedAt,
     });
+    logStructured({
+      level: 'info',
+      event: 'admin.inviteCode.rotated',
+      message: 'Invite code rotated',
+      householdId,
+      outcome: 'success',
+      fromStatus: household.inviteLifecycleStatus,
+      toStatus: 'generated',
+      lifecycleStatus: 'generated',
+    });
 
     return { inviteCode, inviteCodeHash };
   }
@@ -562,6 +713,13 @@ export class WeddingService {
       );
     }
 
+    logStructured({
+      level: 'info',
+      event: 'invitation.revealed',
+      message: 'Invitation revealed',
+      householdId,
+      outcome: 'success',
+    });
     return this.buildInvitationDetails(household, inviteCode, baseUrl);
   }
 
@@ -608,12 +766,30 @@ export class WeddingService {
         invitation,
       });
       await this.markInvitationSent(household);
+      logStructured({
+        level: 'info',
+        event: 'invitation.email.processed',
+        message: 'Invitation email processed',
+        householdId,
+        outcome: result.status === 'sent' ? 'success' : result.status,
+        channel: 'email',
+      });
       return { result, invitation };
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : 'Unable to send invitation email';
+      logStructured({
+        level: 'error',
+        event: 'invitation.email.failed',
+        message: 'Invitation email failed',
+        householdId,
+        channel: 'email',
+        outcome: 'failed',
+        ...describeError(error),
+        statusCode: getErrorStatusCode(error),
+      });
       return {
         invitation,
         result: invitationEmailResult(household, 'failed', message),
@@ -650,6 +826,17 @@ export class WeddingService {
       }
     }
 
+    const summary = summarizeInvitationEmailResults(results);
+    logStructured({
+      level: 'info',
+      event: 'invitation.email.bulkCompleted',
+      message: 'Invitation email bulk send completed',
+      outcome: 'success',
+      recordCount: households.length,
+      sentCount: summary.sentCount,
+      skippedCount: summary.skippedCount,
+      failedCount: summary.failedCount,
+    });
     return { results };
   }
 
@@ -705,18 +892,37 @@ export class WeddingService {
     }
 
     try {
-      return await this.householdMessenger.sendHouseholdNotification({
+      const result = await this.householdMessenger.sendHouseholdNotification({
         household:
           payload.channel === 'sms' && smsDeliveryPhone
             ? { ...household, phone: smsDeliveryPhone }
             : household,
         ...payload,
       });
+      logStructured({
+        level: 'info',
+        event: 'notification.household.completed',
+        message: 'Household notification delivered',
+        householdId,
+        channel: result.channel,
+        outcome: 'success',
+      });
+      return result;
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : 'Unable to send household notification';
+      logStructured({
+        level: 'error',
+        event: 'notification.household.failed',
+        message: 'Household notification failed',
+        householdId,
+        channel: payload.channel,
+        outcome: 'failed',
+        ...describeError(error),
+        statusCode: getErrorStatusCode(error),
+      });
       throw new PublicError(message, 502);
     }
   }
@@ -729,8 +935,15 @@ export class WeddingService {
         rsvp: await this.getStoredRsvp(household.householdId),
       })),
     );
-
-    return rsvpsToCsv(rows);
+    const csv = rsvpsToCsv(rows);
+    logStructured({
+      level: 'info',
+      event: 'admin.rsvps.exported',
+      message: 'RSVP export generated',
+      outcome: 'success',
+      recordCount: rows.length,
+    });
+    return csv;
   }
 
   async exportInvitations(baseUrl: string): Promise<string> {
@@ -744,13 +957,28 @@ export class WeddingService {
           : '',
       })),
     );
-
-    return invitationExportToCsv(csvRows);
+    const csv = invitationExportToCsv(csvRows);
+    logStructured({
+      level: 'info',
+      event: 'invitation.exported',
+      message: 'Invitation export generated',
+      outcome: 'success',
+      recordCount: csvRows.length,
+    });
+    return csv;
   }
 
   async exportInvitationLabels(baseUrl: string): Promise<Buffer> {
     const rows = await this.prepareInvitationExportRows(baseUrl);
-    return createInvitationLabelsPdf(rows.filter((row) => row.rsvpUrl));
+    const pdf = await createInvitationLabelsPdf(rows.filter((row) => row.rsvpUrl));
+    logStructured({
+      level: 'info',
+      event: 'invitation.labels.exported',
+      message: 'Invitation label export generated',
+      outcome: 'success',
+      recordCount: rows.length,
+    });
+    return pdf;
   }
 
   private async ensureRecoverableInvitation(
@@ -1134,10 +1362,14 @@ export class WeddingService {
     try {
       await this.rsvpNotifier.notifyRsvpChanged({ household, rsvp });
     } catch (error) {
-      console.error('RSVP notification failed', {
+      logStructured({
+        level: 'error',
+        event: 'notification.rsvpAdmin.failed',
+        message: 'RSVP admin notification failed',
         householdId: household.householdId,
-        rsvpUpdatedAt: rsvp.updatedAt,
-        error,
+        outcome: 'failed',
+        ...describeError(error),
+        statusCode: getErrorStatusCode(error),
       });
     }
   }
@@ -1472,6 +1704,40 @@ function summarizeAttendance(
     pendingGuests: 0,
     plusOneGuests: rsvp.plusOnes.length,
   };
+}
+
+function summarizeRsvpCounts(rsvp: StoredRsvp): {
+  attendingCount: number;
+  declinedCount: number;
+  plusOneCount: number;
+} {
+  const attendingCount = rsvp.members.filter((member) => member.attending).length;
+  const declinedCount = rsvp.members.length - attendingCount;
+  return {
+    attendingCount,
+    declinedCount,
+    plusOneCount: rsvp.plusOnes.length,
+  };
+}
+
+function summarizeInvitationEmailResults(results: InvitationEmailResult[]): {
+  sentCount: number;
+  skippedCount: number;
+  failedCount: number;
+} {
+  return results.reduce(
+    (counts, result) => {
+      if (result.status === 'sent') {
+        counts.sentCount += 1;
+      } else if (result.status === 'skipped') {
+        counts.skippedCount += 1;
+      } else {
+        counts.failedCount += 1;
+      }
+      return counts;
+    },
+    { sentCount: 0, skippedCount: 0, failedCount: 0 },
+  );
 }
 
 function invitationEmailResult(

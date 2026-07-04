@@ -5,7 +5,7 @@ name = "matt_alison_wedding"
 [setup]
 script = '''
 cd "$CODEX_WORKTREE_PATH"
-git pull origin develop
+git pull origin main
 npm install
 '''
 

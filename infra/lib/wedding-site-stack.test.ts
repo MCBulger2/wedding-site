@@ -86,6 +86,21 @@ function templateResourcesOfType(
   );
 }
 
+type SynthesizedResource = {
+  Type?: string;
+  Properties?: Record<string, any>;
+  DeletionPolicy?: string;
+  UpdateReplacePolicy?: string;
+};
+
+function templateResourceEntries(
+  template: Record<string, any>,
+): Array<[string, SynthesizedResource]> {
+  return Object.entries(
+    template.Resources as Record<string, SynthesizedResource>,
+  );
+}
+
 function dashboardBodyText(template: Record<string, any>): string {
   const dashboards = templateResourcesOfType(
     template,
@@ -284,6 +299,70 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(JSON.stringify(stage)).not.toContain('throttlingBurstLimit');
   });
 
+  it('creates a one-month API access log group with safe stage access logs', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const apiAccessLogGroupEntry = templateResourceEntries(template).find(
+      ([logicalId, resource]) =>
+        logicalId.includes('ApiAccessLogGroup') &&
+        resource.Type === 'AWS::Logs::LogGroup',
+    );
+    const apiHandlerLogGroupEntry = templateResourceEntries(template).find(
+      ([logicalId, resource]) =>
+        logicalId.includes('ApiHandlerLogGroup') &&
+        resource.Type === 'AWS::Logs::LogGroup',
+    );
+    const stage = templateResourcesOfType(template, 'AWS::ApiGatewayV2::Stage').find(
+      (resource) => resource.Properties?.AccessLogSettings,
+    );
+
+    expect(apiAccessLogGroupEntry).toBeDefined();
+    expect(apiAccessLogGroupEntry?.[1]).toMatchObject({
+      Properties: {
+        RetentionInDays: 30,
+      },
+    });
+    expect(apiHandlerLogGroupEntry).toBeDefined();
+    expect(apiAccessLogGroupEntry?.[1].DeletionPolicy).toBe(
+      apiHandlerLogGroupEntry?.[1].DeletionPolicy,
+    );
+    expect(apiAccessLogGroupEntry?.[1].UpdateReplacePolicy).toBe(
+      apiHandlerLogGroupEntry?.[1].UpdateReplacePolicy,
+    );
+    expect(stage).toBeDefined();
+    expect(stage?.Properties?.AccessLogSettings).toMatchObject({
+      Format:
+        '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLatency":"$context.responseLatency","integrationLatency":"$context.integrationLatency","protocol":"$context.protocol","responseLength":"$context.responseLength"}',
+    });
+    expect(stage?.Properties?.AccessLogSettings?.DestinationArn).toEqual({
+      'Fn::GetAtt': [apiAccessLogGroupEntry?.[0], 'Arn'],
+    });
+    expect(stage?.Properties?.AccessLogSettings?.Format).toContain(
+      'routeKey',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).toContain(
+      'responseLatency',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).not.toContain(
+      'rawPath',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).not.toContain(
+      'queryString',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).not.toContain(
+      'headers',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).not.toContain(
+      'sourceIp',
+    );
+    expect(stage?.Properties?.AccessLogSettings?.Format).not.toContain('body');
+  });
+
   it('creates a dashboard and baseline alarms without notification wiring by default', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
@@ -305,11 +384,18 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(dashboardBody).toContain('Wedding Site staging Operations');
     expect(dashboardBody).toContain('API Gateway Traffic');
     expect(dashboardBody).toContain('API Lambda Health');
+    expect(dashboardBody).toContain('API Request Timeline');
+    expect(dashboardBody).toContain('Recent API Application Events');
+    expect(dashboardBody).toContain('Public RSVP And Recovery Activity');
+    expect(dashboardBody).toContain('Admin Activity');
+    expect(dashboardBody).toContain('Notification Delivery');
     expect(dashboardBody).toContain('DynamoDB Throttles');
     expect(dashboardBody).toContain('DynamoDB System Errors');
     expect(dashboardBody).toContain('CloudFront Error Rates');
     expect(dashboardBody).toContain('Recent API Errors');
     expect(dashboardBody).not.toContain('Contact Forwarder Lambda Health');
+    expect(dashboardBody).not.toContain('Contact Forwarding Activity');
+    expect(dashboardBody).not.toContain('Recent Contact Forwarder Errors');
     expect(dashboardBody).not.toContain('WAF Public RSVP Requests');
   });
 
@@ -359,6 +445,7 @@ describe('WeddingSiteStack infrastructure', () => {
       templateResourcesOfType(template, 'AWS::CloudWatch::Alarm'),
     ).toHaveLength(8);
     expect(dashboardBody).toContain('Contact Forwarder Lambda Health');
+    expect(dashboardBody).toContain('Contact Forwarding Activity');
     expect(dashboardBody).toContain('Recent Contact Forwarder Errors');
   });
 

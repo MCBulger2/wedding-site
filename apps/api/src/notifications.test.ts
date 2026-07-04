@@ -8,7 +8,7 @@ import {
   type Household,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AwsWeddingNotificationsClient,
   buildInvitationEmail,
@@ -19,6 +19,18 @@ import {
 } from './notifications.js';
 
 describe('notifications', () => {
+  let consoleLog: ReturnType<typeof vi.spyOn>;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('builds styled household emails from shared frontend wedding content', () => {
     const email = buildHouseholdNotificationEmail(
       {
@@ -79,6 +91,21 @@ describe('notifications', () => {
     expect(body?.Text?.Data).toContain('Your invitation details are ready.');
     expect(body?.Html?.Data).toContain('Matt &amp; Alison');
     expect(body?.Html?.Data).toContain('Open wedding website');
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        event: 'notification.household.deliveryCompleted',
+        householdId: 'h1',
+        channel: 'email',
+        provider: 'ses',
+        outcome: 'success',
+      }),
+    );
+    const serialized = JSON.stringify(logs);
+    expect(serialized).not.toContain('guest@example.com');
+    expect(serialized).not.toContain('Your invitation details are ready.');
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('builds styled RSVP admin emails without invite-code secrets', () => {
@@ -384,4 +411,8 @@ function createHousehold(overrides: Partial<Household> = {}): Household {
     updatedAt: '2026-06-26T17:00:00.000Z',
     ...overrides,
   };
+}
+
+function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+  return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }
