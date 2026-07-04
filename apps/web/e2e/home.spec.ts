@@ -359,24 +359,37 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
       deltaY: 0,
     });
   };
+  const wheelUntilCaption = async (caption: string) => {
+    await expect
+      .poll(
+        async () => {
+          const currentCaption = await activeCaption.textContent();
+          if (currentCaption !== caption) {
+            await wheelHorizontally(300);
+          }
+          return activeCaption.textContent();
+        },
+        { intervals: [100], timeout: 5_000 },
+      )
+      .toBe(caption);
+  };
   await carousel.scrollIntoViewIfNeeded();
 
   await wheelHorizontally(20);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 
-  await wheelHorizontally(300);
-
-  for (let i = 0; i < 3; i += 1) {
-    await page.waitForTimeout(50);
-    await wheelHorizontally(300);
-  }
-
-  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+  await wheelUntilCaption(secondGalleryPhoto.caption);
   await expect(
     page.getByRole('img', {
       name: secondGalleryPhoto.alt,
     }),
   ).toBeVisible();
+
+  for (let i = 0; i < 3; i += 1) {
+    await page.waitForTimeout(50);
+    await wheelHorizontally(300);
+  }
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
 
   await page.waitForTimeout(500);
   await wheelHorizontally(300);
