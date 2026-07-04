@@ -341,6 +341,16 @@ test('homepage map link opens Apple Maps on Apple devices', async ({
 });
 
 test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const testWindow = window as Window & {
+      __photoCarouselTestNow?: number;
+    };
+    const originalDateNow = Date.now;
+
+    testWindow.__photoCarouselTestNow = 1_000;
+    Date.now = () => testWindow.__photoCarouselTestNow ?? originalDateNow();
+  });
+
   await page.goto('/');
 
   await expect(
@@ -358,6 +368,15 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
       deltaX,
       deltaY: 0,
     });
+  };
+  const setWheelClock = async (now: number) => {
+    await page.evaluate((nextNow) => {
+      (
+        window as Window & {
+          __photoCarouselTestNow?: number;
+        }
+      ).__photoCarouselTestNow = nextNow;
+    }, now);
   };
   const wheelUntilCaption = async (caption: string) => {
     await expect
@@ -391,7 +410,7 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
   }
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
 
-  await page.waitForTimeout(500);
+  await setWheelClock(1_500);
   await wheelHorizontally(300);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
