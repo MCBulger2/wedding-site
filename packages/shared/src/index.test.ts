@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { describe, expect, it, vi } from 'vitest';
 import {
   CalendarEventSchema,
