@@ -49,11 +49,19 @@ export function SiteFooter({ showAdminLink }: { showAdminLink: boolean }) {
       <span>
         {siteContent.coupleNames} · {siteContent.dateLabel}
       </span>
-      {showAdminLink && (
-        <a className={scoped(styles, 'footer-admin-link')} href="/admin">
-          Admin
+      <div className={scoped(styles, 'footer-links')}>
+        <a className={scoped(styles, 'footer-admin-link')} href="/terms">
+          Terms
         </a>
-      )}
+        <a className={scoped(styles, 'footer-admin-link')} href="/privacy">
+          Privacy
+        </a>
+        {showAdminLink && (
+          <a className={scoped(styles, 'footer-admin-link')} href="/admin">
+            Admin
+          </a>
+        )}
+      </div>
     </footer>
   );
 }

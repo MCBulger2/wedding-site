@@ -55,6 +55,26 @@ const notificationRecipientEmails =
   parseStringList(app.node.tryGetContext('notificationRecipientEmails')) ??
   parseStringList(process.env.NOTIFICATION_RECIPIENT_EMAILS) ??
   deploymentConfig.notificationRecipientEmails;
+const twilioAccountSid =
+  readString(app.node.tryGetContext('twilioAccountSid')) ??
+  readString(process.env.TWILIO_ACCOUNT_SID) ??
+  deploymentConfig.twilioAccountSid;
+const twilioApiKeySid =
+  readString(app.node.tryGetContext('twilioApiKeySid')) ??
+  readString(process.env.TWILIO_API_KEY_SID) ??
+  deploymentConfig.twilioApiKeySid;
+const twilioApiKeySecretArn =
+  readString(app.node.tryGetContext('twilioApiKeySecretArn')) ??
+  readString(process.env.TWILIO_API_KEY_SECRET_ARN) ??
+  deploymentConfig.twilioApiKeySecretArn;
+const twilioMessagingServiceSid =
+  readString(app.node.tryGetContext('twilioMessagingServiceSid')) ??
+  readString(process.env.TWILIO_MESSAGING_SERVICE_SID) ??
+  deploymentConfig.twilioMessagingServiceSid;
+const twilioFromPhoneNumber =
+  readString(app.node.tryGetContext('twilioFromPhoneNumber')) ??
+  readString(process.env.TWILIO_FROM_PHONE_NUMBER) ??
+  deploymentConfig.twilioFromPhoneNumber;
 const contactEmailAddress =
   readString(app.node.tryGetContext('contactEmailAddress')) ??
   readString(process.env.CONTACT_EMAIL_ADDRESS) ??
@@ -95,6 +115,11 @@ new WeddingSiteStack(app, `WeddingSite-${envName}`, {
   allowedOrigins,
   notificationSenderEmail,
   notificationRecipientEmails,
+  twilioAccountSid,
+  twilioApiKeySid,
+  twilioApiKeySecretArn,
+  twilioMessagingServiceSid,
+  twilioFromPhoneNumber,
   contactEmailAddress,
   contactForwardingRecipientEmail,
   enablePasskeys,

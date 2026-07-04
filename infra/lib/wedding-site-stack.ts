@@ -39,6 +39,11 @@ export interface WeddingSiteStackProps extends StackProps {
   allowedOrigins: string[];
   notificationSenderEmail?: string;
   notificationRecipientEmails: string[];
+  twilioAccountSid?: string;
+  twilioApiKeySid?: string;
+  twilioApiKeySecretArn?: string;
+  twilioMessagingServiceSid?: string;
+  twilioFromPhoneNumber?: string;
   contactEmailAddress?: string;
   contactForwardingRecipientEmail?: string;
   enablePasskeys: boolean;
@@ -297,9 +302,7 @@ export class WeddingSiteStack extends Stack {
       throttlingBurstLimit: 100,
       throttlingRateLimit: 50,
     };
-    // CfnStage routeSettings is a map whose values must use CloudFormation's
-    // PascalCase field names; the typed CDK property currently serializes them
-    // as lower-case and API Gateway rejects the deployment.
+    // CfnStage routeSettings values must use CloudFormation's PascalCase keys.
     defaultApiStage.addPropertyOverride('RouteSettings', {
       'GET /api/rsvp/{inviteCode}': {
         ThrottlingBurstLimit: 20,
@@ -357,6 +360,7 @@ export class WeddingSiteStack extends Stack {
           })
         : undefined;
     const domainSesIdentities = new Map<string, ses.IEmailIdentity>();
+    const manageHostedZoneSesIdentities = props.envName === 'production';
     const getSesIdentity = (
       id: string,
       emailAddress: string,
@@ -373,9 +377,11 @@ export class WeddingSiteStack extends Stack {
           return existingIdentity;
         }
 
-        const identity = new ses.EmailIdentity(this, id, {
-          identity: ses.Identity.publicHostedZone(hostedZone),
-        });
+        const identity = manageHostedZoneSesIdentities
+          ? new ses.EmailIdentity(this, id, {
+              identity: ses.Identity.publicHostedZone(hostedZone),
+            })
+          : ses.EmailIdentity.fromEmailIdentityName(this, id, domainKey);
         domainSesIdentities.set(domainKey, identity);
         return identity;
       }
@@ -431,6 +437,14 @@ export class WeddingSiteStack extends Stack {
     if (props.cloudFrontWebAclArn) {
       distribution.attachWebAclId(props.cloudFrontWebAclArn);
     }
+    const siteAliasRecord =
+      frontendDomainName && hostedZone
+        ? new route53.ARecord(this, 'SiteAliasRecord', {
+            zone: hostedZone,
+            recordName: frontendDomainName,
+            target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
+          })
+        : undefined;
 
     const deployedFrontendBaseUrl = frontendDomainName
       ? `https://${frontendDomainName}`
@@ -457,6 +471,14 @@ export class WeddingSiteStack extends Stack {
             props.authDomainName,
           ])
         : undefined;
+    const authParentDomainName = props.authDomainName ? getParentDomainName(props.authDomainName) : undefined;
+    const authParentAliasRecord =
+      authParentDomainName &&
+      frontendDomainName &&
+      siteAliasRecord &&
+      normalizeDomainName(authParentDomainName) === normalizeDomainName(frontendDomainName)
+        ? siteAliasRecord
+        : undefined;
     const userPoolDomain =
       props.authDomainName && authCertificate
         ? userPool.addDomain('AdminCustomDomain', {
@@ -474,6 +496,9 @@ export class WeddingSiteStack extends Stack {
           });
     if (authParentValidationRecord) {
       userPoolDomain.node.addDependency(authParentValidationRecord);
+    }
+    if (authParentAliasRecord) {
+      userPoolDomain.node.addDependency(authParentAliasRecord);
     }
 
     const userPoolClient = userPool.addClient('AdminWebClient', {
@@ -528,6 +553,29 @@ export class WeddingSiteStack extends Stack {
             },
           },
         }),
+      );
+    }
+
+    const twilioConfigState = getTwilioConfigState(props);
+    if (twilioConfigState === 'complete') {
+      apiHandler.addEnvironment('TWILIO_ACCOUNT_SID', props.twilioAccountSid!);
+      apiHandler.addEnvironment('TWILIO_API_KEY_SID', props.twilioApiKeySid!);
+      apiHandler.addEnvironment('TWILIO_API_KEY_SECRET_ARN', props.twilioApiKeySecretArn!);
+      if (props.twilioMessagingServiceSid) {
+        apiHandler.addEnvironment('TWILIO_MESSAGING_SERVICE_SID', props.twilioMessagingServiceSid);
+      } else {
+        apiHandler.addEnvironment('TWILIO_FROM_PHONE_NUMBER', props.twilioFromPhoneNumber!);
+      }
+
+      secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        'TwilioApiKeySecret',
+        props.twilioApiKeySecretArn!,
+      ).grantRead(apiHandler);
+    } else if (twilioConfigState === 'partial') {
+      cdk.Annotations.of(this).addWarningV2(
+        'TwilioSmsConfigurationIncomplete',
+        'Twilio SMS requires TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET_ARN, and either TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM_PHONE_NUMBER.',
       );
     }
 
@@ -668,13 +716,6 @@ export class WeddingSiteStack extends Stack {
       );
     }
 
-    apiHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['sns:Publish'],
-        resources: ['*'],
-      }),
-    );
-
     const adminAuthorizer = new authorizers.HttpUserPoolAuthorizer('AdminAuthorizer', userPool, {
       userPoolClients: [userPoolClient],
     });
@@ -718,14 +759,6 @@ export class WeddingSiteStack extends Stack {
       distributionPaths: ['/*'],
       prune: true,
     });
-
-    if (frontendDomainName && hostedZone) {
-      new route53.ARecord(this, 'SiteAliasRecord', {
-        zone: hostedZone,
-        recordName: frontendDomainName,
-        target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
-      });
-    }
 
     if (props.apiDomainName && hostedZone) {
       const apiCertificate = new acm.Certificate(this, 'ApiCertificate', {
@@ -847,6 +880,27 @@ function getEmailDomain(emailAddress: string): string {
 
 function normalizeDomainName(domainName: string): string {
   return domainName.trim().replace(/\.+$/, '').toLowerCase();
+}
+
+function getTwilioConfigState(props: WeddingSiteStackProps): 'complete' | 'partial' | 'absent' {
+  const hasRequired =
+    Boolean(props.twilioAccountSid) &&
+    Boolean(props.twilioApiKeySid) &&
+    Boolean(props.twilioApiKeySecretArn);
+  const hasSender = Boolean(props.twilioMessagingServiceSid) || Boolean(props.twilioFromPhoneNumber);
+  const hasAny = [
+    props.twilioAccountSid,
+    props.twilioApiKeySid,
+    props.twilioApiKeySecretArn,
+    props.twilioMessagingServiceSid,
+    props.twilioFromPhoneNumber,
+  ].some(Boolean);
+
+  if (hasRequired && hasSender) {
+    return 'complete';
+  }
+
+  return hasAny ? 'partial' : 'absent';
 }
 
 function cognitoUserPoolDomainAliasTarget(domain: cognito.UserPoolDomain): route53.IAliasRecordTarget {

@@ -649,3 +649,37 @@
     padding-right: 1.25rem;
   }
 }
+.policy-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.policy-copy,
+.proof-form,
+.proof-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.policy-copy p {
+  margin: 0;
+}
+
+.proof-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proof-form {
+  margin-top: 1rem;
+}
+
+.proof-form :global(.checkbox-row) {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .proof-grid {
+    grid-template-columns: 1fr;
+  }
+}
