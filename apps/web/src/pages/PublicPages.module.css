@@ -6,7 +6,7 @@
       rgba(13, 31, 25, 0.56) 42%,
       rgba(13, 31, 25, 0.16) 100%
     ),
-    url('/hero-wedding.jpg') center / cover;
+    var(--image-hero-wedding) center / cover;
   align-items: center;
   color: var(--hero-text);
   display: flex;

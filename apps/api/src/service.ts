@@ -1215,15 +1215,21 @@ export class WeddingService {
     sourceIpHash: string,
   ): Promise<boolean> {
     const now = Date.now();
+    const windowStartsAt =
+      Math.floor(now / RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS) *
+      RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS;
+    const windowExpiresAt = windowStartsAt + RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS;
     const contactAttempts = await this.recordRsvpRecoveryAttempt(
       'contact',
       contactHash,
-      now,
+      windowStartsAt,
+      windowExpiresAt,
     );
     const ipAttempts = await this.recordRsvpRecoveryAttempt(
       'ip',
       sourceIpHash,
-      now,
+      windowStartsAt,
+      windowExpiresAt,
     );
     return (
       contactAttempts > RSVP_RECOVERY_CONTACT_LIMIT ||
@@ -1234,24 +1240,17 @@ export class WeddingService {
   private async recordRsvpRecoveryAttempt(
     scope: 'contact' | 'ip',
     keyHash: string,
-    now: number,
+    windowStartsAt: number,
+    windowExpiresAt: number,
   ): Promise<number> {
-    const existing = await this.repository.getRecoveryRateLimitRecord(
+    return this.repository.recordRecoveryRateLimitAttempt({
       scope,
       keyHash,
-    );
-    const withinWindow = existing && existing.windowExpiresAt > now;
-    const attempts = withinWindow ? existing.attempts + 1 : 1;
-
-    await this.repository.saveRecoveryRateLimitRecord({
-      scope,
-      keyHash,
-      attempts,
-      windowExpiresAt: now + RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS,
-      updatedAt: new Date(now).toISOString(),
+      windowStartsAt,
+      attempts: 0,
+      windowExpiresAt,
+      updatedAt: new Date().toISOString(),
     });
-
-    return attempts;
   }
 
   private validateRsvpAgainstHousehold(
