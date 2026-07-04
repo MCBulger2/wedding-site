@@ -37,9 +37,9 @@ export interface WeddingRepository {
   listHouseholds(): Promise<Household[]>;
   saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void>;
   saveHousehold(household: Household): Promise<void>;
+  saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
   saveInviteCodeSecret(secret: InviteCodeSecret): Promise<void>;
-  saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void>;
 }
 
 interface StoredHouseholdItem extends Household {
@@ -204,20 +204,7 @@ export class DynamoWeddingRepository implements WeddingRepository {
 
   async saveHousehold(household: Household): Promise<void> {
     const existingRsvp = await this.getRsvp(household.householdId);
-    const item: StoredHouseholdItem = {
-      ...household,
-      rsvp: existingRsvp,
-      rsvpStatus: existingRsvp ? deriveRsvpStatus(existingRsvp) : household.rsvpStatus,
-      ...householdKey(household.householdId),
-      entityType: 'Household',
-    };
-
-    await this.client.send(
-      new PutCommand({
-        TableName: this.tableName,
-        Item: item,
-      }),
-    );
+    await this.putHouseholdItem(household, existingRsvp);
   }
 
   async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
@@ -260,24 +247,32 @@ export class DynamoWeddingRepository implements WeddingRepository {
     );
   }
 
-  async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
-    const household = await this.getHousehold(householdId);
-    if (!household) {
-      throw new Error('Household not found');
-    }
+  async saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void> {
+    await this.putHouseholdItem(household, rsvp, 'attribute_exists(pk) AND attribute_exists(sk)');
+  }
+
+  private async putHouseholdItem(
+    household: Household,
+    rsvp?: StoredRsvp,
+    conditionExpression?: string,
+  ): Promise<void> {
+    const putInput = {
+      TableName: this.tableName,
+      Item: {
+        ...household,
+        rsvp,
+        rsvpStatus: rsvp ? deriveRsvpStatus(rsvp) : household.rsvpStatus,
+        updatedAt: rsvp?.updatedAt ?? household.updatedAt,
+        ...householdKey(household.householdId),
+        entityType: 'Household',
+      } satisfies StoredHouseholdItem,
+      ...(conditionExpression
+        ? { ConditionExpression: conditionExpression }
+        : {}),
+    };
 
     await this.client.send(
-      new PutCommand({
-        TableName: this.tableName,
-        Item: {
-          ...household,
-          rsvp,
-          rsvpStatus: deriveRsvpStatus(rsvp),
-          updatedAt: rsvp.updatedAt,
-          ...householdKey(householdId),
-          entityType: 'Household',
-        } satisfies StoredHouseholdItem,
-      }),
+      new PutCommand(putInput),
     );
   }
 }
@@ -335,6 +330,18 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     });
   }
 
+  async saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void> {
+    if (!this.households.has(household.householdId)) {
+      throw new Error('Household not found');
+    }
+    this.rsvps.set(household.householdId, rsvp);
+    this.households.set(household.householdId, {
+      ...household,
+      rsvpStatus: deriveRsvpStatus(rsvp),
+      updatedAt: rsvp.updatedAt,
+    });
+  }
+
   async saveRecoveryRateLimitRecord(record: RecoveryRateLimitRecord): Promise<void> {
     this.recoveryRateLimits.set(`${record.scope}:${record.keyHash}`, record);
   }
@@ -347,18 +354,6 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     this.inviteCodeSecrets.set(secret.householdId, secret);
   }
 
-  async saveRsvp(householdId: string, rsvp: StoredRsvp): Promise<void> {
-    const household = this.households.get(householdId);
-    if (!household) {
-      throw new Error('Household not found');
-    }
-    this.rsvps.set(householdId, rsvp);
-    this.households.set(householdId, {
-      ...household,
-      rsvpStatus: deriveRsvpStatus(rsvp),
-      updatedAt: rsvp.updatedAt,
-    });
-  }
 }
 
 export function deriveRsvpStatus(rsvp: Pick<StoredRsvp, 'members'>): Household['rsvpStatus'] {
