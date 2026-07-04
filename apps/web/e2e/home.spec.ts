@@ -542,7 +542,13 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
   await page.goto('/rsvp');
   await page.getByRole('button', { name: "Don't have a code?" }).click();
   await page.getByLabel('Email or mobile number').fill('(480) 555-0100');
-  await expect(page.getByRole('checkbox')).not.toBeChecked();
+  const smsConsentCheckbox = page.getByRole('checkbox');
+  await expect(smsConsentCheckbox).not.toBeChecked();
+  const smsConsentCheckboxBounds = await smsConsentCheckbox.boundingBox();
+  expect(smsConsentCheckboxBounds).not.toBeNull();
+  expect(smsConsentCheckboxBounds!.width).toBeGreaterThanOrEqual(16);
+  expect(smsConsentCheckboxBounds!.height).toBeGreaterThanOrEqual(16);
+  expect(smsConsentCheckboxBounds!.height).toBeLessThanOrEqual(24);
   await page.getByRole('button', { name: 'Send private RSVP link' }).click();
   await expect(
     page.getByText(
@@ -551,8 +557,8 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
   ).toBeVisible();
   expect(recoveryRequests).toEqual([]);
 
-  await page.getByRole('checkbox').check();
-  await expect(page.getByRole('checkbox')).toBeChecked();
+  await smsConsentCheckbox.check();
+  await expect(smsConsentCheckbox).toBeChecked();
   await Promise.all([
     page.waitForResponse('**/api/rsvp/recovery'),
     page.locator('#rsvp-recovery-form').evaluate((form) => {
