@@ -385,6 +385,7 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(dashboardBody).toContain('API Gateway Traffic');
     expect(dashboardBody).toContain('API Lambda Health');
     expect(dashboardBody).toContain('API Request Timeline');
+    expect(dashboardBody).not.toContain('sort bin(5m)');
     expect(dashboardBody).toContain('Recent API Application Events');
     expect(dashboardBody).toContain('Public RSVP And Recovery Activity');
     expect(dashboardBody).toContain('Admin Activity');
