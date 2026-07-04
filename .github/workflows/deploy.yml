@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  release:
+    types:
+      - published
   workflow_dispatch:
     inputs:
       environment:
@@ -15,13 +18,12 @@ on:
           - staging
           - production
       ref:
-        description: Branch, tag, or SHA to deploy. Production refs must be on main or a v* tag.
+        description: Branch, tag, or SHA to deploy. Production refs must resolve to main; release tags must be v*.
         required: false
         type: string
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   NODE_VERSION: 24
@@ -29,6 +31,7 @@ env:
 jobs:
   resolve-deploy:
     name: resolve-deploy
+    if: ${{ github.event_name != 'release' || github.event.release.prerelease == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -40,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
 
       - id: resolve
@@ -51,6 +54,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             target_environment="staging"
             target_ref="${GITHUB_REF_NAME}"
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            target_environment="production"
+            target_ref="${{ github.event.release.tag_name }}"
           else
             target_environment="${{ inputs.environment }}"
             target_ref="${{ inputs.ref }}"
@@ -68,16 +74,15 @@ jobs:
           esac
 
           target_sha="$(git rev-parse HEAD)"
-          deploy_staging="true"
+          deploy_staging="false"
           deploy_production="false"
 
-          if [[ "${target_environment}" == "production" ]]; then
-            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-              echo "::error::Production deploys must be started manually."
-              exit 1
-            fi
+          if [[ "${target_environment}" == "staging" ]]; then
+            deploy_staging="true"
+          else
+            deploy_production="true"
 
-            git fetch --no-tags origin main
+            git fetch --no-tags origin main:refs/remotes/origin/main
             release_tag="false"
             if [[ "${target_ref}" == refs/tags/v* ]]; then
               release_tag="true"
@@ -85,12 +90,15 @@ jobs:
               release_tag="true"
             fi
 
-            if [[ "${release_tag}" != "true" ]] && ! git merge-base --is-ancestor "${target_sha}" origin/main; then
-              echo "::error::Production deploy ref must resolve to a commit already on main or to a v* tag."
+            if [[ "${{ github.event_name }}" == "release" ]] && [[ "${release_tag}" != "true" ]]; then
+              echo "::error::GitHub Release production deploys must use a v* tag."
               exit 1
             fi
 
-            deploy_production="true"
+            if ! git merge-base --is-ancestor "${target_sha}" origin/main; then
+              echo "::error::Production deploy ref must resolve to a commit already on main."
+              exit 1
+            fi
           fi
 
           {
@@ -138,6 +146,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
+    permissions:
+      contents: read
+      id-token: write
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
@@ -192,11 +203,13 @@ jobs:
     needs:
       - resolve-deploy
       - deploy-verify
-      - deploy-staging
     if: needs.resolve-deploy.outputs.deploy-production == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     concurrency:
       group: deploy-production
       cancel-in-progress: false
