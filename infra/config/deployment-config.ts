@@ -14,6 +14,7 @@ export interface DeploymentConfig {
   twilioFromPhoneNumber?: string;
   contactEmailAddress?: string;
   contactForwardingRecipientEmail?: string;
+  operationsAlertEmails: string[];
   enablePasskeys: boolean;
 }
 
@@ -22,12 +23,14 @@ export const deploymentConfigs: Record<string, DeploymentConfig> = {
     appRegion: 'us-west-1',
     allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     notificationRecipientEmails: [],
+    operationsAlertEmails: [],
     enablePasskeys: true,
   },
   production: {
     appRegion: 'us-west-1',
     allowedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     notificationRecipientEmails: [],
+    operationsAlertEmails: [],
     enablePasskeys: true,
   },
 };

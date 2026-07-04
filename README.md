@@ -94,12 +94,12 @@ cp .env.staging.example .env.staging.local
 cp .env.production.example .env.production.local
 ```
 
-Local `.env*` files are ignored by Git. Do not commit real domains, notification recipients, Twilio API key secrets, guest data, or invite codes. SMS delivery uses Twilio through the API Lambda. Store the Twilio API key secret value in AWS Secrets Manager and configure only the account/API key identifiers, sender identifier, and secret ARN in environment variables.
+Local `.env*` files are ignored by Git. Do not commit real domains, notification recipients, operations alert recipients, Twilio API key secrets, guest data, or invite codes. SMS delivery uses Twilio through the API Lambda. Store the Twilio API key secret value in AWS Secrets Manager and configure only the account/API key identifiers, sender identifier, and secret ARN in environment variables.
 
 You can still override any value with CDK context or environment variables. For example:
 
 ```bash
-npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging -c envName=staging -c hostedZoneDomain=matt-alison.com -c frontendDomainName=staging.matt-alison.com -c apiDomainName=api.staging.matt-alison.com -c authDomainName=login.staging.matt-alison.com -c allowedOrigins=https://staging.matt-alison.com
+npm run deploy:infra -- WeddingSiteCertificates-staging WeddingSite-staging WeddingSiteEdgeObservability-staging -c envName=staging -c hostedZoneDomain=matt-alison.com -c frontendDomainName=staging.matt-alison.com -c apiDomainName=api.staging.matt-alison.com -c authDomainName=login.staging.matt-alison.com -c allowedOrigins=https://staging.matt-alison.com
 ```
 
 Destroy infrastructure with the matching commands when you intentionally want to tear an environment down:
@@ -125,6 +125,8 @@ Production should be deployed through GitHub Actions after required checks pass.
 - Cognito user pool for admin access.
 - WAF rules and rate limits where appropriate.
 - CloudWatch log groups with explicit retention.
+- CloudWatch dashboard and alarms for API, Lambda, DynamoDB, CloudFront, and optional WAF/contact-forwarding signals.
+- A us-east-1 edge observability stack for CloudFront alarms, because CloudFront metrics are global.
 
 Use separate staging and production environments so risky changes can be tested before guests use the site.
 
@@ -138,7 +140,8 @@ The deploy workflow expects these GitHub environment settings:
 - Variable `HOSTED_ZONE_DOMAIN`: optional hosted-zone lookup domain override.
 - Variable `ALLOWED_ORIGINS`: optional comma-separated CORS origins for direct API access.
 - Variable `NOTIFICATION_SENDER_EMAIL`: optional SES sender override.
-- Variable `NOTIFICATION_RECIPIENT_EMAILS`: optional comma-separated notification recipients.
+- Variable `NOTIFICATION_RECIPIENT_EMAILS`: optional comma-separated RSVP/admin notification recipients.
+- Variable `OPERATIONS_ALERT_EMAILS`: optional comma-separated CloudWatch alarm email recipients. Each recipient must confirm the SNS subscription email after deployment before alarms can notify them.
 - Variable `TWILIO_ACCOUNT_SID`: optional Twilio account SID for SMS delivery.
 - Variable `TWILIO_API_KEY_SID`: optional Twilio API key SID for SMS delivery.
 - Variable `TWILIO_API_KEY_SECRET_ARN`: optional AWS Secrets Manager ARN containing the Twilio API key secret.
