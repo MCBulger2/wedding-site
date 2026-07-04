@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "npm run images:check && npm run images:generate && tsc -p tsconfig.json && vite build",
     "dev": "vite",
+    "images:check": "node scripts/check-responsive-images-untracked.mjs",
+    "images:generate": "node scripts/generate-responsive-images.mjs",
+    "predev": "npm run images:generate",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -23,6 +26,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "sharp": "^0.35.3",
     "vite": "^8.1.3"
   }
 }

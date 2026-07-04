@@ -221,6 +221,10 @@
   box-sizing: border-box;
 }
 
+.responsive-image-picture {
+  display: contents;
+}
+
 html {
   scroll-behavior: smooth;
 }

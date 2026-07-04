@@ -13,3 +13,4 @@ cdk.out*/
 infra/cdk.context.json
 *.tsbuildinfo
 apps/web/.vite/
+apps/web/public/images/

@@ -7,6 +7,7 @@ import {
   SmsConsentCheckboxField,
   smsPhonePlaceholder,
 } from '../components/SmsConsentFields.js';
+import { ResponsiveImage } from '../components/ResponsiveImage.js';
 import { siteContent } from '../siteContent.js';
 import styles from './PublicPages.module.css';
 
@@ -279,12 +280,13 @@ export function RegistryPage() {
             >
               {link.image && (
                 <div className={scoped(styles, 'registry-card-media')}>
-                  <img
+                  <ResponsiveImage
                     src={link.image.src}
                     alt={link.image.alt}
                     loading="lazy"
+                    sizes="(min-width: 980px) 220px, 100vw"
                     decoding="async"
-                    style={{ objectPosition: link.image.objectPosition }}
+                    objectPosition={link.image.objectPosition}
                   />
                 </div>
               )}
@@ -333,10 +335,11 @@ export function OurStoryPage() {
           <p className="page-lede">{ourStory.intro}</p>
         </div>
         <figure className={scoped(styles, 'our-story-hero-image')}>
-          <img
+          <ResponsiveImage
             src={ourStory.heroImage.src}
             alt={ourStory.heroImage.alt}
-            style={{ objectPosition: ourStory.heroImage.objectPosition }}
+            sizes="(min-width: 900px) 56vw, 100vw"
+            objectPosition={ourStory.heroImage.objectPosition}
           />
         </figure>
       </section>
@@ -344,11 +347,12 @@ export function OurStoryPage() {
       <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-meet'))}>
         {meetSection?.image && (
           <figure className={scoped(styles, 'story-thumbnail')}>
-            <img
+            <ResponsiveImage
               src={meetSection.image.src}
               alt={meetSection.image.alt}
               decoding="async"
-              style={{ objectPosition: meetSection.image.objectPosition }}
+              sizes="(min-width: 760px) 180px, 100vw"
+              objectPosition={meetSection.image.objectPosition}
             />
           </figure>
         )}
@@ -359,11 +363,12 @@ export function OurStoryPage() {
         <StoryText title={proposalSection?.title} body={proposalSection?.body} />
         {proposalSection?.image && (
           <figure className={scoped(styles, 'story-landscape')}>
-            <img
+            <ResponsiveImage
               src={proposalSection.image.src}
               alt={proposalSection.image.alt}
               decoding="async"
-              style={{ objectPosition: proposalSection.image.objectPosition }}
+              sizes="(min-width: 900px) 44vw, 100vw"
+              objectPosition={proposalSection.image.objectPosition}
             />
           </figure>
         )}
@@ -653,12 +658,13 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
                 aria-hidden={index === activeIndex ? 'false' : 'true'}
                 key={`${photo.src}-${photo.caption}`}
               >
-                <img
+                <ResponsiveImage
                   src={photo.src}
                   alt={photo.alt}
                   loading={index === 0 ? 'eager' : 'lazy'}
                   decoding="async"
-                  style={{ objectPosition: photo.objectPosition }}
+                  sizes="(min-width: 980px) 58vw, 100vw"
+                  objectPosition={photo.objectPosition}
                 />
               </figure>
             ))}

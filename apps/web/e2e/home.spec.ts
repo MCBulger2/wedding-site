@@ -60,6 +60,39 @@ const secondGalleryPhoto = {
   caption: 'Alison & Matt after the proposal',
 };
 
+async function expectResponsiveImageDelivery(
+  image: Locator,
+  expectedFallbackPath: string,
+) {
+  await expect(image).toHaveAttribute('src', expectedFallbackPath);
+
+  const delivery = await image.evaluate((element) => {
+    const img = element as HTMLImageElement;
+    const picture = img.closest('picture');
+
+    return {
+      sources: Array.from(picture?.querySelectorAll('source') ?? []).map(
+        (source) => ({
+          srcSet: source.srcset,
+          type: source.type,
+        }),
+      ),
+    };
+  });
+
+  await expect
+    .poll(() =>
+      image.evaluate((element) => (element as HTMLImageElement).currentSrc),
+    )
+    .toContain('/images/');
+  expect(delivery.sources).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ type: 'image/avif' }),
+      expect.objectContaining({ type: 'image/webp' }),
+    ]),
+  );
+}
+
 async function openHouseholdActions(card: Locator) {
   const trigger = card.getByRole('button', { name: 'Actions' });
   await trigger.evaluate((element) => {
@@ -87,6 +120,13 @@ async function clickHouseholdAction(card: Locator, actionName: string) {
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
+  await expect
+    .poll(() =>
+      page
+        .locator('.hero')
+        .evaluate((element) => getComputedStyle(element).backgroundImage),
+    )
+    .toContain('/images/hero-wedding');
   await expect(
     page.getByRole('heading', { name: 'Matt & Alison' }),
   ).toBeVisible();
@@ -112,6 +152,12 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
       name: firstGalleryPhoto.alt,
     }),
   ).toBeVisible();
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: firstGalleryPhoto.alt,
+    }),
+    '/images/ring-1200.jpg',
+  );
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toHaveAttribute('href', '/our-story');
@@ -244,6 +290,12 @@ test('our story page renders editorial sections and calls to action', async ({
       name: 'Matt proposing to Alison by the lake',
     }),
   ).toBeVisible();
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Matt proposing to Alison by the lake',
+    }),
+    '/images/hero-wedding-1920.jpg',
+  );
   await expect(
     page.getByRole('heading', { name: 'How we met' }),
   ).toBeVisible();
@@ -433,6 +485,12 @@ test('registry page renders configured links', async ({ page }) => {
       name: 'Travel journals, sunglasses, and a camera overlooking a coastal honeymoon destination',
     }),
   ).toBeVisible();
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Travel journals, sunglasses, and a camera overlooking a coastal honeymoon destination',
+    }),
+    '/images/registry-honeymoon-fund-1200.jpg',
+  );
   await expect(
     page.getByRole('img', {
       name: 'Ceramic house, keys, and greenery on a warm tabletop',
@@ -665,6 +723,13 @@ test('admin route shows a minimal sign-in entry point', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Admin sign in' }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('.admin-login-intro')
+        .evaluate((element) => getComputedStyle(element).backgroundImage),
+    )
+    .toContain('/images/hero-wedding');
   await expect(
     page.getByRole('heading', { name: 'Welcome back' }),
   ).toBeVisible();

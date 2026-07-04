@@ -25,7 +25,7 @@
   align-content: center;
   background:
     linear-gradient(135deg, rgba(8, 54, 41, 0.94), rgba(15, 81, 63, 0.78)),
-    url('/hero-wedding.jpg') center / cover;
+    var(--image-hero-wedding) center / cover;
   color: var(--hero-text);
   display: grid;
   padding: clamp(2rem, 5vw, 4rem);
