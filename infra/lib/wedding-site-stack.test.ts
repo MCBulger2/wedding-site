@@ -227,4 +227,31 @@ describe('WeddingSiteStack infrastructure', () => {
       },
     });
   });
+
+  it('synthesizes CloudFormation-compatible route setting keys', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const stage = templateResourcesOfType(
+      template,
+      'AWS::ApiGatewayV2::Stage',
+    ).find((resource) => resource.Properties?.RouteSettings);
+
+    expect(stage).toBeDefined();
+    expect(stage).toMatchObject({
+      Properties: {
+        RouteSettings: {
+          'GET /api/rsvp/{inviteCode}': {
+            ThrottlingBurstLimit: 20,
+            ThrottlingRateLimit: 10,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(stage)).not.toContain('throttlingBurstLimit');
+  });
 });
