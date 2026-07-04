@@ -2,7 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { IConstruct } from 'constructs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CertificateStack } from './certificate-stack.js';
 import { EdgeObservabilityStack } from './edge-observability-stack.js';
 import {
   WeddingSiteStack,
@@ -12,6 +14,47 @@ import {
 const webDistPath = path.resolve('apps/web/dist');
 const webDistIndexPath = path.join(webDistPath, 'index.html');
 let createdWebDistFixture = false;
+
+function resourceTagsForEnv(envName: string): Record<string, string> {
+  return {
+    Project: 'Wedding Site',
+    Environment: envName === 'production' ? 'Production' : 'Staging',
+  };
+}
+
+function applyResourceTags(stack: cdk.Stack, envName: string): void {
+  const tags = resourceTagsForEnv(envName);
+  for (const [key, value] of Object.entries(tags)) {
+    cdk.Tags.of(stack).add(key, value);
+  }
+  cdk.Aspects.of(stack).add(new LambdaFunctionTagAspect(tags));
+}
+
+class LambdaFunctionTagAspect implements cdk.IAspect {
+  constructor(private readonly tags: Record<string, string>) {}
+
+  visit(node: IConstruct): void {
+    if (
+      !cdk.CfnResource.isCfnResource(node) ||
+      node.cfnResourceType !== 'AWS::Lambda::Function'
+    ) {
+      return;
+    }
+
+    const tagManager = (node as unknown as { tags?: cdk.TagManager }).tags;
+    if (tagManager) {
+      for (const [key, value] of Object.entries(this.tags)) {
+        tagManager.setTag(key, value);
+      }
+      return;
+    }
+
+    node.addPropertyOverride(
+      'Tags',
+      Object.entries(this.tags).map(([Key, Value]) => ({ Key, Value })),
+    );
+  }
+}
 
 function synthInviteCodePepper(envName: WeddingSiteStackProps['envName']) {
   const template = synthStackTemplate({
@@ -45,13 +88,53 @@ function synthStackTemplate(props: WeddingSiteStackProps): Record<string, any> {
           Id: 'Z1234567890',
           Name: 'matt-alison.com.',
         },
+      'hosted-zone:account=123456789012:domainName=matt-alison.com:region=us-east-1':
+        {
+          Id: 'Z1234567890',
+          Name: 'matt-alison.com.',
+        },
     },
   });
   const stack = new WeddingSiteStack(
     app,
     `WeddingSite-${props.envName}`,
-    props,
+    {
+      ...props,
+      tags: {
+        ...resourceTagsForEnv(props.envName),
+        ...props.tags,
+      },
+    },
   );
+  applyResourceTags(stack, props.envName);
+  return Template.fromStack(stack).toJSON();
+}
+
+function synthCertificateTemplate(props: {
+  envName: string;
+  hostedZoneDomain?: string;
+  frontendDomainName?: string;
+  authDomainName?: string;
+}): Record<string, any> {
+  const app = new cdk.App({
+    context: {
+      'hosted-zone:account=123456789012:domainName=matt-alison.com:region=us-east-1':
+        {
+          Id: 'Z1234567890',
+          Name: 'matt-alison.com.',
+        },
+    },
+  });
+  const stack = new CertificateStack(
+    app,
+    `WeddingSiteCertificates-${props.envName}`,
+    {
+      env: { account: '123456789012', region: 'us-east-1' },
+      tags: resourceTagsForEnv(props.envName),
+      ...props,
+    },
+  );
+  applyResourceTags(stack, props.envName);
   return Template.fromStack(stack).toJSON();
 }
 
@@ -65,11 +148,13 @@ function synthEdgeObservabilityTemplate(props: {
     `WeddingSiteEdgeObservability-${props.envName}`,
     {
       env: { account: '123456789012', region: 'us-east-1' },
+      tags: resourceTagsForEnv(props.envName),
       envName: props.envName,
       distributionId: 'E1234567890ABC',
       operationsAlertEmails: props.operationsAlertEmails,
     },
   );
+  applyResourceTags(stack, props.envName);
   return Template.fromStack(stack).toJSON();
 }
 
@@ -111,6 +196,28 @@ function dashboardBodyText(template: Record<string, any>): string {
   return JSON.stringify(dashboards[0].Properties?.DashboardBody);
 }
 
+function expectTaggedResourceTypes(
+  template: Record<string, any>,
+  resourceTypes: string[],
+  envName: string,
+): void {
+  for (const resourceType of resourceTypes) {
+    const resources = templateResourcesOfType(template, resourceType);
+    expect(resources.length, resourceType).toBeGreaterThan(0);
+    for (const resource of resources) {
+      expect(resource.Properties?.Tags, resourceType).toEqual(
+        expect.arrayContaining([
+          { Key: 'Project', Value: 'Wedding Site' },
+          {
+            Key: 'Environment',
+            Value: envName === 'production' ? 'Production' : 'Staging',
+          },
+        ]),
+      );
+    }
+  }
+}
+
 describe('WeddingSiteStack infrastructure', () => {
   beforeAll(() => {
     if (!fs.existsSync(webDistPath)) {
@@ -138,6 +245,56 @@ describe('WeddingSiteStack infrastructure', () => {
 
     expect(inviteCodePepper.DeletionPolicy).not.toBe('Retain');
     expect(inviteCodePepper.UpdateReplacePolicy).not.toBe('Retain');
+  });
+
+  it('tags core site stack resources with project and environment values', () => {
+    for (const envName of ['staging', 'production']) {
+      const template = synthStackTemplate({
+        env: { account: '123456789012', region: 'us-west-1' },
+        envName,
+        allowedOrigins: [],
+        notificationRecipientEmails: [],
+        enablePasskeys: false,
+      });
+
+      expectTaggedResourceTypes(
+        template,
+        [
+          'AWS::DynamoDB::Table',
+          'AWS::KMS::Key',
+          'AWS::Lambda::Function',
+          'AWS::S3::Bucket',
+          'AWS::SecretsManager::Secret',
+        ],
+        envName,
+      );
+    }
+  });
+
+  it('tags certificate stack resources with project and environment values', () => {
+    const stagingTemplate = synthCertificateTemplate({
+      envName: 'staging',
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'staging.matt-alison.com',
+      authDomainName: 'login.staging.matt-alison.com',
+    });
+    const productionTemplate = synthCertificateTemplate({
+      envName: 'production',
+      hostedZoneDomain: 'matt-alison.com',
+      frontendDomainName: 'matt-alison.com',
+      authDomainName: 'login.matt-alison.com',
+    });
+
+    expectTaggedResourceTypes(
+      stagingTemplate,
+      ['AWS::CertificateManager::Certificate'],
+      'staging',
+    );
+    expectTaggedResourceTypes(
+      productionTemplate,
+      ['AWS::CertificateManager::Certificate', 'AWS::WAFv2::WebACL'],
+      'production',
+    );
   });
 
   it('creates nested auth domains after the frontend alias record exists', () => {
@@ -530,5 +687,18 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(subscriptions).toHaveLength(1);
     expect(subscriptions[0].Properties.Endpoint).toBe('ops@example.com');
     expect(alarms[0].Properties.AlarmActions).toBeDefined();
+  });
+
+  it('tags edge observability resources with project and environment values', () => {
+    const template = synthEdgeObservabilityTemplate({
+      envName: 'production',
+      operationsAlertEmails: ['ops@example.com'],
+    });
+
+    expectTaggedResourceTypes(
+      template,
+      ['AWS::CloudWatch::Alarm', 'AWS::SNS::Topic'],
+      'production',
+    );
   });
 });
