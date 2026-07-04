@@ -351,19 +351,24 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
 
   const carousel = page.getByLabel('Matt and Alison photos');
   const activeCaption = carousel.locator('.photo-caption-row strong');
+  const wheelHorizontally = async (deltaX: number) => {
+    await carousel.dispatchEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaX,
+      deltaY: 0,
+    });
+  };
   await carousel.scrollIntoViewIfNeeded();
-  const box = await carousel.boundingBox();
-  if (!box) throw new Error('Carousel bounding box not found');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-  await page.mouse.wheel(20, 0);
+  await wheelHorizontally(20);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 
-  await page.mouse.wheel(300, 0);
+  await wheelHorizontally(300);
 
   for (let i = 0; i < 3; i += 1) {
     await page.waitForTimeout(50);
-    await page.mouse.wheel(300, 0);
+    await wheelHorizontally(300);
   }
 
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
@@ -374,7 +379,7 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
   ).toBeVisible();
 
   await page.waitForTimeout(500);
-  await page.mouse.wheel(300, 0);
+  await wheelHorizontally(300);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
 
