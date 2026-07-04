@@ -1531,7 +1531,6 @@ function createRequestTimelineLogQueryWidget(
     [
       'fields @timestamp, routeKey, status, responseLatency, integrationLatency, protocol, responseLength',
       'stats count(*) as requests, avg(responseLatency) as avgResponseLatency, avg(integrationLatency) as avgIntegrationLatency by bin(5m)',
-      'sort bin(5m) desc',
     ],
     cloudwatch.LogQueryVisualizationType.LINE,
   );
