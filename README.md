@@ -113,7 +113,7 @@ Production resources use retain policies where appropriate, so a production dest
 
 ## Deployment Overview
 
-The repository uses `main` as the only long-lived branch. Feature pull requests target `main`; after a merge, GitHub Actions automatically deploys that commit to staging. Production is promoted manually by running the Deploy workflow from `main`, choosing `environment=production`, and, when needed, setting `ref` to a `main` SHA or `v*` tag. The workflow deploys the selected source to staging first, then waits on the production GitHub environment before deploying production.
+The repository uses `main` as the only long-lived branch. Feature pull requests target `main`; after a merge, GitHub Actions automatically deploys that commit to staging. Production is promoted by publishing a non-prerelease GitHub Release for a `v*` tag whose commit is already on `main`. The production workflow verifies the tagged commit is on `main`, waits on the production GitHub environment, and deploys production without redeploying staging, so production can intentionally trail the latest staging commit. Manual Deploy workflow runs remain available for explicit staging deploys or exceptional production redeploys.
 
 Deployment should synthesize and deploy CDK stacks for:
 

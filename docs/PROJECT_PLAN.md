@@ -25,7 +25,7 @@ Use a simple TypeScript monorepo:
 Use two environments:
 
 - `staging`: deployed automatically from `main` after changes merge.
-- `production`: deployed manually by promoting a tested `main` SHA or `v*` tag after staging validation.
+- `production`: deployed automatically when a non-prerelease GitHub Release is published for a tested `v*` tag whose commit is already on `main`.
 
 ## Application Design
 
@@ -122,7 +122,7 @@ Use DynamoDB with a small number of access patterns:
 5. Build backend RSVP and admin endpoints.
 6. Add guest CSV import format and deterministic validation errors before any data is written.
 7. Add CI workflow for typecheck, lint, unit tests, API tests, frontend build, CDK synth, and Playwright smoke tests.
-8. Add deploy workflow that deploys staging from `main` and gates manual production promotion through the production GitHub environment.
+8. Add deploy workflow that deploys staging from `main` and gates GitHub Release-based production promotion through the production GitHub environment.
 9. Run security review before launch: WAF and rate limits, IAM/KMS review, no logged or raw-stored plaintext invite codes, HTTPS-only, admin MFA, and DynamoDB point-in-time recovery.
 10. Do final launch rehearsal with test households before printing mailed invite URLs and QR codes.
 
@@ -182,7 +182,7 @@ Deployment checks should cover:
 
 - `cdk synth` passes.
 - Staging deploy completes from `main`.
-- Production deploy promotes the requested `main` SHA or `v*` tag only after staging has deployed the same source.
+- Production deploy promotes a `v*` GitHub Release tag whose commit is already on `main` without redeploying staging.
 - HTTPS certificate validates.
 - Route 53 aliases resolve.
 - CloudFront serves current assets.

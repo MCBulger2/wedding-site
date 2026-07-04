@@ -14,8 +14,8 @@ GitHub releases use `main` as the only long-lived branch:
 
 - Feature pull requests target `main`.
 - Merges to `main` automatically deploy the current commit to staging.
-- Production deploys are started manually from the Deploy workflow on `main` with `environment=production` and an optional `ref` set to a `main` SHA or `v*` tag.
-- The production workflow deploys the selected source to staging first, then waits on the production GitHub environment before deploying production.
+- Production deploys start automatically when a non-prerelease GitHub Release is published for a `v*` tag whose commit is already on `main`.
+- The production workflow verifies the tagged commit is on `main`, then waits on the production GitHub environment before deploying production. It does not redeploy staging, so production can intentionally remain behind the latest staging commit.
 - `develop` and release branches are not deployment sources.
 
 For local custom-domain deploys, copy the relevant template:
