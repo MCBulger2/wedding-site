@@ -1,7 +1,18 @@
 import { generateIcs } from '@matt-alison-wedding/shared';
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, Gift, Heart, Hotel, KeyRound, MapPin } from 'lucide-react';
-import useEmblaCarousel from 'embla-carousel-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowRight,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Gift,
+  Heart,
+  Hotel,
+  KeyRound,
+  MapPin,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import {
   SmsConsentCheckboxField,
@@ -27,8 +38,13 @@ export function HomePage() {
         <div className={scoped(styles, 'hero-copy')}>
           <p className="eyebrow">Wedding Announcement</p>
           <h1>{siteContent.coupleNames}</h1>
-          <p className={scoped(styles, 'hero-lede')}>{siteContent.announcement}</p>
-          <div className={scoped(styles, 'hero-facts')} aria-label="Wedding highlights">
+          <p className={scoped(styles, 'hero-lede')}>
+            {siteContent.announcement}
+          </p>
+          <div
+            className={scoped(styles, 'hero-facts')}
+            aria-label="Wedding highlights"
+          >
             <span>
               <CalendarDays aria-hidden="true" />
               {siteContent.dateLabel}
@@ -98,7 +114,9 @@ export function HomePage() {
               referrerPolicy="no-referrer"
             />
           </div>
-          <div className={cx('hero-actions', scoped(styles, 'compact-actions'))}>
+          <div
+            className={cx('hero-actions', scoped(styles, 'compact-actions'))}
+          >
             <a
               className="icon-button"
               href={venueMapHref}
@@ -120,7 +138,13 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="travel" className={cx(scoped(styles, 'section-grid'), scoped(styles, 'travel-section'))}>
+      <section
+        id="travel"
+        className={cx(
+          scoped(styles, 'section-grid'),
+          scoped(styles, 'travel-section'),
+        )}
+      >
         <div>
           <p className="eyebrow">Travel</p>
           <h2>Getting there</h2>
@@ -140,7 +164,10 @@ export function HomePage() {
             {siteContent.hotels
               .filter((hotel) => hotel.publiclyShareable)
               .map((hotel) => (
-                <article key={hotel.name} className={scoped(styles, 'hotel-card')}>
+                <article
+                  key={hotel.name}
+                  className={scoped(styles, 'hotel-card')}
+                >
                   <h3>{hotel.name}</h3>
                   <p>{hotel.address}</p>
                   <dl>
@@ -182,7 +209,9 @@ export function HomePage() {
                       </a>
                     )}
                     {hotel.phoneNumber && (
-                      <span className={scoped(styles, 'phone-note')}>{hotel.phoneNumber}</span>
+                      <span className={scoped(styles, 'phone-note')}>
+                        {hotel.phoneNumber}
+                      </span>
                     )}
                   </div>
                 </article>
@@ -217,7 +246,10 @@ export function HomePage() {
                 {faq.link && (
                   <>
                     {' '}
-                    <a className={scoped(styles, 'faq-link')} href={faq.link.href}>
+                    <a
+                      className={scoped(styles, 'faq-link')}
+                      href={faq.link.href}
+                    >
                       {faq.link.label}
                     </a>
                     .
@@ -244,7 +276,9 @@ function getNativeMapUrl(): string {
     /iphone|ipad|ipod/.test(userAgent) ||
     (platform === 'macintel' && navigator.maxTouchPoints > 1);
 
-  return isAppleDevice ? siteContent.venueAppleMapsUrl : siteContent.venueMapUrl;
+  return isAppleDevice
+    ? siteContent.venueAppleMapsUrl
+    : siteContent.venueMapUrl;
 }
 
 export function RegistryPage() {
@@ -328,7 +362,10 @@ export function OurStoryPage() {
 
   return (
     <main className={scoped(styles, 'our-story-page')}>
-      <section className={scoped(styles, 'our-story-hero')} aria-labelledby="our-story-heading">
+      <section
+        className={scoped(styles, 'our-story-hero')}
+        aria-labelledby="our-story-heading"
+      >
         <div className={scoped(styles, 'our-story-hero-copy')}>
           <h1 id="our-story-heading">{ourStory.title}</h1>
           <span className={scoped(styles, 'story-rule')} aria-hidden="true" />
@@ -344,7 +381,12 @@ export function OurStoryPage() {
         </figure>
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-meet'))}>
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-meet'),
+        )}
+      >
         {meetSection?.image && (
           <figure className={scoped(styles, 'story-thumbnail')}>
             <ResponsiveImage
@@ -359,8 +401,16 @@ export function OurStoryPage() {
         <StoryText title={meetSection?.title} body={meetSection?.body} />
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-proposal'))}>
-        <StoryText title={proposalSection?.title} body={proposalSection?.body} />
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-proposal'),
+        )}
+      >
+        <StoryText
+          title={proposalSection?.title}
+          body={proposalSection?.body}
+        />
         {proposalSection?.image && (
           <figure className={scoped(styles, 'story-landscape')}>
             <ResponsiveImage
@@ -374,12 +424,20 @@ export function OurStoryPage() {
         )}
       </section>
 
-      <section className={cx(scoped(styles, 'story-section'), scoped(styles, 'story-section-duo'))}>
+      <section
+        className={cx(
+          scoped(styles, 'story-section'),
+          scoped(styles, 'story-section-duo'),
+        )}
+      >
         <StoryText title={loveSection?.title} body={loveSection?.body} />
         <StoryText title={futureSection?.title} body={futureSection?.body} />
       </section>
 
-      <section className={scoped(styles, 'story-cta-band')} aria-label="Our story next steps">
+      <section
+        className={scoped(styles, 'story-cta-band')}
+        aria-label="Our story next steps"
+      >
         <a className="secondary-button button-inline" href="/#details">
           {ourStory.ctas.detailsLabel}
           <ArrowRight aria-hidden="true" />
@@ -540,39 +598,70 @@ function StoryText({ title, body }: { title?: string; body?: string }) {
 function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const hasMultiplePhotos = photos.length > 1;
-  const [emblaRef, emblaApi] = useEmblaCarousel({
-    align: 'start',
-    loop: hasMultiplePhotos,
-  });
   const carouselRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | undefined>(undefined);
   const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
-  const syncActivePhoto = useCallback(() => {
-    if (!emblaApi) {
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  const syncActivePhoto = () => {
+    const scroller = scrollerRef.current;
+    if (!scroller) {
       return;
     }
 
-    setActiveIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) {
-      return undefined;
+    const slideWidth = scroller.clientWidth;
+    if (slideWidth <= 0) {
+      return;
     }
 
-    syncActivePhoto();
-    emblaApi.on('select', syncActivePhoto);
-    emblaApi.on('reInit', syncActivePhoto);
+    const nextIndex = Math.min(
+      photos.length - 1,
+      Math.max(0, Math.round(scroller.scrollLeft / slideWidth)),
+    );
+    setActiveIndex(nextIndex);
+  };
 
-    return () => {
-      emblaApi.off('select', syncActivePhoto);
-      emblaApi.off('reInit', syncActivePhoto);
-    };
-  }, [emblaApi, syncActivePhoto]);
+  const handlePhotoScroll = () => {
+    if (scrollFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+    }
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = undefined;
+      syncActivePhoto();
+    });
+  };
+
+  const showPhoto = (index: number) => {
+    const nextIndex = (index + photos.length) % photos.length;
+    const slide = trackRef.current?.children.item(nextIndex) as
+      HTMLElement | null | undefined;
+
+    setActiveIndex(nextIndex);
+    slide?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'start',
+    });
+  };
+
+  const advancePhoto = (offset: number) => {
+    showPhoto(activeIndex + offset);
+  };
 
   useEffect(() => {
     const el = carouselRef.current;
-    if (!el || !emblaApi) return;
+    if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -589,12 +678,8 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       if (Math.abs(scroll.deltaX) < PHOTO_WHEEL_SCROLL_THRESHOLD) return;
 
       const now = Date.now();
-      if (
-        now - scroll.lastNavigationAt <
-        PHOTO_WHEEL_NAVIGATION_INTERVAL_MS
-      ) {
-        scroll.deltaX =
-          Math.sign(scroll.deltaX) * PHOTO_WHEEL_SCROLL_THRESHOLD;
+      if (now - scroll.lastNavigationAt < PHOTO_WHEEL_NAVIGATION_INTERVAL_MS) {
+        scroll.deltaX = Math.sign(scroll.deltaX) * PHOTO_WHEEL_SCROLL_THRESHOLD;
         return;
       }
 
@@ -603,78 +688,88 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       scroll.deltaX = 0;
 
       if (shouldScrollNext) {
-        emblaApi.scrollNext();
+        advancePhoto(1);
       } else {
-        emblaApi.scrollPrev();
+        advancePhoto(-1);
       }
     };
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [emblaApi]);
+  }, [activeIndex]);
 
   if (!activePhoto) {
     return null;
   }
 
-  const showPhoto = (index: number) => {
-    const nextIndex = (index + photos.length) % photos.length;
-    setActiveIndex(nextIndex);
-    emblaApi?.scrollTo(nextIndex);
-  };
-  const advancePhoto = (offset: number) => {
-    if (!emblaApi) {
-      showPhoto(activeIndex + offset);
-      return;
-    }
-
-    if (offset > 0) {
-      emblaApi.scrollNext();
-    } else {
-      emblaApi.scrollPrev();
-    }
-  };
-
   return (
-    <section className={scoped(styles, 'photo-section')} aria-labelledby="photo-carousel-heading">
+    <section
+      className={scoped(styles, 'photo-section')}
+      aria-labelledby="photo-carousel-heading"
+    >
       <div className={scoped(styles, 'photo-section-copy')}>
         <p className="eyebrow">Photos</p>
         <h2 id="photo-carousel-heading">A few favorite moments</h2>
         <p className="page-lede">
-          A growing gallery for engagement and wedding-weekend photos, with more memories to add as the celebration gets
-          closer.
+          A growing gallery for engagement and wedding-weekend photos, with more
+          memories to add as the celebration gets closer.
         </p>
         <a className="secondary-button button-inline" href="/our-story">
           Read our story
           <ArrowRight aria-hidden="true" />
         </a>
       </div>
-      <div ref={carouselRef} className={scoped(styles, 'photo-carousel')} aria-roledescription="carousel" aria-label="Matt and Alison photos">
-        <div ref={emblaRef} className={scoped(styles, 'photo-frame')}>
-          <div className={scoped(styles, 'photo-track')}>
-            {photos.map((photo, index) => (
-              <figure
-                className={scoped(styles, 'photo-slide')}
-                aria-hidden={index === activeIndex ? 'false' : 'true'}
-                key={`${photo.src}-${photo.caption}`}
-              >
-                <ResponsiveImage
-                  src={photo.src}
-                  alt={photo.alt}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  sizes="(min-width: 980px) 58vw, 100vw"
-                  objectPosition={photo.objectPosition}
-                />
-              </figure>
-            ))}
+      <div
+        ref={carouselRef}
+        className={scoped(styles, 'photo-carousel')}
+        aria-roledescription="carousel"
+        aria-label="Matt and Alison photos"
+      >
+        <div className={scoped(styles, 'photo-frame-shell')}>
+          <div
+            ref={scrollerRef}
+            className={scoped(styles, 'photo-frame')}
+            data-testid="photo-carousel-scroller"
+            onScroll={handlePhotoScroll}
+          >
+            <div ref={trackRef} className={scoped(styles, 'photo-track')}>
+              {photos.map((photo, index) => (
+                <figure
+                  className={scoped(styles, 'photo-slide')}
+                  aria-hidden={index === activeIndex ? 'false' : 'true'}
+                  key={`${photo.src}-${photo.caption}`}
+                >
+                  <ResponsiveImage
+                    src={photo.src}
+                    alt={photo.alt}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    sizes="(min-width: 980px) 58vw, 100vw"
+                    objectPosition={photo.objectPosition}
+                  />
+                </figure>
+              ))}
+            </div>
           </div>
           {hasMultiplePhotos && (
-            <div className={scoped(styles, 'photo-controls')} aria-label="Photo controls">
-              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show previous photo" onClick={() => advancePhoto(-1)}>
+            <div
+              className={scoped(styles, 'photo-controls')}
+              aria-label="Photo controls"
+            >
+              <button
+                type="button"
+                className={scoped(styles, 'photo-nav-button')}
+                aria-label="Show previous photo"
+                onClick={() => advancePhoto(-1)}
+              >
                 <ChevronLeft aria-hidden="true" />
               </button>
-              <button type="button" className={scoped(styles, 'photo-nav-button')} aria-label="Show next photo" onClick={() => advancePhoto(1)}>
+              <button
+                type="button"
+                className={scoped(styles, 'photo-nav-button')}
+                aria-label="Show next photo"
+                onClick={() => advancePhoto(1)}
+              >
                 <ChevronRight aria-hidden="true" />
               </button>
             </div>
@@ -686,7 +781,10 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
             {activePhoto.detail && <span>{activePhoto.detail}</span>}
           </p>
           {hasMultiplePhotos && (
-            <div className={scoped(styles, 'photo-dots')} aria-label="Choose a photo">
+            <div
+              className={scoped(styles, 'photo-dots')}
+              aria-label="Choose a photo"
+            >
               {photos.map((photo, index) => (
                 <button
                   type="button"
