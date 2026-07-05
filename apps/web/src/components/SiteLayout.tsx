@@ -4,7 +4,34 @@ import { siteContent } from '../siteContent.js';
 import { useTheme } from '../theme.js';
 import styles from './SiteLayout.module.css';
 
-export function Header() {
+type HeaderRoute =
+  | 'home'
+  | 'our_story'
+  | 'registry'
+  | 'privacy'
+  | 'rsvp_entry'
+  | 'rsvp'
+  | 'rsvp_success'
+  | 'sms_opt_in_proof'
+  | 'terms'
+  | 'admin';
+
+const navItems: Array<{
+  href: string;
+  label: string;
+  activeRoutes: HeaderRoute[];
+}> = [
+  { href: '/#details', label: 'Details', activeRoutes: ['home'] },
+  { href: '/our-story', label: 'Our Story', activeRoutes: ['our_story'] },
+  { href: '/registry', label: 'Registry', activeRoutes: ['registry'] },
+  {
+    href: '/rsvp',
+    label: 'RSVP',
+    activeRoutes: ['rsvp_entry', 'rsvp', 'rsvp_success'],
+  },
+];
+
+export function Header({ activeRoute }: { activeRoute: HeaderRoute }) {
   const { resolvedTheme, toggleTheme } = useTheme();
   const isDarkTheme = resolvedTheme === 'dark';
   const ThemeIcon = isDarkTheme ? Sun : Moon;
@@ -24,10 +51,17 @@ export function Header() {
       </a>
       <div className={scoped(styles, 'header-actions')}>
         <nav aria-label="Primary navigation">
-          <a href="/#details">Details</a>
-          <a href="/our-story">Our Story</a>
-          <a href="/registry">Registry</a>
-          <a href="/rsvp">RSVP</a>
+          {navItems.map((item) => (
+            <a
+              href={item.href}
+              aria-current={
+                item.activeRoutes.includes(activeRoute) ? 'page' : undefined
+              }
+              key={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
         </nav>
         <button
           type="button"

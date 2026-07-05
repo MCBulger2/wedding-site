@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const adminAuthConfig = {
   clientId: 'admin-client-id',
@@ -205,6 +205,34 @@ async function expectMinimumContrastRatio(locator: Locator, minimumRatio: number
   expect(contrastRatio).toBeGreaterThanOrEqual(minimumRatio);
 }
 
+async function clickBulkAction(page: Page, actionName: string) {
+  await page.getByRole('button', { name: 'Bulk actions' }).click();
+  await page.getByRole('menuitem', { name: actionName }).click();
+}
+
+async function expectCarouselControlsMatchPointer(page: Page) {
+  const controlsVisibleByDefault = await page.evaluate(() =>
+    window.matchMedia('(hover: none), (pointer: coarse)').matches,
+  );
+
+  await expect(page.locator('.photo-controls')).toHaveCSS(
+    'opacity',
+    controlsVisibleByDefault ? '1' : '0',
+  );
+
+  if (!controlsVisibleByDefault) {
+    await page.getByLabel('Matt and Alison photos').hover();
+    await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
+  }
+
+  await expect(
+    page.getByRole('button', { name: 'Show previous photo' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Show next photo' }),
+  ).toBeVisible();
+}
+
 test('homepage renders wedding announcement and details', async ({ page }) => {
   await page.goto('/');
 
@@ -249,10 +277,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toHaveAttribute('href', '/our-story');
-  await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '0');
-  const carousel = page.getByLabel('Matt and Alison photos');
-  await carousel.hover();
-  await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
+  await expectCarouselControlsMatchPointer(page);
   await page.getByRole('button', { name: 'Show next photo' }).click();
   await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
@@ -387,6 +412,9 @@ test('homepage details render on mobile', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
   ).toBeVisible();
+  await expectCarouselControlsMatchPointer(page);
+  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
@@ -482,6 +510,26 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
     });
   expect(mobileMeetLayout.copyTop).toBeLessThan(mobileMeetLayout.imageTop);
   expect(mobileMeetLayout.imageWidth).toBe(mobileMeetLayout.contentWidth);
+  const heroImageRadii = await page
+    .locator('.our-story-hero-image')
+    .evaluate((element) => {
+      const styles = getComputedStyle(element);
+
+      return {
+        bottomLeft: styles.borderBottomLeftRadius,
+        bottomRight: styles.borderBottomRightRadius,
+        overflow: styles.overflow,
+        topLeft: styles.borderTopLeftRadius,
+        topRight: styles.borderTopRightRadius,
+      };
+    });
+  expect(heroImageRadii).toEqual({
+    bottomLeft: '8px',
+    bottomRight: '8px',
+    overflow: 'hidden',
+    topLeft: '8px',
+    topRight: '8px',
+  });
   await expect(
     page.getByRole('link', { name: 'Back to wedding details' }),
   ).toBeVisible();
@@ -681,6 +729,42 @@ test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', as
   );
 });
 
+test('mobile footer links stay aligned across public, RSVP, and admin routes', async ({
+  page,
+}) => {
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const route of ['/', '/rsvp', '/admin']) {
+    await page.goto(route);
+    const footerLinks = page.getByRole('contentinfo').getByRole('link');
+    await expect(footerLinks.getByText('Terms')).toBeVisible();
+    await expect(footerLinks.getByText('Privacy')).toBeVisible();
+    const boxes = await footerLinks.evaluateAll((links) =>
+      links.map((link) => {
+        const rect = link.getBoundingClientRect();
+        return {
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          y: Math.round(rect.y),
+        };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    const rows = boxes.map((box) => box.y);
+    expect(Math.max(...rows) - Math.min(...rows)).toBeLessThanOrEqual(2);
+    for (let index = 1; index < boxes.length; index += 1) {
+      expect(boxes[index].left).toBeGreaterThan(boxes[index - 1].right);
+    }
+  }
+});
+
 test('rsvp recovery stays collapsed by default and shows generic success when expanded', async ({
   page,
 }) => {
@@ -721,6 +805,24 @@ test('rsvp recovery stays collapsed by default and shows generic success when ex
 test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/rsvp');
+
+  const lookupOrder = await page.locator('.rsvp-lookup-card').evaluate((card) => {
+    const panel = card.querySelector('.rsvp-lookup-panel');
+    const guide = card.querySelector('.rsvp-lookup-guide');
+    const codeInput = card.querySelector('#invite-code');
+    const cardBox = card.getBoundingClientRect();
+    const panelBox = panel?.getBoundingClientRect();
+    const guideBox = guide?.getBoundingClientRect();
+    const codeBox = codeInput?.getBoundingClientRect();
+
+    return {
+      codeTop: Math.round((codeBox?.top ?? 0) - cardBox.top),
+      guideTop: Math.round((guideBox?.top ?? 0) - cardBox.top),
+      panelTop: Math.round((panelBox?.top ?? 0) - cardBox.top),
+    };
+  });
+  expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.guideTop);
+  expect(lookupOrder.codeTop).toBeLessThan(280);
 
   await page.getByRole('button', { name: "Don't have a code?" }).click();
   await expect(page.getByLabel('Email or mobile number')).toBeVisible();
@@ -968,7 +1070,12 @@ test('guest can look up an invite code and submit an RSVP', async ({
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'mobile',
+    'Desktop table interactions are covered in the chromium project; mobile cards have focused coverage.',
+  );
+
   const deliveredNotifications: Array<{
     channel: string;
     deliveredTo: string;
@@ -1441,20 +1548,25 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('Signed in as admin@example.com')).toBeVisible();
   await expect(page.getByText('1 households loaded.')).toBeVisible();
+  const householdsTable = page.getByLabel('Households table');
+  await expect(householdsTable).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'The Example Household' }),
+    householdsTable.getByRole('columnheader', { name: 'Household' }),
   ).toBeVisible();
+  await expect(householdsTable.getByText('The Example Household')).toBeVisible();
   await expect(page.getByText('generated').first()).toBeVisible();
-  await expect(page.getByText('Jamie Guest')).toBeVisible();
-
-  const exampleCard = page
-    .getByLabel('Households')
-    .locator('article')
-    .filter({ hasText: 'The Example Household' });
+  const exampleRow = householdsTable
+    .getByRole('row')
+    .filter({ hasText: 'The Example Household' })
+    .first();
+  await exampleRow
+    .getByRole('button', { name: 'Show The Example Household details' })
+    .click();
+  await expect(householdsTable.getByText('Jamie Guest')).toBeVisible();
   await expect(
-    exampleCard.getByRole('link', { name: '+14805550100' }),
+    exampleRow.getByRole('link', { name: '+14805550100' }),
   ).toBeVisible();
-  await clickHouseholdAction(exampleCard, 'Notify');
+  await clickHouseholdAction(exampleRow, 'Notify');
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
@@ -1469,7 +1581,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     subject: 'Travel update',
   });
 
-  await clickHouseholdAction(exampleCard, 'Notify');
+  await clickHouseholdAction(exampleRow, 'Notify');
   await page.getByLabel('Delivery channel').selectOption('sms');
   await expect(page.getByLabel('Notification subject')).toHaveCount(0);
   await page
@@ -1485,7 +1597,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     message: 'Ceremony starts at 3:00 PM.',
   });
 
-  await page.getByRole('button', { name: 'Export invitations' }).click();
+  await clickBulkAction(page, 'Export invitations');
   await page
     .getByRole('dialog', { name: 'Confirm invitation export' })
     .getByRole('button', { name: 'Export invitations' })
@@ -1497,7 +1609,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(page.getByText('exported').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Export QR labels' }).click();
+  await clickBulkAction(page, 'Export QR labels');
   await page
     .getByRole('dialog', { name: 'Confirm QR label export' })
     .getByRole('button', { name: 'Export QR labels' })
@@ -1509,13 +1621,13 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   expect(labelExportRequests).toBe(1);
 
-  await clickHouseholdAction(exampleCard, 'View invitation');
+  await clickHouseholdAction(exampleRow, 'View invitation');
   await expect(
-    exampleCard.getByRole('link', {
+    householdsTable.getByRole('link', {
       name: new URL('/rsvp/A2B3C4D5E6', page.url()).toString(),
     }),
   ).toBeVisible();
-  await exampleCard.getByRole('button', { name: 'Email invitation' }).click();
+  await householdsTable.getByRole('button', { name: 'Email invitation' }).click();
   await expect(
     page.getByText(
       'The Example Household: Sent invitation email to sam@example.com',
@@ -1526,7 +1638,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     deliveredTo: 'sam@example.com',
   });
 
-  await page.getByRole('button', { name: 'Email invitations' }).click();
+  await clickBulkAction(page, 'Email invitations');
   await page
     .getByRole('dialog', { name: 'Confirm invitation emails' })
     .getByRole('button', { name: 'Email invitations' })
@@ -1539,27 +1651,24 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  await clickHouseholdAction(exampleCard, 'Edit');
-  await page
+  await clickHouseholdAction(exampleRow, 'Edit');
+  const editPanel = householdsTable.getByLabel('Edit The Example Household');
+  await editPanel
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
-  await page.getByLabel('Sam Example edit wedding-party role').fill('Reader');
-  await page.getByRole('button', { name: 'Save changes' }).click();
+  await editPanel.getByLabel('Sam Example edit wedding-party role').fill('Reader');
+  await editPanel.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Household changes saved.')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'The Updated Household' }),
-  ).toBeVisible();
+  await expect(householdsTable.getByText('The Updated Household')).toBeVisible();
 
   page.once('dialog', (dialog) => dialog.accept());
-  const updatedCard = page
-    .getByLabel('Households')
-    .locator('article')
-    .filter({ hasText: 'The Updated Household' });
-  await clickHouseholdAction(updatedCard, 'Archive');
+  const updatedRow = householdsTable
+    .getByRole('row')
+    .filter({ hasText: 'The Updated Household' })
+    .first();
+  await clickHouseholdAction(updatedRow, 'Archive');
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'The Updated Household' }),
-  ).toHaveCount(0);
+  await expect(householdsTable.getByText('The Updated Household')).toHaveCount(0);
   await page.getByLabel('Show archived households').check();
   await expect(page.getByText('archived').first()).toBeVisible();
 
@@ -1581,23 +1690,19 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     ),
   ).toBeVisible();
   await expect(
-    page
-      .getByLabel('Households')
-      .getByRole('heading', { name: 'The Harper Household' }),
+    householdsTable.getByText('The Harper Household'),
   ).toBeVisible();
-  const newCard = page
-    .getByLabel('Households')
-    .locator('article')
-    .filter({ hasText: 'The Harper Household' });
-  await expect(newCard.locator('.invite-code-block strong').first()).toHaveText(
-    'FRESH22456',
-  );
   await expect(
-    newCard.getByRole('link', {
+    householdsTable.locator('.invite-code-block strong').filter({
+      hasText: 'FRESH22456',
+    }),
+  ).toHaveText('FRESH22456');
+  await expect(
+    householdsTable.getByRole('link', {
       name: new URL('/rsvp/FRESH22456', page.url()).toString(),
     }),
   ).toBeVisible();
-  await newCard.getByRole('button', { name: 'QR code' }).click();
+  await householdsTable.getByRole('button', { name: 'QR code' }).click();
   await expect(
     page.getByRole('dialog', { name: 'The Harper Household invitation QR' }),
   ).toBeVisible();
@@ -1607,14 +1712,100 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(
     page.getByRole('heading', { name: 'RSVP dashboard' }),
   ).toBeVisible();
-  const reloadedCard = page
+  const reloadedTable = page.getByLabel('Households table');
+  const reloadedRow = reloadedTable
+    .getByRole('row')
+    .filter({ hasText: 'The Harper Household' })
+    .first();
+  await clickHouseholdAction(reloadedRow, 'View invitation');
+  await expect(
+    reloadedTable.locator('.invite-code-block strong').filter({
+      hasText: 'FRESH22456',
+    }),
+  ).toHaveText('FRESH22456');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByLabel('Households table')).toBeHidden();
+  await expect(
+    page
+      .getByLabel('Households')
+      .locator('article')
+      .filter({ hasText: 'The Harper Household' }),
+  ).toBeVisible();
+});
+
+test('admin mobile keeps household cards instead of the desktop table', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/admin/households', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        households: [
+          {
+            household: { ...household, rsvpStatus: 'partial' },
+            attendance: {
+              invitedGuests: 3,
+              attendingGuests: 2,
+              declinedGuests: 1,
+              pendingGuests: 0,
+              plusOneGuests: 1,
+            },
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+  await page.route(
+    `${adminAuthConfig.userPoolDomain}/oauth2/token`,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          access_token: 'fake-access-token',
+          id_token: createJwt({ email: 'admin@example.com' }),
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      });
+    },
+  );
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('adminAuth.state', 'login-state');
+    window.sessionStorage.setItem('adminAuth.codeVerifier', 'test-verifier');
+  });
+
+  await page.goto('/admin?code=hosted-ui-code&state=login-state');
+
+  await expect(
+    page.getByRole('heading', { name: 'RSVP dashboard' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Households table')).toBeHidden();
+  const mobileCard = page
     .getByLabel('Households')
     .locator('article')
-    .filter({ hasText: 'The Harper Household' });
-  await clickHouseholdAction(reloadedCard, 'View invitation');
-  await expect(
-    reloadedCard.locator('.invite-code-block strong').first(),
-  ).toHaveText('FRESH22456');
+    .filter({ hasText: 'The Example Household' });
+  await expect(mobileCard).toBeVisible();
+  await expect(mobileCard.getByRole('button', { name: 'Actions' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      })),
+    )
+    .toEqual({ clientWidth: 390, scrollWidth: 390 });
 });
 
 test('admin bulk invitation actions require confirmation and block duplicate submits', async ({
@@ -1747,7 +1938,7 @@ test('admin bulk invitation actions require confirmation and block duplicate sub
     page.getByRole('heading', { name: 'RSVP dashboard' }),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Export invitations' }).click();
+  await clickBulkAction(page, 'Export invitations');
   const exportDialog = page.getByRole('dialog', {
     name: 'Confirm invitation export',
   });
@@ -1759,7 +1950,7 @@ test('admin bulk invitation actions require confirmation and block duplicate sub
   await expect(exportDialog).toHaveCount(0);
   expect(invitationExportRequests).toBe(0);
 
-  await page.getByRole('button', { name: 'Export invitations' }).click();
+  await clickBulkAction(page, 'Export invitations');
   const exportConfirmDialog = page.getByRole('dialog', {
     name: 'Confirm invitation export',
   });
@@ -1778,7 +1969,7 @@ test('admin bulk invitation actions require confirmation and block duplicate sub
     ),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Export QR labels' }).click();
+  await clickBulkAction(page, 'Export QR labels');
   const labelDialog = page.getByRole('dialog', {
     name: 'Confirm QR label export',
   });
@@ -1793,7 +1984,7 @@ test('admin bulk invitation actions require confirmation and block duplicate sub
     ),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Email invitations' }).click();
+  await clickBulkAction(page, 'Email invitations');
   const emailDialog = page.getByRole('dialog', {
     name: 'Confirm invitation emails',
   });
@@ -1849,6 +2040,29 @@ test('admin route clears malformed stored sessions instead of crashing', async (
     )
     .toBeNull();
   expect(pageErrors).toEqual([]);
+});
+
+test('admin e2e uses routed auth config when local admin mocks are enabled outside Playwright', async ({
+  page,
+}) => {
+  let authConfigRequests = 0;
+
+  await page.route('**/api/admin/auth/config', async (route) => {
+    authConfigRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+
+  await page.goto('/admin');
+
+  await expect(
+    page.getByRole('heading', { name: 'Admin sign in' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  expect(authConfigRequests).toBeGreaterThan(0);
 });
 
 function createJwt(payload: Record<string, unknown>): string {

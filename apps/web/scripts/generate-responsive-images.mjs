@@ -1,6 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import {
+  computeResponsiveImageInputHash,
+  readValidResponsiveImageCache,
+  writeResponsiveImageCacheManifest,
+} from './responsive-image-cache.mjs';
 import {
   backgroundCssOutput,
   formats,
@@ -15,6 +21,48 @@ const sourceRoot = path.join(webRoot, sourceDir);
 const outputRoot = path.join(webRoot, outputDir);
 const metadataPath = path.join(webRoot, metadataOutput);
 const backgroundCssPath = path.join(webRoot, backgroundCssOutput);
+const cacheManifestPath = path.join(outputRoot, '.responsive-image-cache.json');
+const repoRoot = path.resolve(webRoot, '..', '..');
+
+const inputHash = await computeResponsiveImageInputHash({
+  sourceRoot,
+  sourceFiles: responsiveImages.map((image) => image.source),
+  extraFiles: [
+    {
+      label: 'generate-responsive-images.mjs',
+      filePath: fileURLToPath(import.meta.url),
+    },
+    {
+      label: 'responsive-image-cache.mjs',
+      filePath: fileURLToPath(
+        new URL('./responsive-image-cache.mjs', import.meta.url),
+      ),
+    },
+    {
+      label: 'responsive-image-config.mjs',
+      filePath: fileURLToPath(
+        new URL('./responsive-image-config.mjs', import.meta.url),
+      ),
+    },
+    {
+      label: 'package-lock.json',
+      filePath: path.join(repoRoot, 'package-lock.json'),
+    },
+  ],
+});
+
+const cachedImages = await readValidResponsiveImageCache({
+  manifestPath: cacheManifestPath,
+  outputRoot,
+  inputHash,
+});
+
+if (cachedImages) {
+  console.log(
+    `Reused ${cachedImages.generatedFiles.length} cached responsive image variants from ${outputDir}`,
+  );
+  process.exit(0);
+}
 
 await fs.rm(outputRoot, { force: true, recursive: true });
 await fs.mkdir(outputRoot, { recursive: true });
@@ -22,6 +70,7 @@ await fs.mkdir(path.dirname(metadataPath), { recursive: true });
 
 const manifestEntries = [];
 const backgroundDeclarations = [];
+const generatedFiles = [];
 
 for (const image of responsiveImages) {
   const sourcePath = path.join(sourceRoot, image.source);
@@ -52,14 +101,19 @@ for (const image of responsiveImages) {
       } else if (format.extension === 'webp') {
         await pipeline.webp({ quality: format.quality }).toFile(outputPath);
       } else {
-        await pipeline.jpeg({ quality: format.quality, mozjpeg: true }).toFile(outputPath);
+        await pipeline
+          .jpeg({ quality: format.quality, mozjpeg: true })
+          .toFile(outputPath);
       }
+      generatedFiles.push(outputFileName);
 
       const outputMetadata = await sharp(outputPath).metadata();
       variants.push({
         src: `/images/${outputFileName}`,
         width: outputMetadata.width ?? width,
-        height: outputMetadata.height ?? Math.round((width * metadata.height) / metadata.width),
+        height:
+          outputMetadata.height ??
+          Math.round((width * metadata.height) / metadata.width),
       });
     }
     generatedFormats.push({ ...format, variants });
@@ -94,7 +148,15 @@ for (const image of responsiveImages) {
 }
 
 await fs.writeFile(metadataPath, buildMetadata(manifestEntries));
-await fs.writeFile(backgroundCssPath, buildBackgroundCss(backgroundDeclarations));
+await fs.writeFile(
+  backgroundCssPath,
+  buildBackgroundCss(backgroundDeclarations),
+);
+await writeResponsiveImageCacheManifest({
+  manifestPath: cacheManifestPath,
+  inputHash,
+  generatedFiles,
+});
 
 console.log(
   `Generated ${manifestEntries.length} responsive image manifests in ${outputDir}`,
@@ -145,12 +207,17 @@ export interface ResponsiveImageAsset {
 }
 
 export const responsiveImageAssets = ${JSON.stringify(
-    Object.fromEntries(entries.map((entry) => [entry.key, {
-      width: entry.width,
-      height: entry.height,
-      fallback: entry.fallback,
-      sources: entry.sources,
-    }])),
+    Object.fromEntries(
+      entries.map((entry) => [
+        entry.key,
+        {
+          width: entry.width,
+          height: entry.height,
+          fallback: entry.fallback,
+          sources: entry.sources,
+        },
+      ]),
+    ),
     null,
     2,
   )} as const satisfies Record<string, ResponsiveImageAsset>;

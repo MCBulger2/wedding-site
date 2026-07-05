@@ -1,8 +1,9 @@
 import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, CheckSquare, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
-import { type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
+import { Archive, CheckSquare, ChevronDown, ChevronRight, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Fragment, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
 import { archiveHousehold, createHousehold, downloadInvitationLabelsPdf, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
 import { cx, scoped } from '../classNames.js';
@@ -169,6 +170,778 @@ interface HouseholdNotificationFormState {
 }
 
 type BulkAdminAction = 'email_invitations' | 'export_invitations' | 'export_labels';
+
+export function AdminBulkActionsMenu({
+  pendingAction,
+  onSelectAction,
+  onExportRsvps,
+}: {
+  pendingAction: BulkAdminAction | undefined;
+  onSelectAction: (action: BulkAdminAction) => void;
+  onExportRsvps: () => void;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className={cx(
+            'secondary-button',
+            scoped(styles, 'admin-menu-trigger'),
+          )}
+        >
+          <MoreHorizontal aria-hidden="true" />
+          Bulk actions
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          className={scoped(styles, 'household-action-menu')}
+          align="end"
+          collisionPadding={12}
+          sideOffset={6}
+        >
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            disabled={pendingAction === 'email_invitations'}
+            onClick={() => onSelectAction('email_invitations')}
+          >
+            <Mail aria-hidden="true" />
+            {pendingAction === 'email_invitations'
+              ? 'Emailing invitations...'
+              : 'Email invitations'}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            disabled={pendingAction === 'export_invitations'}
+            onClick={() => onSelectAction('export_invitations')}
+          >
+            <Download aria-hidden="true" />
+            {pendingAction === 'export_invitations'
+              ? 'Exporting invitations...'
+              : 'Export invitations'}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            disabled={pendingAction === 'export_labels'}
+            onClick={() => onSelectAction('export_labels')}
+          >
+            <Download aria-hidden="true" />
+            {pendingAction === 'export_labels'
+              ? 'Exporting QR labels...'
+              : 'Export QR labels'}
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator
+            className={scoped(styles, 'household-action-menu-separator')}
+          />
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            onClick={onExportRsvps}
+          >
+            <Download aria-hidden="true" />
+            Export RSVP CSV
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+interface AdminTableActionHandlers {
+  onNotify: (record: AdminHouseholdRecord) => void;
+  onEmailInvitation: (record: AdminHouseholdRecord) => void;
+  onEdit: (record: AdminHouseholdRecord) => void;
+  onRotateInviteCode: (record: AdminHouseholdRecord) => void;
+  onManageInvitation: (record: AdminHouseholdRecord) => void;
+  onArchive: (record: AdminHouseholdRecord) => void;
+  onMarkSent: (record: AdminHouseholdRecord) => void;
+  onMarkExported: (record: AdminHouseholdRecord) => void;
+}
+
+export function AdminHouseholdsTable({
+  records,
+  actionHandlers,
+  invitationDetails,
+  expandedInvitationHouseholdId,
+  editingHouseholdId,
+  editForm,
+  onEditFormChange,
+  onSaveHouseholdEdit,
+  onCancelHouseholdEdit,
+  onRemoveMember,
+  onCopyInviteCode,
+  onCopyInviteLink,
+  onOpenQrCode,
+}: {
+  records: AdminHouseholdRecord[];
+  actionHandlers: AdminTableActionHandlers;
+  invitationDetails: Record<string, AdminInvitationDetails>;
+  expandedInvitationHouseholdId: string | undefined;
+  editingHouseholdId: string | undefined;
+  editForm: HouseholdFormState;
+  onEditFormChange: (form: HouseholdFormState) => void;
+  onSaveHouseholdEdit: (householdId: string) => void;
+  onCancelHouseholdEdit: () => void;
+  onRemoveMember: (record: AdminHouseholdRecord, memberId: string) => void;
+  onCopyInviteCode: (inviteCode: string) => void;
+  onCopyInviteLink: (rsvpUrl: string) => void;
+  onOpenQrCode: (invite: AdminInvitationDetails) => void;
+}) {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
+  const columns = useMemo<ColumnDef<AdminHouseholdRecord>[]>(
+    () => [
+      {
+        id: 'household',
+        header: 'Household',
+        cell: ({ row }) => {
+          const record = row.original;
+          const householdId = record.household.householdId;
+          const isExpanded =
+            expandedRows.has(householdId) ||
+            expandedInvitationHouseholdId === householdId ||
+            editingHouseholdId === householdId;
+          const ExpandIcon = isExpanded ? ChevronDown : ChevronRight;
+
+          return (
+            <div className={scoped(styles, 'table-household-cell')}>
+              <button
+                type="button"
+                className={scoped(styles, 'table-expand-button')}
+                aria-label={`${isExpanded ? 'Hide' : 'Show'} ${record.household.displayName} details`}
+                aria-expanded={isExpanded}
+                onClick={() =>
+                  setExpandedRows((current) => {
+                    const next = new Set(current);
+                    if (next.has(householdId)) {
+                      next.delete(householdId);
+                    } else {
+                      next.add(householdId);
+                    }
+                    return next;
+                  })
+                }
+              >
+                <ExpandIcon aria-hidden="true" />
+              </button>
+              <div>
+                <strong>{record.household.displayName}</strong>
+                <span>{record.household.members.length} household guests</span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'contact',
+        header: 'Contact',
+        cell: ({ row }) => (
+          <div className={scoped(styles, 'table-contact-cell')}>
+            {row.original.household.email ? (
+              <a href={`mailto:${row.original.household.email}`}>
+                {row.original.household.email}
+              </a>
+            ) : (
+              <span>No email</span>
+            )}
+            {row.original.household.phone && (
+              <a href={`tel:${row.original.household.phone}`}>
+                {row.original.household.phone}
+              </a>
+            )}
+            {(row.original.household.phone ||
+              row.original.household.smsConsent) && (
+              <small>
+                {hasRecordedSmsConsent(row.original.household)
+                  ? 'SMS consent recorded'
+                  : 'SMS consent missing'}
+              </small>
+            )}
+          </div>
+        ),
+      },
+      {
+        id: 'rsvp',
+        header: 'RSVP',
+        cell: ({ row }) => (
+          <span
+            className={cx(
+              scoped(styles, 'status-pill'),
+              scoped(styles, row.original.household.rsvpStatus),
+            )}
+          >
+            {row.original.household.rsvpStatus.replace('_', ' ')}
+          </span>
+        ),
+      },
+      {
+        id: 'invitation',
+        header: 'Invitation',
+        cell: ({ row }) => (
+          <span
+            className={cx(
+              scoped(styles, 'status-pill'),
+              scoped(
+                styles,
+                `invite-${row.original.household.inviteLifecycleStatus}`,
+              ),
+            )}
+          >
+            {inviteStatusLabel(row.original.household)}
+          </span>
+        ),
+      },
+      {
+        id: 'guests',
+        header: 'Guests',
+        cell: ({ row }) => (
+          <div className={scoped(styles, 'table-count-cell')}>
+            <span>{row.original.attendance.attendingGuests} attending</span>
+            <span>{row.original.attendance.pendingGuests} pending</span>
+            <span>{row.original.attendance.plusOneGuests} plus-ones</span>
+          </div>
+        ),
+      },
+      {
+        id: 'updated',
+        header: 'Latest update',
+        cell: ({ row }) => (
+          <span>{formatShortDate(row.original.household.updatedAt)}</span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => {
+          const record = row.original;
+          return (
+            <HouseholdCardActions
+              household={record.household}
+              canNotify={
+                Boolean(record.household.email) ||
+                hasRecordedSmsConsent(record.household)
+              }
+              canEmailInvitation={
+                Boolean(record.household.email) &&
+                !isHouseholdArchived(record.household)
+              }
+              onNotify={() => actionHandlers.onNotify(record)}
+              onEmailInvitation={() => actionHandlers.onEmailInvitation(record)}
+              onEdit={() => {
+                setExpandedRows((current) =>
+                  new Set(current).add(record.household.householdId),
+                );
+                actionHandlers.onEdit(record);
+              }}
+              onRotateInviteCode={() => actionHandlers.onRotateInviteCode(record)}
+              onManageInvitation={() => {
+                setExpandedRows((current) =>
+                  new Set(current).add(record.household.householdId),
+                );
+                actionHandlers.onManageInvitation(record);
+              }}
+              onMarkSent={() => actionHandlers.onMarkSent(record)}
+              onMarkExported={() => actionHandlers.onMarkExported(record)}
+              onArchive={() => actionHandlers.onArchive(record)}
+            />
+          );
+        },
+      },
+    ],
+    [
+      actionHandlers,
+      editingHouseholdId,
+      expandedInvitationHouseholdId,
+      expandedRows,
+    ],
+  );
+  const table = useReactTable({
+    data: records,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  if (records.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className={scoped(styles, 'admin-table-shell')}
+      aria-label="Households table"
+    >
+      <table className={scoped(styles, 'admin-households-table')}>
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id} scope="col">
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => {
+            const record = row.original;
+            const householdId = record.household.householdId;
+            const isExpanded =
+              expandedRows.has(householdId) ||
+              expandedInvitationHouseholdId === householdId ||
+              editingHouseholdId === householdId;
+
+            return (
+              <Fragment key={row.id}>
+                <tr key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && (
+                  <tr
+                    className={scoped(styles, 'admin-table-detail-row')}
+                    key={`${row.id}-details`}
+                  >
+                    <td colSpan={row.getVisibleCells().length}>
+                      <AdminHouseholdDetails
+                        record={record}
+                        invitation={
+                          invitationDetails[record.household.householdId]
+                        }
+                        invitationExpanded={
+                          expandedInvitationHouseholdId ===
+                          record.household.householdId
+                        }
+                        editing={editingHouseholdId === householdId}
+                        editForm={editForm}
+                        onEditFormChange={onEditFormChange}
+                        onSaveHouseholdEdit={onSaveHouseholdEdit}
+                        onCancelHouseholdEdit={onCancelHouseholdEdit}
+                        onRemoveMember={onRemoveMember}
+                        onCopyInviteCode={onCopyInviteCode}
+                        onCopyInviteLink={onCopyInviteLink}
+                        onOpenQrCode={onOpenQrCode}
+                        onEmailInvitation={() =>
+                          actionHandlers.onEmailInvitation(record)
+                        }
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AdminHouseholdDetails({
+  record,
+  invitation,
+  invitationExpanded,
+  editing,
+  editForm,
+  onEditFormChange,
+  onSaveHouseholdEdit,
+  onCancelHouseholdEdit,
+  onRemoveMember,
+  onCopyInviteCode,
+  onCopyInviteLink,
+  onOpenQrCode,
+  onEmailInvitation,
+}: {
+  record: AdminHouseholdRecord;
+  invitation: AdminInvitationDetails | undefined;
+  invitationExpanded: boolean;
+  editing: boolean;
+  editForm: HouseholdFormState;
+  onEditFormChange: (form: HouseholdFormState) => void;
+  onSaveHouseholdEdit: (householdId: string) => void;
+  onCancelHouseholdEdit: () => void;
+  onRemoveMember: (record: AdminHouseholdRecord, memberId: string) => void;
+  onCopyInviteCode: (inviteCode: string) => void;
+  onCopyInviteLink: (rsvpUrl: string) => void;
+  onOpenQrCode: (invite: AdminInvitationDetails) => void;
+  onEmailInvitation: () => void;
+}) {
+  return (
+    <div className={scoped(styles, 'admin-detail-panel')}>
+      {invitation && invitationExpanded && (
+        <InvitationPreview
+          record={record}
+          invitation={invitation}
+          onCopyInviteCode={onCopyInviteCode}
+          onCopyInviteLink={onCopyInviteLink}
+          onOpenQrCode={onOpenQrCode}
+          onEmailInvitation={onEmailInvitation}
+        />
+      )}
+
+      {editing && (
+        <HouseholdEditPanel
+          record={record}
+          editForm={editForm}
+          onEditFormChange={onEditFormChange}
+          onSaveHouseholdEdit={onSaveHouseholdEdit}
+          onCancelHouseholdEdit={onCancelHouseholdEdit}
+          onRemoveMember={onRemoveMember}
+        />
+      )}
+
+      <div className={scoped(styles, 'member-list')}>
+        {record.household.members.map((member) => {
+          const memberRsvp = record.rsvp?.members.find(
+            (entry) => entry.memberId === member.id,
+          );
+          return (
+            <div key={member.id} className={scoped(styles, 'member-row')}>
+              <strong>{formatMemberName(member)}</strong>
+              <span>
+                {memberRsvp
+                  ? summarizeMemberRsvp(memberRsvp.attending)
+                  : 'Awaiting RSVP'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {record.rsvp?.plusOnes.length ? (
+        <div className={scoped(styles, 'note-block')}>
+          <strong>Plus-ones</strong>
+          <ul className="plain-list compact-list">
+            {record.rsvp.plusOnes.map((plusOne, index) => (
+              <li key={`${plusOne.sponsorMemberId}-${index}`}>
+                {plusOne.firstName} {plusOne.lastName}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {record.rsvp?.notes && (
+        <div className={scoped(styles, 'note-block')}>
+          <strong>Notes</strong>
+          <p>{record.rsvp.notes}</p>
+        </div>
+      )}
+
+      {record.rsvp?.accessibilityNotes && (
+        <div className={scoped(styles, 'note-block')}>
+          <strong>Accessibility</strong>
+          <p>{record.rsvp.accessibilityNotes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvitationPreview({
+  record,
+  invitation,
+  onCopyInviteCode,
+  onCopyInviteLink,
+  onOpenQrCode,
+  onEmailInvitation,
+}: {
+  record: AdminHouseholdRecord;
+  invitation: AdminInvitationDetails;
+  onCopyInviteCode: (inviteCode: string) => void;
+  onCopyInviteLink: (rsvpUrl: string) => void;
+  onOpenQrCode: (invite: AdminInvitationDetails) => void;
+  onEmailInvitation: () => void;
+}) {
+  return (
+    <section
+      className={scoped(styles, 'invite-preview-card')}
+      aria-label={`${record.household.displayName} invitation details`}
+    >
+      <div>
+        <p className="eyebrow">Invitation ready</p>
+        <h4>Share this code, link, or QR with the household.</h4>
+        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
+          Revealed for this admin session only.
+        </p>
+      </div>
+      <div className={scoped(styles, 'invite-code-box')}>
+        <div className={scoped(styles, 'invite-code-block')}>
+          <span className={scoped(styles, 'invite-detail-label')}>
+            Invite code
+          </span>
+          <strong>{invitation.inviteCode}</strong>
+        </div>
+        <div className={scoped(styles, 'invite-code-block')}>
+          <span className={scoped(styles, 'invite-detail-label')}>
+            RSVP link
+          </span>
+          <a
+            className={scoped(styles, 'invite-link')}
+            href={invitation.rsvpUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {invitation.rsvpUrl}
+          </a>
+        </div>
+      </div>
+      <div className="toolbar-actions">
+        <button
+          type="button"
+          className="secondary-button button-inline"
+          onClick={() => onCopyInviteCode(invitation.inviteCode)}
+        >
+          <KeyRound aria-hidden="true" />
+          Copy code
+        </button>
+        <button
+          type="button"
+          className="secondary-button button-inline"
+          onClick={() => onCopyInviteLink(invitation.rsvpUrl)}
+        >
+          <ExternalLink aria-hidden="true" />
+          Copy link
+        </button>
+        <button
+          type="button"
+          className="secondary-button button-inline"
+          onClick={() => onOpenQrCode(invitation)}
+        >
+          <Image aria-hidden="true" />
+          QR code
+        </button>
+        <button
+          type="button"
+          className="secondary-button button-inline"
+          onClick={onEmailInvitation}
+          disabled={!record.household.email}
+        >
+          <Mail aria-hidden="true" />
+          {record.household.inviteSentAt ? 'Resend email' : 'Email invitation'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function HouseholdEditPanel({
+  record,
+  editForm,
+  onEditFormChange,
+  onSaveHouseholdEdit,
+  onCancelHouseholdEdit,
+  onRemoveMember,
+}: {
+  record: AdminHouseholdRecord;
+  editForm: HouseholdFormState;
+  onEditFormChange: (form: HouseholdFormState) => void;
+  onSaveHouseholdEdit: (householdId: string) => void;
+  onCancelHouseholdEdit: () => void;
+  onRemoveMember: (record: AdminHouseholdRecord, memberId: string) => void;
+}) {
+  return (
+    <section
+      className={scoped(styles, 'edit-panel')}
+      aria-label={`Edit ${record.household.displayName}`}
+    >
+      <div className={scoped(styles, 'split-fields')}>
+        <label>
+          Display name
+          <input
+            aria-label={`${record.household.displayName} edit display name`}
+            value={editForm.displayName}
+            onChange={(event) =>
+              onEditFormChange({
+                ...editForm,
+                displayName: event.target.value,
+              })
+            }
+          />
+        </label>
+        <label>
+          Contact email
+          <input
+            aria-label={`${record.household.displayName} edit contact email`}
+            type="email"
+            value={editForm.email}
+            onChange={(event) =>
+              onEditFormChange({ ...editForm, email: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          Mobile phone
+          <input
+            aria-label={`${record.household.displayName} edit mobile phone`}
+            type="tel"
+            value={editForm.phone}
+            onChange={(event) =>
+              onEditFormChange({ ...editForm, phone: event.target.value })
+            }
+          />
+        </label>
+      </div>
+      <label>
+        Max plus-ones
+        <input
+          aria-label={`${record.household.displayName} edit max plus-ones`}
+          type="number"
+          min="0"
+          max="10"
+          value={editForm.maxPlusOnes}
+          onChange={(event) =>
+            onEditFormChange({
+              ...editForm,
+              maxPlusOnes: event.target.value,
+            })
+          }
+        />
+      </label>
+      <AddressFields
+        form={editForm}
+        onChange={onEditFormChange}
+        labelPrefix={`${record.household.displayName} edit`}
+      />
+      {editForm.members.map((member, index) => (
+        <fieldset key={member.id ?? index}>
+          <legend>
+            {member.id ? formatMemberName(member) : `Member ${index + 1}`}
+          </legend>
+          <div className={scoped(styles, 'split-fields')}>
+            <label>
+              First name
+              <input
+                aria-label={`${formatMemberName(member)} edit first name`}
+                value={member.firstName}
+                onChange={(event) =>
+                  onEditFormChange({
+                    ...editForm,
+                    members: editForm.members.map((entry, entryIndex) =>
+                      entryIndex === index
+                        ? { ...entry, firstName: event.target.value }
+                        : entry,
+                    ),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                aria-label={`${formatMemberName(member)} edit last name`}
+                value={member.lastName}
+                onChange={(event) =>
+                  onEditFormChange({
+                    ...editForm,
+                    members: editForm.members.map((entry, entryIndex) =>
+                      entryIndex === index
+                        ? { ...entry, lastName: event.target.value }
+                        : entry,
+                    ),
+                  })
+                }
+              />
+            </label>
+          </div>
+          <label className="checkbox-row">
+            <input
+              aria-label={`${formatMemberName(member)} edit can bring a plus-one`}
+              type="checkbox"
+              checked={member.canBringPlusOne}
+              onChange={(event) =>
+                onEditFormChange({
+                  ...editForm,
+                  members: editForm.members.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? { ...entry, canBringPlusOne: event.target.checked }
+                      : entry,
+                  ),
+                })
+              }
+            />
+            Can bring a plus-one
+          </label>
+          <label>
+            Wedding-party role
+            <input
+              aria-label={`${formatMemberName(member)} edit wedding-party role`}
+              value={member.weddingPartyRole}
+              onChange={(event) =>
+                onEditFormChange({
+                  ...editForm,
+                  members: editForm.members.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? { ...entry, weddingPartyRole: event.target.value }
+                      : entry,
+                  ),
+                })
+              }
+            />
+          </label>
+          <label className="checkbox-row">
+            <input
+              aria-label={`${formatMemberName(member)} edit rehearsal dinner invited`}
+              type="checkbox"
+              checked={member.rehearsalDinnerInvited}
+              onChange={(event) =>
+                onEditFormChange({
+                  ...editForm,
+                  members: editForm.members.map((entry, entryIndex) =>
+                    entryIndex === index
+                      ? {
+                          ...entry,
+                          rehearsalDinnerInvited: event.target.checked,
+                        }
+                      : entry,
+                  ),
+                })
+              }
+            />
+            Rehearsal dinner invited
+          </label>
+          {member.id && (
+            <button
+              type="button"
+              className="secondary-button button-inline danger-button"
+              onClick={() => onRemoveMember(record, member.id!)}
+            >
+              <Trash2 aria-hidden="true" />
+              Remove member
+            </button>
+          )}
+        </fieldset>
+      ))}
+      <div className="toolbar-actions">
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => onSaveHouseholdEdit(record.household.householdId)}
+        >
+          <Save aria-hidden="true" />
+          Save changes
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancelHouseholdEdit}
+        >
+          Cancel
+        </button>
+      </div>
+    </section>
+  );
+}
 
 export function AdminPage() {
   const [authConfig, setAuthConfig] = useState<AdminAuthConfig | undefined>();
@@ -921,50 +1694,14 @@ export function AdminPage() {
             <Users aria-hidden="true" />
             Create household
           </button>
+          <AdminBulkActionsMenu
+            pendingAction={pendingBulkAction}
+            onSelectAction={setBulkActionToConfirm}
+            onExportRsvps={() => void handleExport('rsvps')}
+          />
           <button
             type="button"
-            className="icon-button"
-            disabled={pendingBulkAction === 'email_invitations'}
-            onClick={() => setBulkActionToConfirm('email_invitations')}
-          >
-            <Mail aria-hidden="true" />
-            {pendingBulkAction === 'email_invitations'
-              ? 'Emailing invitations...'
-              : 'Email invitations'}
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            disabled={pendingBulkAction === 'export_invitations'}
-            onClick={() => setBulkActionToConfirm('export_invitations')}
-          >
-            <Download aria-hidden="true" />
-            {pendingBulkAction === 'export_invitations'
-              ? 'Exporting invitations...'
-              : 'Export invitations'}
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            disabled={pendingBulkAction === 'export_labels'}
-            onClick={() => setBulkActionToConfirm('export_labels')}
-          >
-            <Download aria-hidden="true" />
-            {pendingBulkAction === 'export_labels'
-              ? 'Exporting QR labels...'
-              : 'Export QR labels'}
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => void handleExport('rsvps')}
-          >
-            <Download aria-hidden="true" />
-            Export CSV
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
+            className={cx('secondary-button', scoped(styles, 'quiet-button'))}
             onClick={() => beginAdminLogout(authConfig)}
           >
             <ShieldCheck aria-hidden="true" />
@@ -1180,6 +1917,45 @@ export function AdminPage() {
                 No households match the current filters.
               </p>
             )}
+            {!isHouseholdsLoading && visibleHouseholds.length > 0 && (
+              <AdminHouseholdsTable
+                records={visibleHouseholds}
+                actionHandlers={{
+                  onNotify: (record) => openNotificationModal(record.household),
+                  onEmailInvitation: (record) =>
+                    void handleEmailInvitation(record),
+                  onEdit: (record) => beginEditHousehold(record.household),
+                  onRotateInviteCode: (record) =>
+                    void handleRotateInviteCode(record),
+                  onManageInvitation: (record) =>
+                    void handleManageInvitation(record),
+                  onArchive: (record) => void handleArchiveHousehold(record),
+                  onMarkSent: (record) => void markInviteStatus(record, 'sent'),
+                  onMarkExported: (record) =>
+                    void markInviteStatus(record, 'exported'),
+                }}
+                editingHouseholdId={editingHouseholdId}
+                editForm={editForm}
+                invitationDetails={invitationDetails}
+                expandedInvitationHouseholdId={expandedInvitationHouseholdId}
+                onEditFormChange={setEditForm}
+                onSaveHouseholdEdit={(householdId) =>
+                  void saveHouseholdEdit(householdId)
+                }
+                onCancelHouseholdEdit={() => setEditingHouseholdId(undefined)}
+                onRemoveMember={(record, memberId) =>
+                  void handleRemoveMember(record, memberId)
+                }
+                onCopyInviteCode={(inviteCode) =>
+                  void navigator.clipboard.writeText(inviteCode)
+                }
+                onCopyInviteLink={(rsvpUrl) =>
+                  void navigator.clipboard.writeText(rsvpUrl)
+                }
+                onOpenQrCode={(invitation) => void openQrCodeModal(invitation)}
+              />
+            )}
+            <div className={scoped(styles, 'mobile-household-cards')}>
             {visibleHouseholds.map((record) => {
               const invitation =
                 invitationDetails[record.household.householdId];
@@ -1611,6 +2387,7 @@ export function AdminPage() {
                 </article>
               );
             })}
+            </div>
           </div>
         </section>
       </section>
@@ -1916,6 +2693,14 @@ function formatCountLabel(
   plural = `${singular}s`,
 ): string {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatShortDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
 }
 
 function formatMemberName(member: {

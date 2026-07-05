@@ -28,7 +28,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Header />
+      <Header activeRoute={route.name} />
       {route.name === 'home' && <HomePage />}
       {route.name === 'our_story' && <OurStoryPage />}
       {route.name === 'privacy' && <PrivacyPage />}
