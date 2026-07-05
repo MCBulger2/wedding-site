@@ -644,6 +644,36 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
 });
 
+test('photo carousel responds to native horizontal scroll snapping', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const scroller = page.getByTestId('photo-carousel-scroller');
+  const activeCaption = carousel.locator('.photo-caption-row strong');
+
+  await carousel.scrollIntoViewIfNeeded();
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
+  await expect
+    .poll(() =>
+      scroller.evaluate((element) => getComputedStyle(element).scrollSnapType),
+    )
+    .toBe('x mandatory');
+  await expect
+    .poll(() =>
+      scroller.evaluate((element) => getComputedStyle(element).overflowX),
+    )
+    .toBe('auto');
+
+  await scroller.evaluate((element) => {
+    element.scrollLeft = element.clientWidth;
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+});
+
 test('registry page renders configured links', async ({ page }) => {
   await page.goto('/registry');
 
