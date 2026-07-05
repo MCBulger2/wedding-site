@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     include: [
       'apps/api/src/**/*.test.ts',
+      'apps/web/scripts/**/*.test.mjs',
       'apps/web/src/**/*.test.{ts,tsx}',
       'infra/**/*.test.ts',
       'packages/shared/src/**/*.test.ts',
@@ -13,7 +14,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@matt-alison-wedding/shared': new URL('./packages/shared/src/index.ts', import.meta.url).pathname,
+      '@matt-alison-wedding/shared': new URL(
+        './packages/shared/src/index.ts',
+        import.meta.url,
+      ).pathname,
     },
   },
 });
