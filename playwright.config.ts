@@ -10,6 +10,9 @@ export default defineConfig({
   workers: Number.isFinite(e2eWorkers) && e2eWorkers > 0 ? e2eWorkers : 8,
   webServer: {
     command: `npm run dev -w apps/web -- --host 127.0.0.1 --port ${e2ePort}`,
+    env: {
+      VITE_ENABLE_LOCAL_ADMIN_MOCKS: "false",
+    },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },

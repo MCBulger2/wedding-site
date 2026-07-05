@@ -1913,6 +1913,29 @@ test('admin route clears malformed stored sessions instead of crashing', async (
   expect(pageErrors).toEqual([]);
 });
 
+test('admin e2e uses routed auth config when local admin mocks are enabled outside Playwright', async ({
+  page,
+}) => {
+  let authConfigRequests = 0;
+
+  await page.route('**/api/admin/auth/config', async (route) => {
+    authConfigRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+
+  await page.goto('/admin');
+
+  await expect(
+    page.getByRole('heading', { name: 'Admin sign in' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  expect(authConfigRequests).toBeGreaterThan(0);
+});
+
 function createJwt(payload: Record<string, unknown>): string {
   const header = toBase64Url({ alg: 'none', typ: 'JWT' });
   const body = toBase64Url(payload);
