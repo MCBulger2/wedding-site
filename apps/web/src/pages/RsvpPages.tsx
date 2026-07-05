@@ -9,9 +9,13 @@ import {
 import {
   CalendarDays,
   Check,
+  Clock,
+  ExternalLink,
   Heart,
   Home,
   LifeBuoy,
+  MapPin,
+  MessageSquare,
   Plus,
   Search,
   Send,
@@ -536,6 +540,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         {household.maxPlusOnes} plus-one
         {household.maxPlusOnes === 1 ? '' : 's'}.
       </p>
+      <EventAtAGlance calendarHref={calendarHref} />
       {savedRsvp && (
         <div className="confirmation-row update-status-banner">
           <div>
@@ -951,24 +956,34 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </label>
         </section>
         <section
-          className={scoped(styles, 'rsvp-form-section')}
+          className={cx(
+            scoped(styles, 'rsvp-form-section'),
+            scoped(styles, 'sms-panel'),
+          )}
           aria-labelledby="rsvp-sms-heading"
         >
-          <div className="section-heading">
+          <div className={scoped(styles, 'sms-panel-header')}>
+            <div className={scoped(styles, 'sms-panel-icon')} aria-hidden="true">
+              <MessageSquare />
+            </div>
             <div>
               <h2 id="rsvp-sms-heading">Text updates</h2>
               <p className="form-message">
-                Optional. Add a mobile number only if you want RSVP recovery,
-                schedule updates, and wedding logistics by text.
+                Get RSVP recovery, schedule updates, and wedding logistics by
+                text.
               </p>
             </div>
           </div>
-          {smsConsentRecorded && (
-            <p className={cx('form-message', scoped(styles, 'sms-status-note'))}>
-              SMS consent is already recorded for{' '}
-              {household.smsConsent?.phone ?? household.phone}.
-            </p>
-          )}
+          <div className={scoped(styles, 'sms-status-row')}>
+            <strong>
+              {smsConsentRecorded ? 'Consent recorded' : 'Consent not recorded'}
+            </strong>
+            <span>
+              {smsConsentRecorded
+                ? (household.smsConsent?.phone ?? household.phone)
+                : 'Text updates stay off unless you opt in.'}
+            </span>
+          </div>
           <label
             className={fieldError('smsPhone') ? 'field-error' : undefined}
           >
@@ -1001,6 +1016,10 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
               setForm({ ...form, smsConsentAccepted: checked });
             }}
           />
+          <p className={cx('form-message', scoped(styles, 'sms-compliance-note'))}>
+            SMS consent is optional. Email delivery and private RSVP links still
+            work if you leave texts off.
+          </p>
         </section>
         <div className={scoped(styles, 'rsvp-save-bar')}>
           <button type="submit" disabled={status === 'saving'}>
@@ -1132,6 +1151,7 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
           {formatDateTime(savedRsvp.submittedAt)} and last updated{' '}
           {formatDateTime(savedRsvp.updatedAt)}.
         </p>
+        <EventAtAGlance calendarHref={calendarHref} />
         <div className="confirmation-row">
           <p className="form-message">
             Need to make a change? You can reopen your invitation link and save
@@ -1200,6 +1220,72 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
       </section>
     </main>
   );
+}
+
+function EventAtAGlance({ calendarHref }: { calendarHref: string }) {
+  const venueMapHref = getNativeMapUrl();
+
+  return (
+    <section
+      className={scoped(styles, 'event-glance')}
+      aria-label="Wedding event at a glance"
+    >
+      <div className={scoped(styles, 'event-glance-copy')}>
+        <p className="eyebrow">Event at a glance</p>
+        <h2>{siteContent.dateLabel}</h2>
+      </div>
+      <div className={scoped(styles, 'event-glance-grid')}>
+        <div>
+          <Clock aria-hidden="true" />
+          <span>
+            <strong>Ceremony at {siteContent.ceremonyTime}</strong>
+            <small>Reception until {siteContent.receptionTime}</small>
+          </span>
+        </div>
+        <div>
+          <MapPin aria-hidden="true" />
+          <span>
+            <strong>{siteContent.venueName}</strong>
+            <small>{siteContent.venueAddress}</small>
+          </span>
+        </div>
+      </div>
+      <div className="toolbar-actions">
+        <a
+          className="secondary-button button-inline"
+          href={venueMapHref}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <ExternalLink aria-hidden="true" />
+          Open map
+        </a>
+        <a
+          className="secondary-button button-inline"
+          href={calendarHref}
+          download="matt-alison-wedding.ics"
+        >
+          <CalendarDays aria-hidden="true" />
+          Add to calendar
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function getNativeMapUrl(): string {
+  if (typeof navigator === 'undefined') {
+    return siteContent.venueMapUrl;
+  }
+
+  const platform = navigator.platform.toLowerCase();
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isAppleDevice =
+    /mac|iphone|ipad|ipod/.test(platform) ||
+    /iphone|ipad|ipod/.test(userAgent) ||
+    (platform === 'macintel' && navigator.maxTouchPoints > 1);
+
+  return isAppleDevice ? siteContent.venueAppleMapsUrl : siteContent.venueMapUrl;
 }
 
 function toEditableRsvp(household: Household, rsvp?: StoredRsvp): RsvpPayload {

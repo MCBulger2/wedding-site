@@ -80,6 +80,11 @@ button svg,
   text-decoration: none;
 }
 
+.site-header nav a[aria-current='page'] {
+  background: var(--hover-bg);
+  color: var(--accent-strong);
+}
+
 .theme-toggle-button {
   background: var(--secondary-button-bg);
   border: 1px solid var(--border-soft);
@@ -113,4 +118,51 @@ button svg,
   letter-spacing: 0.04em;
   text-decoration: none;
   text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.6rem;
+    justify-content: center;
+    min-height: 96px;
+    padding-bottom: 1rem;
+    padding-top: 1rem;
+  }
+
+  .header-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .site-footer {
+    display: grid;
+    gap: 0.7rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .site-footer {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
+  }
+
+  .site-header nav {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    width: auto;
+  }
+
+  .header-actions {
+    align-items: flex-start;
+  }
+
+  .site-header nav a {
+    padding: 0.5rem 0.55rem;
+  }
 }
