@@ -25,6 +25,13 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Cache responsive images
+        uses: actions/cache@v4
+        with:
+          path: apps/web/public/images
+          key: ${{ runner.os }}-responsive-images-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-responsive-images-
       - run: npm run build
       - name: Cache Playwright browsers
         uses: actions/cache@v4
