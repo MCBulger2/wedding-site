@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Header, SiteFooter } from './components/SiteLayout.js';
-import { AdminPage } from './pages/AdminPage.js';
 import {
   HomePage,
   OurStoryPage,
@@ -10,6 +9,12 @@ import {
   TermsPage,
 } from './pages/PublicPages.js';
 import { RsvpLookupPage, RsvpPage, RsvpSuccessPage } from './pages/RsvpPages.js';
+
+const AdminPage = lazy(() =>
+  import('./pages/AdminPage.js').then((module) => ({
+    default: module.AdminPage,
+  })),
+);
 
 type Route =
   | { name: 'home' }
@@ -40,7 +45,11 @@ export function App() {
       )}
       {route.name === 'sms_opt_in_proof' && <SmsOptInProofPage />}
       {route.name === 'terms' && <TermsPage />}
-      {route.name === 'admin' && <AdminPage />}
+      {route.name === 'admin' && (
+        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+          <AdminPage />
+        </Suspense>
+      )}
       <SiteFooter showAdminLink={route.name !== 'admin'} />
     </div>
   );
