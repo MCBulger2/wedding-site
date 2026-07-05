@@ -105,33 +105,23 @@ export class DynamoWeddingRepository implements WeddingRepository {
   }
 
   async listHouseholdsByEmail(email: string): Promise<Household[]> {
-    const result = await this.client.send(
-      new ScanCommand({
-        TableName: this.tableName,
-        FilterExpression: 'entityType = :entityType AND email = :email',
-        ExpressionAttributeValues: {
-          ':entityType': 'Household',
-          ':email': email,
-        },
-      }),
-    );
-
-    return (result.Items ?? []).map((item) => fromHouseholdItem(item as StoredHouseholdItem));
+    return this.scanHouseholds({
+      FilterExpression: 'entityType = :entityType AND email = :email',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+        ':email': email,
+      },
+    });
   }
 
   async listHouseholdsByPhone(phone: string): Promise<Household[]> {
-    const result = await this.client.send(
-      new ScanCommand({
-        TableName: this.tableName,
-        FilterExpression: 'entityType = :entityType AND phone = :phone',
-        ExpressionAttributeValues: {
-          ':entityType': 'Household',
-          ':phone': phone,
-        },
-      }),
-    );
-
-    return (result.Items ?? []).map((item) => fromHouseholdItem(item as StoredHouseholdItem));
+    return this.scanHouseholds({
+      FilterExpression: 'entityType = :entityType AND phone = :phone',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+        ':phone': phone,
+      },
+    });
   }
 
   async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
@@ -167,17 +157,12 @@ export class DynamoWeddingRepository implements WeddingRepository {
   }
 
   async listHouseholds(): Promise<Household[]> {
-    const result = await this.client.send(
-      new ScanCommand({
-        TableName: this.tableName,
-        FilterExpression: 'entityType = :entityType',
-        ExpressionAttributeValues: {
-          ':entityType': 'Household',
-        },
-      }),
-    );
-
-    return (result.Items ?? []).map((item) => fromHouseholdItem(item as StoredHouseholdItem));
+    return this.scanHouseholds({
+      FilterExpression: 'entityType = :entityType',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+      },
+    });
   }
 
   async saveHousehold(household: Household): Promise<void> {
@@ -269,6 +254,29 @@ export class DynamoWeddingRepository implements WeddingRepository {
     await this.client.send(
       new PutCommand(putInput),
     );
+  }
+
+  private async scanHouseholds(input: {
+    FilterExpression: string;
+    ExpressionAttributeValues: Record<string, unknown>;
+  }): Promise<Household[]> {
+    const items: StoredHouseholdItem[] = [];
+    let exclusiveStartKey: Record<string, unknown> | undefined;
+
+    do {
+      const result = await this.client.send(
+        new ScanCommand({
+          TableName: this.tableName,
+          ...input,
+          ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+        }),
+      );
+
+      items.push(...((result.Items ?? []) as StoredHouseholdItem[]));
+      exclusiveStartKey = result.LastEvaluatedKey;
+    } while (exclusiveStartKey);
+
+    return items.map(fromHouseholdItem);
   }
 }
 
