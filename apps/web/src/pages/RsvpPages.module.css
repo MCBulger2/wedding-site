@@ -196,9 +196,116 @@
   line-height: 1.35;
 }
 
+.event-glance {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+}
+
+.event-glance-copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.event-glance-copy h2 {
+  font-size: clamp(1.65rem, 3vw, 2.2rem);
+  margin: 0;
+}
+
+.event-glance-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+}
+
+.event-glance-grid > div {
+  align-items: flex-start;
+  background: var(--surface-tint-soft);
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.event-glance-grid svg {
+  color: var(--accent-strong);
+  flex: 0 0 auto;
+}
+
+.event-glance-grid span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.event-glance-grid small {
+  color: var(--copy-muted);
+  line-height: 1.4;
+}
+
 .rsvp-form-section {
   display: grid;
   gap: 0.85rem;
+}
+
+.sms-panel {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  padding: 1.25rem;
+}
+
+.sms-panel-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+}
+
+.sms-panel-header h2 {
+  margin-bottom: 0.35rem;
+}
+
+.sms-panel-icon {
+  align-items: center;
+  background: var(--accent-wash);
+  border-radius: 8px;
+  color: var(--accent-strong);
+  display: flex;
+  flex: 0 0 auto;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.sms-status-row {
+  align-items: center;
+  background: var(--surface-tint-soft);
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+}
+
+.sms-status-row strong {
+  color: var(--accent-strong);
+}
+
+.sms-status-row span,
+.sms-compliance-note {
+  color: var(--copy-muted);
+}
+
+.sms-compliance-note {
+  font-size: 0.9rem;
+  margin: 0;
 }
 
 .rsvp-plus-one-section {
@@ -349,6 +456,15 @@
 }
 
 @media (max-width: 760px) {
+  .rsvp-lookup-panel {
+    order: -1;
+  }
+
+  .rsvp-lookup-guide h1 {
+    font-size: clamp(2.2rem, 13vw, 3.4rem);
+  }
+
+  .event-glance-grid,
   .guest-response-grid,
   .rsvp-notes-grid,
   .rsvp-response-summary,

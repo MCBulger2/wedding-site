@@ -5,6 +5,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from './App.js';
 import {
+  AdminBulkActionsMenu,
+  AdminHouseholdsTable,
   HouseholdCardActions,
   HouseholdNotificationForm,
 } from './pages/AdminPage.js';
@@ -73,6 +75,23 @@ describe('HouseholdCardActions', () => {
 });
 
 describe('App routes', () => {
+  it('marks the active top-level navigation route', () => {
+    window.history.pushState({}, '', '/our-story');
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Our Story' }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      screen.getByRole('link', { name: 'Registry' }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
   it('renders the terms route', () => {
     window.history.pushState({}, '', '/terms');
 
@@ -148,5 +167,120 @@ describe('HouseholdNotificationForm', () => {
         /SMS delivery stays disabled until this household opts in through the RSVP or recovery form./i,
       ),
     ).not.toBeNull();
+  });
+});
+
+describe('AdminBulkActionsMenu', () => {
+  it('keeps invitation and export actions behind one menu', () => {
+    const onSelectAction = vi.fn();
+    const onExportRsvps = vi.fn();
+
+    render(
+      <AdminBulkActionsMenu
+        pendingAction={undefined}
+        onSelectAction={onSelectAction}
+        onExportRsvps={onExportRsvps}
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Bulk actions' }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(
+      screen.getByRole('menuitem', { name: 'Email invitations' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: 'Export invitations' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: 'Export QR labels' }),
+    ).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Export RSVP CSV' })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Export RSVP CSV' }));
+    expect(onExportRsvps).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AdminHouseholdsTable', () => {
+  it('renders desktop table columns and expandable household details', () => {
+    render(
+      <AdminHouseholdsTable
+        records={[
+          {
+            household: {
+              ...household,
+              phone: '+14805550100',
+              smsConsent: {
+                status: 'opted_in',
+                phone: '+14805550100',
+                source: 'rsvp_form',
+                consentedAt: '2026-01-01T00:00:00.000Z',
+                consentTextVersion: 'twilio-tollfree-v1',
+              },
+              updatedAt: '2026-01-02T00:00:00.000Z',
+            },
+            attendance: {
+              invitedGuests: 1,
+              attendingGuests: 0,
+              declinedGuests: 0,
+              pendingGuests: 1,
+              plusOneGuests: 0,
+            },
+            hasRecoverableInviteCode: true,
+          },
+        ]}
+        actionHandlers={{
+          onNotify: vi.fn(),
+          onEmailInvitation: vi.fn(),
+          onEdit: vi.fn(),
+          onRotateInviteCode: vi.fn(),
+          onManageInvitation: vi.fn(),
+          onArchive: vi.fn(),
+          onMarkSent: vi.fn(),
+          onMarkExported: vi.fn(),
+        }}
+        editingHouseholdId={undefined}
+        editForm={{
+          displayName: '',
+          email: '',
+          phone: '',
+          maxPlusOnes: '0',
+          mailingAddress: {
+            line1: '',
+            line2: '',
+            city: '',
+            state: '',
+            postalCode: '',
+            country: 'US',
+          },
+          members: [],
+        }}
+        invitationDetails={{}}
+        expandedInvitationHouseholdId={undefined}
+        onEditFormChange={vi.fn()}
+        onSaveHouseholdEdit={vi.fn()}
+        onCancelHouseholdEdit={vi.fn()}
+        onRemoveMember={vi.fn()}
+        onCopyInviteCode={vi.fn()}
+        onCopyInviteLink={vi.fn()}
+        onOpenQrCode={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Household' })).not.toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Contact' })).not.toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'RSVP' })).not.toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Invitation' })).not.toBeNull();
+    expect(screen.getByRole('cell', { name: /The Example Family/ })).not.toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show The Example Family details' }),
+    );
+
+    expect(screen.getByText('Taylor Example')).not.toBeNull();
+    expect(screen.getByText('Awaiting RSVP')).not.toBeNull();
   });
 });

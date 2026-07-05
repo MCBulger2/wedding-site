@@ -142,6 +142,12 @@
   opacity: 0.46;
 }
 
+.household-action-menu-separator {
+  background: var(--border-muted);
+  height: 1px;
+  margin: 0.25rem 0;
+}
+
 .title-row,
 .meta-row span,
 .stats-inline span {
@@ -181,13 +187,23 @@
   color: var(--hero-muted);
 }
 
-.admin-toolbar h1 {
+.admin-toolbar h2 {
   font-size: clamp(2.5rem, 6vw, 5rem);
+  margin: 0;
 }
 
 .admin-toolbar :global(.secondary-button) {
   background: var(--hero-secondary-bg);
   color: var(--hero-text);
+}
+
+.admin-menu-trigger,
+.quiet-button {
+  min-height: 46px;
+}
+
+.quiet-button {
+  opacity: 0.9;
 }
 
 .token-row {
@@ -244,6 +260,89 @@
   align-content: start;
   display: grid;
   gap: 1rem;
+}
+
+.admin-table-shell {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.admin-households-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px;
+  width: 100%;
+}
+
+.admin-households-table th,
+.admin-households-table td {
+  border-bottom: 1px solid var(--border-muted);
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-households-table th {
+  color: var(--copy-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-households-table tbody tr:hover td {
+  background: var(--surface-tint-soft);
+}
+
+.table-household-cell {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  min-width: 220px;
+}
+
+.table-household-cell > div,
+.table-contact-cell,
+.table-count-cell {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.table-household-cell span,
+.table-contact-cell span,
+.table-contact-cell small,
+.table-count-cell span {
+  color: var(--copy-muted);
+  font-size: 0.88rem;
+}
+
+.table-expand-button {
+  background: var(--secondary-button-bg);
+  border: 1px solid var(--border-soft);
+  color: var(--accent-strong);
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
+.table-expand-button svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.admin-table-detail-row td {
+  background: var(--surface-faint);
+  padding: 1rem;
+}
+
+.admin-detail-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.mobile-household-cards {
+  display: none;
 }
 
 .filter-toggle {
@@ -344,7 +443,7 @@
 
 .member-list {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 
 .member-row {
@@ -361,6 +460,8 @@
 .note-block {
   background: var(--surface-tint-soft);
   border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
   padding: 0.9rem 1rem;
 }
 
@@ -369,7 +470,7 @@
   border: 1px solid var(--photo-frame-border);
   border-radius: 8px;
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
   padding: 1rem;
 }
 
@@ -406,7 +507,7 @@
   border: 1px solid var(--accent-border);
   border-radius: 8px;
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
   margin-top: 0.9rem;
   padding: 1rem;
 }
@@ -563,4 +664,19 @@
   max-width: 256px;
   padding: 0.8rem;
   width: min(100%, 256px);
+}
+
+@media (max-width: 760px) {
+  .admin-table-shell {
+    display: none;
+  }
+
+  .mobile-household-cards {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .table-household-cell {
+    display: grid;
+  }
 }

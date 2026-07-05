@@ -136,7 +136,7 @@ describe('theme preferences', () => {
   it('toggles from the header with an accessible label', async () => {
     render(
       <ThemeProvider>
-        <Header />
+        <Header activeRoute="home" />
       </ThemeProvider>,
     );
 
