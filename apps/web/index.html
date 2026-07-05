@@ -25,27 +25,7 @@
       imagesrcset="/images/hero-wedding-960.avif 1x, /images/hero-wedding-1920.avif 2x"
       fetchpriority="high"
     />
-    <script>
-      (() => {
-        let theme = 'light';
-
-        try {
-          const storageKey = 'wedding.theme';
-          const storedTheme = window.localStorage.getItem(storageKey);
-          theme =
-            storedTheme === 'light' || storedTheme === 'dark'
-              ? storedTheme
-              : window.matchMedia?.('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light';
-        } catch {
-          theme = 'light';
-        }
-
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-      })();
-    </script>
+    <script src="/theme-bootstrap.js"></script>
     <title>Matt &amp; Alison&apos;s Wedding</title>
   </head>
   <body>

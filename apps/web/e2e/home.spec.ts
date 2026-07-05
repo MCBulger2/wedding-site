@@ -117,6 +117,94 @@ async function clickHouseholdAction(card: Locator, actionName: string) {
   }
 }
 
+async function expectMinimumContrastRatio(locator: Locator, minimumRatio: number) {
+  const contrastRatio = await locator.evaluate((element) => {
+    const parseRgb = (value: string) => {
+      const match = value.match(
+        /rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)/,
+      );
+
+      if (!match) {
+        throw new Error(`Unable to parse color value: ${value}`);
+      }
+
+      return {
+        alpha: match[4] === undefined ? 1 : Number(match[4]),
+        blue: Number(match[3]),
+        green: Number(match[2]),
+        red: Number(match[1]),
+      };
+    };
+
+    const blend = (
+      foreground: ReturnType<typeof parseRgb>,
+      background: ReturnType<typeof parseRgb>,
+    ) => {
+      const alpha = foreground.alpha + background.alpha * (1 - foreground.alpha);
+
+      if (alpha === 0) {
+        return { alpha: 0, blue: 0, green: 0, red: 0 };
+      }
+
+      return {
+        alpha,
+        blue:
+          (foreground.blue * foreground.alpha +
+            background.blue * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+        green:
+          (foreground.green * foreground.alpha +
+            background.green * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+        red:
+          (foreground.red * foreground.alpha +
+            background.red * background.alpha * (1 - foreground.alpha)) /
+          alpha,
+      };
+    };
+
+    const elementBackground = () => {
+      const layers = [];
+      let current: Element | null = element;
+
+      while (current) {
+        layers.push(parseRgb(window.getComputedStyle(current).backgroundColor));
+        current = current.parentElement;
+      }
+
+      return layers
+        .reverse()
+        .reduce(
+          (background, foreground) => blend(foreground, background),
+          parseRgb('rgb(255, 255, 255)'),
+        );
+    };
+
+    const relativeLuminance = (color: ReturnType<typeof parseRgb>) => {
+      const [red, green, blue] = [color.red, color.green, color.blue].map(
+        (channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.03928
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        },
+      );
+
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    };
+
+    const styles = window.getComputedStyle(element);
+    const textLuminance = relativeLuminance(parseRgb(styles.color));
+    const backgroundLuminance = relativeLuminance(elementBackground());
+    const lighter = Math.max(textLuminance, backgroundLuminance);
+    const darker = Math.min(textLuminance, backgroundLuminance);
+
+    return (lighter + 0.05) / (darker + 0.05);
+  });
+
+  expect(contrastRatio).toBeGreaterThanOrEqual(minimumRatio);
+}
+
 async function clickBulkAction(page: Page, actionName: string) {
   await page.getByRole('button', { name: 'Bulk actions' }).click();
   await page.getByRole('menuitem', { name: actionName }).click();
@@ -246,6 +334,47 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page.getByRole('contentinfo').getByRole('link', { name: 'Admin' }),
   ).toBeVisible();
+});
+
+test('dark mode public CTA links meet text contrast requirements', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('wedding.theme', 'dark');
+  });
+
+  await page.goto('/');
+
+  for (const name of [
+    'Find your RSVP',
+    'Open map',
+    'Book hotel',
+    'View registry',
+  ]) {
+    await expectMinimumContrastRatio(page.getByRole('link', { name }), 4.5);
+  }
+});
+
+test('light mode travel and hotel details meet text contrast requirements', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('wedding.theme', 'light');
+  });
+
+  await page.goto('/');
+
+  for (const text of [
+    'Phoenix Sky Harbor International Airport is the closest major airport.',
+    '123 TBD, Mesa, AZ 85251',
+    'MATTALISON2027',
+    'November 30, 2026',
+    'Wedding block rate available while rooms last.',
+    'Ten minutes from the venue by rideshare.',
+    '480-555-0127',
+  ]) {
+    await expectMinimumContrastRatio(page.getByText(text), 4.5);
+  }
 });
 
 test('homepage details render on mobile', async ({ page }) => {
