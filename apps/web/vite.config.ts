@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      sourcemap: true,
+    },
     resolve: {
       alias: {
         '@matt-alison-wedding/shared': fileURLToPath(
