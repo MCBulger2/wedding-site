@@ -23,8 +23,10 @@
     "dev": "npm run dev -w apps/web",
     "format": "prettier --write .",
     "lint": "eslint .",
+    "report:ci": "node scripts/report-github-test-results.mjs",
     "synth": "npm run synth -w infra",
     "test": "vitest run",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/vitest-junit.xml --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reporter=html --coverage.reportsDirectory=coverage",
     "test:e2e": "playwright test",
     "typecheck": "tsc -b packages/shared apps/api apps/web infra"
   },
@@ -33,6 +35,7 @@
     "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",

@@ -132,7 +132,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:ci
       - name: Cache responsive images
         uses: actions/cache@v4
         with:
@@ -150,7 +150,24 @@ jobs:
             ${{ runner.os }}-playwright-chromium-
       - run: npx playwright install-deps chromium
       - run: npx playwright install chromium
-      - run: npm run test:e2e -- --project=chromium
+      - run: npm run test:e2e -- --project=chromium --reporter=line,junit,html
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-junit.xml
+      - name: Write test and coverage summary
+        if: ${{ always() }}
+        run: npm run report:ci
+      - name: Upload test and coverage artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-verify-test-and-coverage-reports
+          path: |
+            coverage/
+            reports/
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
   deploy-staging:
     name: deploy-staging

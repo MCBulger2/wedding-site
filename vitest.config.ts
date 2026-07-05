@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     include: [
       'apps/api/src/**/*.test.ts',
+      'scripts/**/*.test.mjs',
       'apps/web/scripts/**/*.test.mjs',
       'apps/web/src/**/*.test.{ts,tsx}',
       'infra/**/*.test.ts',
