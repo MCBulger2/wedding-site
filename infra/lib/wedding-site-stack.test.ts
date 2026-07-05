@@ -328,6 +328,98 @@ describe('WeddingSiteStack infrastructure', () => {
     );
   });
 
+  it('sets browser and edge cache policies for frontend static resources', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    const responseHeaderEntries = templateResourceEntries(template).filter(
+      ([, resource]) =>
+        resource.Type === 'AWS::CloudFront::ResponseHeadersPolicy',
+    );
+    const cacheHeaderPolicy = responseHeaderEntries.find(([, resource]) =>
+      resource.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig?.Items?.some(
+        (header: { Header?: string; Value?: string; Override?: boolean }) =>
+          header.Header === 'Cache-Control' &&
+          header.Value === 'no-cache' &&
+          header.Override === true,
+      ),
+    );
+    const immutableStaticHeaderPolicy = responseHeaderEntries.find(
+      ([, resource]) =>
+        resource.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig?.Items?.some(
+          (header: { Header?: string; Value?: string; Override?: boolean }) =>
+            header.Header === 'Cache-Control' &&
+            header.Value === 'public, max-age=31536000, immutable' &&
+            header.Override === true,
+        ),
+    );
+    const generatedImageHeaderPolicy = responseHeaderEntries.find(
+      ([, resource]) =>
+        resource.Properties?.ResponseHeadersPolicyConfig?.CustomHeadersConfig?.Items?.some(
+          (header: { Header?: string; Value?: string; Override?: boolean }) =>
+            header.Header === 'Cache-Control' &&
+            header.Value === 'public, max-age=86400' &&
+            header.Override === true,
+        ),
+    );
+
+    expect(cacheHeaderPolicy).toBeDefined();
+    expect(immutableStaticHeaderPolicy).toBeDefined();
+    expect(generatedImageHeaderPolicy).toBeDefined();
+
+    const staticCachePolicyEntry = templateResourceEntries(template).find(
+      ([, resource]) =>
+        resource.Type === 'AWS::CloudFront::CachePolicy' &&
+        resource.Properties?.CachePolicyConfig?.DefaultTTL === 31_536_000 &&
+        resource.Properties?.CachePolicyConfig?.MaxTTL === 31_536_000,
+    );
+    const imageCachePolicyEntry = templateResourceEntries(template).find(
+      ([, resource]) =>
+        resource.Type === 'AWS::CloudFront::CachePolicy' &&
+        resource.Properties?.CachePolicyConfig?.DefaultTTL === 86_400 &&
+        resource.Properties?.CachePolicyConfig?.MaxTTL === 86_400,
+    );
+
+    expect(staticCachePolicyEntry).toBeDefined();
+    expect(imageCachePolicyEntry).toBeDefined();
+
+    const distribution = templateResourcesOfType(
+      template,
+      'AWS::CloudFront::Distribution',
+    )[0];
+    const distributionConfig = distribution.Properties?.DistributionConfig;
+    const cacheBehaviors = distributionConfig?.CacheBehaviors ?? [];
+    const assetBehavior = cacheBehaviors.find(
+      (behavior: { PathPattern?: string }) =>
+        behavior.PathPattern === '/assets/*',
+    );
+    const imageBehavior = cacheBehaviors.find(
+      (behavior: { PathPattern?: string }) =>
+        behavior.PathPattern === '/images/*',
+    );
+
+    expect(
+      distributionConfig?.DefaultCacheBehavior?.ResponseHeadersPolicyId,
+    ).toEqual({ Ref: cacheHeaderPolicy?.[0] });
+    expect(assetBehavior?.CachePolicyId).toEqual({
+      Ref: staticCachePolicyEntry?.[0],
+    });
+    expect(assetBehavior?.ResponseHeadersPolicyId).toEqual({
+      Ref: immutableStaticHeaderPolicy?.[0],
+    });
+    expect(imageBehavior?.CachePolicyId).toEqual({
+      Ref: imageCachePolicyEntry?.[0],
+    });
+    expect(imageBehavior?.ResponseHeadersPolicyId).toEqual({
+      Ref: generatedImageHeaderPolicy?.[0],
+    });
+  });
+
   it('creates nested auth domains after the frontend alias record exists', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
