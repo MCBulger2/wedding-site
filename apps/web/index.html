@@ -17,27 +17,7 @@
     />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script>
-      (() => {
-        let theme = 'light';
-
-        try {
-          const storageKey = 'wedding.theme';
-          const storedTheme = window.localStorage.getItem(storageKey);
-          theme =
-            storedTheme === 'light' || storedTheme === 'dark'
-              ? storedTheme
-              : window.matchMedia?.('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light';
-        } catch {
-          theme = 'light';
-        }
-
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-      })();
-    </script>
+    <script src="/theme-bootstrap.js"></script>
     <title>Matt &amp; Alison&apos;s Wedding</title>
   </head>
   <body>
