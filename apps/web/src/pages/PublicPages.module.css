@@ -147,6 +147,13 @@
   pointer-events: auto;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .photo-controls {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .photo-nav-button {
   background: var(--photo-nav-bg);
   border: 1px solid var(--border);
