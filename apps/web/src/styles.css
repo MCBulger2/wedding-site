@@ -12,7 +12,7 @@
   --border: rgba(36, 42, 47, 0.14);
   --border-soft: rgba(36, 42, 47, 0.1);
   --border-muted: rgba(36, 42, 47, 0.08);
-  --copy-muted: #68736d;
+  --copy-muted: #5f6963;
   --surface: rgba(255, 255, 252, 0.96);
   --surface-strong: #ffffff;
   --surface-soft: rgba(255, 255, 252, 0.78);
@@ -39,6 +39,7 @@
   --hero-secondary-bg: rgba(255, 255, 251, 0.12);
   --hero-secondary-border: rgba(255, 255, 251, 0.18);
   --hero-eyebrow: #ffd8ba;
+  --primary-button-text: var(--hero-text);
   --photo-frame-bg: rgba(36, 42, 47, 0.08);
   --photo-frame-border: rgba(36, 42, 47, 0.12);
   --photo-nav-bg: rgba(255, 255, 252, 0.86);
@@ -139,6 +140,7 @@
   --ink-soft: #d8dfd2;
   --danger: #ffb2a5;
   --danger-soft: rgba(255, 134, 115, 0.18);
+  --primary-button-text: #07140f;
   --header-bg: rgba(7, 20, 15, 0.9);
   --hero-muted: rgba(255, 255, 251, 0.88);
   --photo-frame-bg: rgba(228, 206, 170, 0.08);
@@ -528,7 +530,7 @@ button:not(.secondary-button):not(.recovery-toggle):not(
   ):not(.rsvp-segment):not(.theme-toggle-button),
 .icon-button {
   background: var(--accent);
-  color: var(--hero-text);
+  color: var(--primary-button-text);
 }
 
 button.recovery-submit-button {
