@@ -240,6 +240,16 @@ describe('RsvpPage', () => {
     ).toBeTruthy();
     expect(screen.queryByLabelText('Sam Example meal choice')).toBeNull();
     expect(screen.queryByLabelText('Accessibility notes')).toBeNull();
+    expect(
+      screen.getByLabelText('Wedding event at a glance'),
+    ).not.toBeNull();
+    expect(screen.getByText('January 18, 2027')).not.toBeNull();
+    expect(screen.getByText(/Ceremony at 4:30 PM/i)).not.toBeNull();
+    expect(screen.getByText('Superstition Manor')).not.toBeNull();
+    expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
+    expect(
+      screen.getByRole('link', { name: /Add to calendar/i }),
+    ).not.toBeNull();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Taylor Example not attending' }),
@@ -281,6 +291,15 @@ describe('RsvpPage', () => {
 
     await screen.findByRole('heading', { name: 'The Example Household' });
     expect(
+      screen.getByText('Text updates'),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(/Get RSVP recovery, schedule updates, and wedding logistics by text./i),
+    ).not.toBeNull();
+    expect(
+      screen.getByText('Consent not recorded'),
+    ).not.toBeNull();
+    expect(
       screen.getByText(/I agree to receive SMS messages from Matt & Alison Wedding/i),
     ).not.toBeNull();
 
@@ -295,6 +314,29 @@ describe('RsvpPage', () => {
     expect(
       screen.getByRole('button', { name: 'Save RSVP and text preferences' }),
     ).not.toBeNull();
+  });
+
+  it('shows recorded SMS consent in the text updates panel', async () => {
+    fetchRsvp.mockResolvedValue({
+      household: {
+        ...household,
+        phone: '+14805550100',
+        smsConsent: {
+          status: 'opted_in',
+          phone: '+14805550100',
+          source: 'rsvp_form',
+          consentedAt: '2026-06-15T22:05:00.000Z',
+          consentTextVersion: 'twilio-tollfree-v1',
+        },
+      },
+    });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: 'The Example Household' });
+
+    expect(screen.getByText('Consent recorded')).not.toBeNull();
+    expect(screen.getByText('+14805550100')).not.toBeNull();
   });
 });
 
@@ -318,5 +360,9 @@ describe('RsvpSuccessPage', () => {
     expect(screen.getByText('Jamie Guest (guest of Sam Example)')).not.toBeNull();
     expect(screen.queryByText('Accessibility: Please seat near an aisle.')).toBeNull();
     expect(screen.queryByText('Meal summary')).toBeNull();
+    expect(
+      screen.getByLabelText('Wedding event at a glance'),
+    ).not.toBeNull();
+    expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
   });
 });
