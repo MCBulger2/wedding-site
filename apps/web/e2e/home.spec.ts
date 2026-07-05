@@ -674,6 +674,149 @@ test('photo carousel responds to native horizontal scroll snapping', async ({
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
 });
 
+test('photo carousel keeps mobile swipe path native and controls stable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  const hasCoarsePointer = await page.evaluate(() =>
+    window.matchMedia('(hover: none), (pointer: coarse)').matches,
+  );
+  test.skip(!hasCoarsePointer, 'Mobile pointer behavior only applies to touch devices');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const controls = carousel.locator('.photo-controls');
+  const dots = carousel.locator('.photo-dot');
+  const captionRow = carousel.locator('.photo-caption-row');
+  const activeCaption = carousel.locator('.photo-caption-row strong');
+
+  await carousel.scrollIntoViewIfNeeded();
+  await expect(controls).toHaveCSS('pointer-events', 'none');
+  await expect
+    .poll(() =>
+      dots.evaluateAll((elements) =>
+        elements.map((element) => Math.round(element.getBoundingClientRect().width)),
+      ),
+    )
+    .toEqual([32, 32]);
+  await expect
+    .poll(() =>
+      dots.evaluateAll((elements) =>
+        elements.map((element) => {
+          const styles = getComputedStyle(element);
+          const markerStyles = getComputedStyle(element, '::before');
+          const rootStyles = getComputedStyle(document.documentElement);
+          const ariaCurrent = element.getAttribute('aria-current');
+          const expectedInactiveMarkerBackground = rootStyles
+            .getPropertyValue('--photo-dot-bg')
+            .trim();
+
+          return {
+            ariaCurrent,
+            hasTransparentButtonBackground:
+              styles.backgroundColor === 'rgba(0, 0, 0, 0)',
+            inactiveMarkerUsesExpectedBackground:
+              ariaCurrent === 'true' ||
+              markerStyles.backgroundColor === expectedInactiveMarkerBackground,
+            markerHeight: markerStyles.height,
+            markerRadius: markerStyles.borderTopLeftRadius,
+            markerTransform: markerStyles.transform,
+            markerWidth: markerStyles.width,
+          };
+        }),
+      ),
+    )
+    .toEqual([
+      {
+        ariaCurrent: 'true',
+        hasTransparentButtonBackground: true,
+        inactiveMarkerUsesExpectedBackground: true,
+        markerHeight: '12px',
+        markerRadius: '999px',
+        markerTransform: 'none',
+        markerWidth: '32px',
+      },
+      {
+        ariaCurrent: 'false',
+        hasTransparentButtonBackground: true,
+        inactiveMarkerUsesExpectedBackground: true,
+        markerHeight: '12px',
+        markerRadius: '999px',
+        markerTransform: 'none',
+        markerWidth: '12px',
+      },
+    ]);
+
+  const beforeCaptionBox = await captionRow.boundingBox();
+  expect(beforeCaptionBox).not.toBeNull();
+
+  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+
+  const afterCaptionBox = await captionRow.boundingBox();
+  expect(afterCaptionBox).not.toBeNull();
+  expect(Math.abs(afterCaptionBox!.height - beforeCaptionBox!.height)).toBeLessThanOrEqual(1);
+  await expect
+    .poll(() =>
+      dots.evaluateAll((elements) =>
+        elements.map((element) => Math.round(element.getBoundingClientRect().width)),
+      ),
+    )
+    .toEqual([32, 32]);
+});
+
+test('photo carousel updates caption once during button navigation', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const activeCaption = carousel.locator('.photo-caption-row strong');
+
+  await carousel.scrollIntoViewIfNeeded();
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
+  await page.evaluate(() => {
+    const caption = document.querySelector('.photo-caption-row strong');
+    const testWindow = window as Window & {
+      __photoCarouselCaptionChanges?: Array<string | null>;
+    };
+    testWindow.__photoCarouselCaptionChanges = [caption?.textContent ?? null];
+
+    const observer = new MutationObserver(() => {
+      testWindow.__photoCarouselCaptionChanges?.push(
+        caption?.textContent ?? null,
+      );
+    });
+    if (caption) {
+      observer.observe(caption, {
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    window.setTimeout(() => observer.disconnect(), 900);
+  });
+
+  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+  await page.waitForTimeout(900);
+
+  const captionChanges = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __photoCarouselCaptionChanges?: Array<string | null>;
+        }
+      ).__photoCarouselCaptionChanges ?? [],
+  );
+  expect(captionChanges).toEqual([
+    firstGalleryPhoto.caption,
+    secondGalleryPhoto.caption,
+  ]);
+});
+
 test('registry page renders configured links', async ({ page }) => {
   await page.goto('/registry');
 
