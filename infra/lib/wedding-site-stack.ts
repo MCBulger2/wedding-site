@@ -380,34 +380,92 @@ export class WeddingSiteStack extends Stack {
       autoDeleteObjects: props.envName === 'production' ? false : true,
     });
 
-    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(
-      this,
-      'SecurityHeadersPolicy',
-      {
-        securityHeadersBehavior: {
-          contentSecurityPolicy: {
-            contentSecurityPolicy:
-              "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'",
-            override: true,
-          },
-          contentTypeOptions: { override: true },
-          frameOptions: {
-            frameOption: cloudfront.HeadersFrameOption.DENY,
-            override: true,
-          },
-          referrerPolicy: {
-            referrerPolicy:
-              cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
-            override: true,
-          },
-          strictTransportSecurity: {
-            accessControlMaxAge: Duration.days(365),
-            includeSubdomains: true,
-            preload: true,
-            override: true,
-          },
-          xssProtection: { protection: true, modeBlock: true, override: true },
+    const createSecurityHeadersBehavior =
+      (): cloudfront.ResponseSecurityHeadersBehavior => ({
+        contentSecurityPolicy: {
+          contentSecurityPolicy:
+            "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'",
+          override: true,
         },
+        contentTypeOptions: { override: true },
+        frameOptions: {
+          frameOption: cloudfront.HeadersFrameOption.DENY,
+          override: true,
+        },
+        referrerPolicy: {
+          referrerPolicy:
+            cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true,
+        },
+        xssProtection: { protection: true, modeBlock: true, override: true },
+      });
+    const createResponseHeadersPolicy = (
+      id: string,
+      cacheControl: string,
+    ): cloudfront.ResponseHeadersPolicy =>
+      new cloudfront.ResponseHeadersPolicy(this, id, {
+        customHeadersBehavior: {
+          customHeaders: [
+            {
+              header: 'Cache-Control',
+              value: cacheControl,
+              override: true,
+            },
+          ],
+        },
+        securityHeadersBehavior: {
+          ...createSecurityHeadersBehavior(),
+        },
+      });
+    const responseHeadersPolicy = createResponseHeadersPolicy(
+      'SecurityHeadersPolicy',
+      'no-cache',
+    );
+    const immutableStaticResponseHeadersPolicy = createResponseHeadersPolicy(
+      'ImmutableStaticHeadersPolicy',
+      'public, max-age=31536000, immutable',
+    );
+    const generatedImageResponseHeadersPolicy = createResponseHeadersPolicy(
+      'GeneratedImageHeadersPolicy',
+      'public, max-age=86400',
+    );
+    const frontendShellCachePolicy = new cloudfront.CachePolicy(
+      this,
+      'FrontendShellCachePolicy',
+      {
+        defaultTtl: Duration.minutes(5),
+        maxTtl: Duration.minutes(5),
+        minTtl: Duration.seconds(0),
+        enableAcceptEncodingBrotli: true,
+        enableAcceptEncodingGzip: true,
+      },
+    );
+    const immutableStaticCachePolicy = new cloudfront.CachePolicy(
+      this,
+      'ImmutableStaticCachePolicy',
+      {
+        defaultTtl: Duration.days(365),
+        maxTtl: Duration.days(365),
+        minTtl: Duration.seconds(0),
+        enableAcceptEncodingBrotli: true,
+        enableAcceptEncodingGzip: true,
+      },
+    );
+    const generatedImageCachePolicy = new cloudfront.CachePolicy(
+      this,
+      'GeneratedImageCachePolicy',
+      {
+        defaultTtl: Duration.days(1),
+        maxTtl: Duration.days(1),
+        minTtl: Duration.seconds(0),
+        enableAcceptEncodingBrotli: true,
+        enableAcceptEncodingGzip: true,
       },
     );
 
@@ -462,13 +520,30 @@ export class WeddingSiteStack extends Stack {
         }))
       : undefined;
 
+    const frontendOrigin =
+      origins.S3BucketOrigin.withOriginAccessControl(siteBucket);
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        origin: frontendOrigin,
+        cachePolicy: frontendShellCachePolicy,
         responseHeadersPolicy,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       additionalBehaviors: {
+        '/assets/*': {
+          origin: frontendOrigin,
+          cachePolicy: immutableStaticCachePolicy,
+          responseHeadersPolicy: immutableStaticResponseHeadersPolicy,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+        '/images/*': {
+          origin: frontendOrigin,
+          cachePolicy: generatedImageCachePolicy,
+          responseHeadersPolicy: generatedImageResponseHeadersPolicy,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
         '/api/*': {
           origin: new origins.HttpOrigin(
             `${api.apiId}.execute-api.${Stack.of(this).region}.${Stack.of(this).urlSuffix}`,
