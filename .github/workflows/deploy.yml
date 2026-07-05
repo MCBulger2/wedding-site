@@ -158,7 +158,7 @@ jobs:
         run: npm run report:ci
       - name: Upload test and coverage artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: deploy-verify-test-and-coverage-reports
           path: |
