@@ -1,108 +1,134 @@
-# Launch Readiness Notes
+# Launch Readiness
 
-This project now has code support for the remaining launch phases. The items below still require real AWS account, DNS, SES, and staging data verification before invitations are printed.
+Use this document as the pre-launch checklist and staging rehearsal guide. Architecture details live in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Deployment Configuration
+## Release Gate
 
-Deployment settings are intentionally split between committed safe defaults and untracked or CI-provided environment values.
+Before invitations are printed or production traffic is announced, verify all of the following against real AWS and GitHub state:
 
-- `infra/config/deployment-config.ts` keeps deployable fallback values only: app region, no custom domains, no committed extra CORS origins, no notification recipients, passkeys enabled, staging local browser trust enabled, and production local browser trust disabled.
-- Local deploys load `.env`, `.env.local`, `.env.<environment>`, and `.env.<environment>.local` before build and CDK synth.
-- GitHub Actions deploys use GitHub environment variables and secrets instead of committed `.env` files.
+- staging deploys cleanly from `main`
+- production deploy wiring still matches the intended `v*` release flow
+- staging and production GitHub environment variables are correct
+- custom domains, Cognito auth domain, SES, Twilio, and WAF settings match the live plan
+- admin login, RSVP, export, and recovery flows still behave as expected
 
-GitHub releases use `main` as the only long-lived branch:
+## Configuration Checks
 
-- Feature pull requests target `main`.
-- Merges to `main` automatically deploy the current commit to staging.
-- Production deploys start automatically when a non-prerelease GitHub Release is published for a `v*` tag whose commit is already on `main`.
-- The production workflow verifies the tagged commit is on `main`, then waits on the production GitHub environment before deploying production. It does not redeploy staging, so production can intentionally remain behind the latest staging commit.
-- `develop` and release branches are not deployment sources.
+Confirm deployment config is split correctly:
 
-For local custom-domain deploys, copy the relevant template:
+- committed defaults stay in `infra/config/deployment-config.ts`
+- local overrides stay in ignored `.env*.local` files
+- GitHub Actions deploys use GitHub environment variables and secrets
 
-```bash
-cp .env.staging.example .env.staging.local
-cp .env.production.example .env.production.local
-```
+Important deploy-time inputs to verify before launch:
 
-The local files should contain the real domain, hosted zone, API domain, auth domain, any additional trusted browser origins, SES sender, notification recipients, Twilio SMS identifiers, passkey setting, and the local-browser-trust flag when needed. They are ignored by Git and must stay out of source control. Store the Twilio API key secret value in AWS Secrets Manager and put only its secret ARN in local or CI configuration.
+- `AWS_DEPLOY_ROLE_ARN`
+- `AWS_REGION`
+- `HOSTED_ZONE_DOMAIN`
+- `FRONTEND_DOMAIN_NAME`
+- `API_DOMAIN_NAME`
+- `AUTH_DOMAIN_NAME`
+- `ALLOWED_ORIGINS`
+- `ENABLE_LOCAL_BROWSER_TRUST`
+- `NOTIFICATION_SENDER_EMAIL`
+- `NOTIFICATION_RECIPIENT_EMAILS`
+- `OPERATIONS_ALERT_EMAILS`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_API_KEY_SID`
+- `TWILIO_API_KEY_SECRET_ARN`
+- `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`
+- `CONTACT_EMAIL_ADDRESS`
+- `CONTACT_FORWARDING_RECIPIENT_EMAIL`
+- `ENABLE_PASSKEYS`
 
-Use CDK context values only when you need to override those defaults:
+Expected branch and deployment model:
 
-```bash
-npm run deploy:infra:staging -- \
-  -c hostedZoneDomain=matt-alison.com \
-  -c frontendDomainName=staging.matt-alison.com \
-  -c apiDomainName=api.staging.matt-alison.com \
-  -c authDomainName=login.staging.matt-alison.com \
-  -c allowedOrigins=https://staging.matt-alison.com \
-  -c enableLocalBrowserTrust=true \
-  -c notificationSenderEmail=staging-rsvp@matt-alison.com \
-  -c notificationRecipientEmails=admin@example.com
+- `main` is the only long-lived branch
+- push to `main` deploys staging
+- published non-prerelease `v*` release deploys production
+- production refs must already be on `main`
 
-npm run deploy:infra:production -- \
-  -c hostedZoneDomain=example.com \
-  -c frontendDomainName=www.example.com \
-  -c apiDomainName=api.example.com \
-  -c authDomainName=auth.example.com \
-  -c allowedOrigins=https://www.example.com \
-  -c notificationSenderEmail=wedding@example.com \
-  -c notificationRecipientEmails=admin1@example.com,admin2@example.com \
-  -c twilioAccountSid=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  -c twilioApiKeySid=SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  -c twilioApiKeySecretArn=arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio-api-key-AbCdEf \
-  -c twilioMessagingServiceSid=MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-  -c contactEmailAddress=contact@matt-alison.com \
-  -c contactForwardingRecipientEmail=admin@example.com
-```
+## Domain and Browser Trust Checks
 
-`domainName` is still accepted as a shorthand for the frontend domain, but `frontendDomainName` is clearer for production.
+Validate the full environment domain set together:
 
-Loopback origins such as `http://localhost:5173` and `http://127.0.0.1:5173` are rejected unless `enableLocalBrowserTrust` or `ENABLE_LOCAL_BROWSER_TRUST` is set to `true`. Production should normally leave local browser trust disabled.
+- frontend domain
+- API domain
+- Cognito auth domain
+- hosted zone
+- allowed browser origins
 
-## SES Verification
+Before launch:
 
-RSVP notifications and invitation emails use SES through the API Lambda. If the notification sender email is under the hosted zone domain, CDK creates an SES domain identity and DKIM DNS records. Recipient verification and SES sandbox removal still need to be completed in AWS before production launch.
+- confirm staging and production alias records resolve correctly
+- confirm CloudFront serves the site over HTTPS
+- confirm `/api/admin/auth/config` resolves on the intended API domain
+- confirm Cognito callback and logout URLs match the real frontend URLs
+- confirm local browser trust is enabled only where explicitly intended
 
-Notifications are best-effort. Guest RSVP saves continue even if SES delivery fails, and failures are logged with household ID and RSVP update time.
+## SES and Contact Email Checks
 
-The public contact address is `contact@matt-alison.com`. When the production deploy provides `CONTACT_EMAIL_ADDRESS=contact@matt-alison.com`, `CONTACT_FORWARDING_RECIPIENT_EMAIL`, and `HOSTED_ZONE_DOMAIN=matt-alison.com`, CDK also configures SES receiving for the hosted zone, creates the SES MX record, stores raw inbound messages in a private S3 bucket with 30-day expiration, and forwards messages to the configured recipient. Do not commit the real forwarding recipient to source control. Replying from the recipient mailbox should go to the original sender through the forwarded email's `Reply-To` header; Gmail alias or SMTP send-as setup can be handled manually later if true replies from `contact@matt-alison.com` become required.
+Verify outbound email and optional inbound forwarding:
 
-Leave `CONTACT_EMAIL_ADDRESS` and `CONTACT_FORWARDING_RECIPIENT_EMAIL` unset in staging unless inbound contact forwarding is being tested deliberately. Staging can still display the public contact address through the shared site-content default without creating an SES receipt rule set for the apex domain.
+- SES sender identity exists and is healthy
+- DKIM and related DNS records are correct
+- notification recipients are intentional
+- sandbox restrictions are removed or all required recipients are verified
+- `contact@matt-alison.com` forwarding is enabled only in the environment meant to own it
+- the forwarding recipient is configured outside source control
+- forwarded messages preserve a useful `Reply-To`
 
-## Twilio SMS Verification
+Guest RSVP writes should continue even if notification delivery fails. Validate that failure mode before launch.
 
-Household SMS notifications and RSVP recovery SMS messages use Twilio's REST Messages API through the API Lambda. Production auth should use a Twilio API key SID plus API key secret. The secret value must live in AWS Secrets Manager; Lambda environment variables should contain only `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET_ARN`, and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`.
+## Twilio SMS Checks
 
-Before launch, verify the Twilio sender or Messaging Service can send to the expected guest phone numbers, that opt-out/compliance settings are acceptable for event notifications, and that incomplete Twilio configuration fails SMS sends without affecting SES email delivery.
+Confirm production SMS wiring uses:
 
-## Public RSVP Abuse Protection
+- account SID
+- API key SID
+- API key secret stored in Secrets Manager
+- either a Messaging Service SID or a from-number
 
-Production CDK synth and deploy now attach a CloudFront-scoped WAF web ACL to the site distribution for `/api/rsvp*` traffic. The ACL applies the AWS managed Amazon IP reputation list, the AWS managed common protections, and a per-IP rate-based block rule for repeated RSVP requests. The public HTTP API stage also applies explicit throttling on the RSVP read, RSVP write, and recovery routes so the direct execute-api endpoint still has infrastructure-level backpressure even outside the CloudFront path.
+Before launch:
 
-Before launch, confirm the production deploy includes the CloudFront web ACL association, that WAF sampled requests and CloudWatch metrics are visible, and that the rate limits still leave enough headroom for normal RSVP edits and invitation-recovery retries.
+- send rehearsal messages to real test numbers
+- confirm consent copy and opt-out expectations are acceptable
+- confirm partial or broken Twilio config fails SMS delivery without breaking email delivery or RSVP writes
 
-## Cognito Passkeys
+## Abuse Protection and Security Checks
 
-Amazon Cognito currently documents WebAuthn/passkey support for user pools, and passkeys with user verification can satisfy MFA requirements in the supported configuration. CDK also exposes passkey sign-in properties in the installed version.
+Verify the live production environment has:
 
-Passkeys are enabled by default for both staging and production. Keep the MFA-required sign-in rehearsal in the launch checklist because the live Cognito hosted UI, custom auth domain, relying-party ID, callback URL, and MFA behavior still need to be verified together in staging before launch.
-
-References:
-
-- https://docs.aws.amazon.com/cognito/latest/developerguide/authentication.html
-- https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-mfa.html
+- CloudFront WAF association for public RSVP traffic
+- API Gateway throttling on RSVP read, write, and recovery routes
+- private S3 buckets
+- HTTPS-only delivery
+- Cognito MFA and intended passkey behavior
+- DynamoDB point-in-time recovery
+- Secrets Manager storage for secret material
+- no raw invite codes in DynamoDB attributes, Lambda environment variables, or logs
 
 ## Staging Rehearsal
 
-Before printing invitations:
+Run a full staging rehearsal before printing invitations:
 
-- Deploy staging with the intended domain, auth domain, SES notification settings, and Twilio SMS settings.
-- Create test households, generate/reveal/export invitation URLs and QR codes, and verify old URLs are not rotated after export or sent status.
-- Verify invitation email send and re-send reuse the same RSVP URL.
-- Submit and update RSVP responses from invite links.
-- Verify RSVP notification emails arrive and do not contain invite codes or hashes.
-- Verify lost-code recovery email and SMS messages only include the private RSVP link, are sent only to stored household contacts, and do not include a separate plaintext invite-code field.
-- Confirm invite codes are stored only as hashes and KMS-encrypted ciphertext, not raw plaintext DynamoDB attributes or logs.
-- Verify admin dashboard login, household editing, archive behavior, invitation CSV export, RSVP CSV export, and SPA routing.
-- Confirm S3 bucket privacy, HTTPS redirects, API CORS origins, Cognito callback/logout URLs, local-browser-trust defaults, DynamoDB PITR, KMS key access, CloudWatch retention, and Secrets Manager invite-code pepper.
+- deploy staging with the intended domain suite and notification settings
+- create test households
+- generate, reveal, export, and email invitation links
+- verify exported or sent households do not accidentally rotate to new mailed URLs without explicit confirmation
+- submit and update RSVPs from invite links
+- verify RSVP recovery by stored email and stored phone flows
+- confirm recovery messages contain the private RSVP link and do not expose extra plaintext invite-code fields
+- verify admin login, household editing, archive behavior, CSV export, and label export
+- verify public pages, RSVP routes, admin routes, and SPA refresh behavior
+
+## Final Launch Review
+
+Immediately before production launch:
+
+- compare GitHub environment values with the intended live configuration
+- confirm the production release tag resolves to the tested commit on `main`
+- review alarms, dashboards, and log groups
+- confirm operations alert recipients have accepted SNS subscriptions
+- confirm contact, notification, and recovery destinations are correct
+- rerun the highest-risk production smoke checks after deploy

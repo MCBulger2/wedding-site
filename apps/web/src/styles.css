@@ -44,7 +44,7 @@
   --photo-frame-border: rgba(36, 42, 47, 0.12);
   --photo-nav-bg: rgba(255, 255, 252, 0.86);
   --photo-nav-shadow: 0 10px 24px rgba(24, 32, 27, 0.16);
-  --photo-dot-bg: rgba(36, 42, 47, 0.24);
+  --photo-dot-bg: rgba(15, 81, 63, 0.34);
   --travel-bg: #ffffff;
   --story-page-bg: linear-gradient(
     180deg,
@@ -147,7 +147,7 @@
   --photo-frame-border: rgba(228, 206, 170, 0.16);
   --photo-nav-bg: rgba(16, 44, 34, 0.9);
   --photo-nav-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
-  --photo-dot-bg: rgba(245, 240, 230, 0.28);
+  --photo-dot-bg: rgba(107, 191, 155, 0.44);
   --travel-bg: #0a1d16;
   --story-page-bg: linear-gradient(
     180deg,
@@ -525,7 +525,7 @@ button,
   padding: 0;
 }
 
-button:not(.secondary-button):not(.recovery-toggle):not(
+button:not(.photo-dot):not(.secondary-button):not(.recovery-toggle):not(
     .recovery-submit-button
   ):not(.rsvp-segment):not(.theme-toggle-button),
 .icon-button {
