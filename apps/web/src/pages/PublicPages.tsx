@@ -602,6 +602,7 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | undefined>(undefined);
+  const programmaticScrollTargetRef = useRef<number | undefined>(undefined);
   const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
 
@@ -629,6 +630,14 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       photos.length - 1,
       Math.max(0, Math.round(scroller.scrollLeft / slideWidth)),
     );
+    const programmaticScrollTarget = programmaticScrollTargetRef.current;
+    if (
+      programmaticScrollTarget !== undefined &&
+      nextIndex !== programmaticScrollTarget
+    ) {
+      return;
+    }
+    programmaticScrollTargetRef.current = undefined;
     setActiveIndex(nextIndex);
   };
 
@@ -647,6 +656,7 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
     const slide = trackRef.current?.children.item(nextIndex) as
       HTMLElement | null | undefined;
 
+    programmaticScrollTargetRef.current = nextIndex;
     setActiveIndex(nextIndex);
     slide?.scrollIntoView({
       behavior: 'smooth',

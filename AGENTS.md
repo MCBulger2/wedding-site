@@ -1,48 +1,46 @@
 # Repository Instructions
 
-These instructions apply to all future coding agents working in this repository.
+These instructions apply to coding agents working in this repository.
 
 ## Project Goal
 
-Build a secure, simple, cost-effective wedding announcement and RSVP website for Matt and Alison's 2027 wedding.
+Maintain a secure, simple, cost-effective wedding announcement and RSVP website for Matt and Alison's 2027 wedding.
 
-The accepted architecture is:
+Source-of-truth documentation:
 
-- React + Vite frontend.
-- AWS serverless backend.
-- Route 53 custom domain.
-- CloudFront and private S3 frontend hosting.
-- API Gateway HTTP API.
-- Lambda handlers.
-- DynamoDB on-demand data storage.
-- Cognito admin authentication.
-- AWS CDK v2 infrastructure as code.
-- GitHub Actions CI/CD using AWS OIDC.
-
-See `docs/PROJECT_PLAN.md` for the full project plan.
+- `docs/ARCHITECTURE.md` for current system shape, flows, and constraints
+- `docs/LAUNCH_READINESS.md` for launch and environment verification
 
 ## Working Expectations
 
-- When execution is allowed, implement requested functionality rather than stopping at suggestions.
-- Keep architecture clean, simple, tested, secure, and cost effective.
+- When execution is allowed, implement the requested work instead of stopping at suggestions.
+- Keep changes scoped to the request and preserve unrelated user work.
+- Prefer existing repository patterns over new abstractions.
+- Keep architecture simple, tested, secure, and cost effective.
 - Prefer AWS serverless primitives unless there is a clear reason not to.
-- Do not introduce needless abstractions, unnecessary services, or always-on infrastructure.
-- Follow existing project patterns once the application is scaffolded.
-- Keep changes scoped to the user's request.
-- Preserve user changes and never revert unrelated work.
+- Do not introduce unnecessary services, always-on infrastructure, or speculative abstractions.
+
+## Documentation Expectations
+
+- Treat documentation as part of the product, not as an afterthought.
+- When a request touches documented behavior, update the relevant docs in the same change.
+- Question, fix, or remove documentation and instructions that are outdated, unnecessary, misleading, or ill-advised.
+- Describe the current implemented system unless a document explicitly exists for future planning.
 
 ## Testing Expectations
 
-- Always run relevant unit tests before final response when application code changes.
-- Always run relevant end-to-end tests before final response when UI behavior changes.
-- Use Playwright MCP to interact with and debug the UI when visual or interaction behavior is involved.
-- If tests cannot be run, clearly explain why and what remains unverified.
+- Run relevant unit or integration tests before final response when application code changes.
+- Run relevant end-to-end tests before final response when UI behavior changes.
+- For visual or interaction work, use the available browser or Playwright tooling in this environment to verify behavior.
+- If tests cannot be run, explain what was not verified and why.
 
 Required testing areas include:
 
-- Unit tests for validation, RSVP authorization, invite-code handling, and backend logic.
-- Integration tests for RSVP and admin API behavior.
-- End-to-end tests for the homepage, RSVP flow, admin login/dashboard, CSV export, and SPA routing.
+- validation, invite-code handling, and backend business logic
+- RSVP and admin API behavior
+- homepage, RSVP flow, admin login and dashboard, exports, and SPA routing
+
+Documentation-only changes do not require application test runs unless non-documentation files are modified.
 
 ## Security Expectations
 
@@ -54,11 +52,11 @@ Required testing areas include:
 - Require HTTPS.
 - Keep S3 buckets private.
 - Protect admin functionality with Cognito and MFA.
-- Use generic errors for invalid invite codes so guest existence is not leaked.
+- Use generic invalid invite-code errors so guest existence is not leaked.
 
 ## Cost Expectations
 
 - Prefer on-demand and pay-per-use services.
 - Avoid idle compute, NAT gateways, managed relational databases, and container platforms unless justified.
 - Keep observability useful but proportionate to a low-traffic wedding site.
-- Revisit optional cost items, such as CloudFront access logs or WAF managed rules, before launch.
+- Revisit optional cost items, such as CloudFront access logs or extra WAF managed rules, before launch.

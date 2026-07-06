@@ -119,6 +119,14 @@
   padding: 1.25rem;
 }
 
+.rsvp-step-indicator {
+  color: var(--copy-muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 1.35rem 0 0.4rem;
+}
+
 .recovery-toggle {
   background: var(--secondary-accent-soft);
   border: 1px solid color-mix(in srgb, var(--secondary-accent) 55%, transparent);
@@ -158,6 +166,8 @@
 .guest-response-grid,
 .rsvp-notes-grid,
 .rsvp-save-bar,
+.rsvp-step-actions,
+.rsvp-confirmation-details,
 .rsvp-response-summary {
   display: grid;
   gap: 1rem;
@@ -386,7 +396,29 @@
 }
 
 .rsvp-save-bar {
+  align-items: center;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  position: static;
+}
+
+.rsvp-step-actions {
+  border-top: 1px solid var(--border-soft);
   justify-content: end;
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  position: static;
+}
+
+.rsvp-save-bar button,
+.rsvp-step-actions button {
+  max-width: 100%;
+  text-align: center;
+  white-space: normal;
 }
 
 .sms-status-note {
@@ -419,13 +451,43 @@
   text-align: left;
 }
 
+.rsvp-confirmation-details {
+  background: var(--surface-tint-soft);
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1.25rem 0 0;
+  padding: 1rem;
+  text-align: left;
+}
+
+.rsvp-confirmation-details > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.rsvp-confirmation-details strong {
+  color: var(--accent-strong);
+}
+
+.rsvp-confirmation-details span {
+  color: var(--copy-muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .rsvp-response-summary {
   border: 1px solid var(--border-soft);
   border-radius: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 1.5rem 0;
   padding: 1rem;
   text-align: left;
+}
+
+.rsvp-response-summary section {
+  min-width: 0;
 }
 
 .rsvp-response-summary section + section {
@@ -449,6 +511,31 @@
   padding: 0;
 }
 
+.rsvp-response-summary p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .rsvp-response-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rsvp-response-summary section + section {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .rsvp-response-summary section:nth-child(even) {
+    border-left: 1px solid var(--border-soft);
+    padding-left: 1rem;
+  }
+
+  .rsvp-response-summary section:nth-child(n + 3) {
+    border-top: 1px solid var(--border-soft);
+    padding-top: 1rem;
+  }
+}
+
 @media (max-width: 1100px) {
   .rsvp-lookup-card {
     grid-template-columns: 1fr;
@@ -466,11 +553,23 @@
 
   .event-glance-grid,
   .guest-response-grid,
+  .rsvp-confirmation-details,
   .rsvp-notes-grid,
   .rsvp-response-summary,
-  .rsvp-save-bar,
   .rsvp-summary-band {
     grid-template-columns: 1fr;
+  }
+
+  .rsvp-save-bar,
+  .rsvp-step-actions {
+    align-items: stretch;
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .rsvp-save-bar button,
+  .rsvp-step-actions button {
+    width: 100%;
   }
 
   .rsvp-response-summary section + section {
@@ -478,5 +577,10 @@
     border-top: 1px solid var(--border-soft);
     padding-left: 0;
     padding-top: 1rem;
+  }
+
+  .rsvp-response-summary section:nth-child(even) {
+    border-left: 0;
+    padding-left: 0;
   }
 }
