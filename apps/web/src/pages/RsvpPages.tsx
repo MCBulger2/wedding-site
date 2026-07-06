@@ -20,7 +20,6 @@ import {
   Search,
   Send,
   Trash2,
-  Users,
 } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -463,7 +462,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
     });
   };
 
-  const addPlusOne = () => {
+  const addPlusOne = (sponsorMemberId?: string) => {
     if (!canAddPlusOne) {
       return;
     }
@@ -474,7 +473,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         return current;
       }
 
-      const defaultSponsor = eligibleSponsors[0];
+      const defaultSponsor =
+        eligibleSponsors.find((member) => member.id === sponsorMemberId) ??
+        eligibleSponsors[0];
       if (!defaultSponsor) {
         return current;
       }
@@ -568,59 +569,13 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         {household.maxPlusOnes} plus-one
         {household.maxPlusOnes === 1 ? '' : 's'}.
       </p>
-      <EventAtAGlance calendarHref={calendarHref} />
-      {savedRsvp && (
-        <div className="confirmation-row update-status-banner">
-          <div>
-            <strong>Your RSVP is already submitted.</strong>
-            <p className="form-message">
-              You&apos;re reviewing an existing response. Make any changes below
-              and select Save RSVP to update it.
-            </p>
-            <p className="form-message timestamp-note">
-              Submitted {formatDateTime(savedRsvp.submittedAt)}. Last updated{' '}
-              {formatDateTime(savedRsvp.updatedAt)}.
-            </p>
-          </div>
-          <a
-            className="secondary-button button-inline"
-            href={calendarHref}
-            download="matt-alison-wedding.ics"
-          >
-            <CalendarDays aria-hidden="true" />
-            Add to calendar
-          </a>
-        </div>
-      )}
-      <div
-        className={scoped(styles, 'rsvp-summary-band')}
-        aria-label="RSVP overview"
-      >
-        <div>
-          <CalendarDays aria-hidden="true" />
-          <span>
-            <strong>RSVP by {siteContent.rsvpDeadline}</strong>
-            <small>We can&apos;t wait to celebrate with you.</small>
-          </span>
-        </div>
-        <div>
-          <Users aria-hidden="true" />
-          <span>
-            <strong>{household.displayName}</strong>
-            <small>
-              {activeMembers.length} household guest
-              {activeMembers.length === 1 ? '' : 's'}
-              {household.maxPlusOnes > 0
-                ? `, up to ${household.maxPlusOnes} plus-one${household.maxPlusOnes === 1 ? '' : 's'}`
-                : ''}
-            </small>
-          </span>
-        </div>
-        <a className="secondary-button button-inline" href="/rsvp">
-          <Search aria-hidden="true" />
-          Not you?
-        </a>
-      </div>
+      <RsvpContextPanel
+        calendarHref={calendarHref}
+        householdGuestCount={activeMembers.length}
+        maxPlusOnes={household.maxPlusOnes}
+        savedRsvp={savedRsvp}
+        showLookupLink
+      />
       <RsvpStepIndicator step={step} />
       <form className={scoped(styles, 'rsvp-form')} onSubmit={submit}>
         {status === 'saving' && (
@@ -649,15 +604,24 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
               </p>
             </div>
           </div>
+          <div className={scoped(styles, 'guest-list')}>
           {household.members.map((member, memberIndex) => {
             const memberRsvp = form.members.find(
               (item) => item.memberId === member.id,
             )!;
             const fullName = `${member.firstName} ${member.lastName}`;
+            const memberPlusOnes = form.plusOnes
+              .map((plusOne, index) => ({ plusOne, index }))
+              .filter(({ plusOne }) => plusOne.sponsorMemberId === member.id);
+            const canAddForMember =
+              member.canBringPlusOne && memberRsvp.attending && canAddPlusOne;
             return (
+              <div
+                className={scoped(styles, 'guest-party-group')}
+                key={member.id}
+              >
               <fieldset
                 className={scoped(styles, 'guest-response-card')}
-                key={member.id}
               >
                 <legend>{fullName}</legend>
                 <div className={scoped(styles, 'guest-response-grid')}>
@@ -768,198 +732,196 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                     )}
                   </div>
                 </div>
+                {member.canBringPlusOne && (
+                  <div className={scoped(styles, 'companion-row')}>
+                    <p className="form-message">
+                      {memberRsvp.attending
+                        ? memberPlusOnes.length > 0
+                          ? `${fullName}'s companion guest is listed below.`
+                          : 'This guest may bring a plus-one.'
+                        : 'Mark this guest as attending to add their plus-one.'}
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary-button button-inline"
+                      onClick={() => addPlusOne(member.id)}
+                      disabled={!canAddForMember}
+                    >
+                      <Plus aria-hidden="true" />
+                      Add plus-one
+                    </button>
+                  </div>
+                )}
               </fieldset>
+              {memberPlusOnes.map(({ plusOne, index }) => (
+                <fieldset
+                  className={scoped(styles, 'companion-guest-card')}
+                  key={`${plusOne.sponsorMemberId}-${index}`}
+                >
+                  <legend>Guest of {fullName}</legend>
+                  <div className="split-fields">
+                    <label
+                      className={
+                        fieldError(`plusOnes.${index}.firstName`)
+                          ? 'field-error'
+                          : undefined
+                      }
+                    >
+                      First name
+                      <input
+                        aria-label={`Plus-one ${index + 1} first name`}
+                        aria-describedby={
+                          fieldError(`plusOnes.${index}.firstName`)
+                            ? buildFieldErrorId(`plusOnes.${index}.firstName`)
+                            : undefined
+                        }
+                        aria-invalid={
+                          fieldError(`plusOnes.${index}.firstName`)
+                            ? 'true'
+                            : 'false'
+                        }
+                        maxLength={80}
+                        value={plusOne.firstName}
+                        onChange={(event) => {
+                          clearFieldError(`plusOnes.${index}.firstName`);
+                          updatePlusOne(index, {
+                            firstName: event.target.value,
+                          });
+                        }}
+                      />
+                      <FieldError
+                        path={`plusOnes.${index}.firstName`}
+                        errors={fieldErrors}
+                      />
+                    </label>
+                    <label
+                      className={
+                        fieldError(`plusOnes.${index}.lastName`)
+                          ? 'field-error'
+                          : undefined
+                      }
+                    >
+                      Last name
+                      <input
+                        aria-label={`Plus-one ${index + 1} last name`}
+                        aria-describedby={
+                          fieldError(`plusOnes.${index}.lastName`)
+                            ? buildFieldErrorId(`plusOnes.${index}.lastName`)
+                            : undefined
+                        }
+                        aria-invalid={
+                          fieldError(`plusOnes.${index}.lastName`)
+                            ? 'true'
+                            : 'false'
+                        }
+                        maxLength={80}
+                        value={plusOne.lastName}
+                        onChange={(event) => {
+                          clearFieldError(`plusOnes.${index}.lastName`);
+                          updatePlusOne(index, {
+                            lastName: event.target.value,
+                          });
+                        }}
+                      />
+                      <FieldError
+                        path={`plusOnes.${index}.lastName`}
+                        errors={fieldErrors}
+                      />
+                    </label>
+                  </div>
+                  {eligibleSponsors.length > 1 && (
+                    <label
+                      className={
+                        fieldError(`plusOnes.${index}.sponsorMemberId`)
+                          ? 'field-error'
+                          : undefined
+                      }
+                    >
+                      Guest of
+                      <select
+                        aria-label={`Plus-one ${index + 1} sponsor`}
+                        aria-describedby={
+                          fieldError(`plusOnes.${index}.sponsorMemberId`)
+                            ? buildFieldErrorId(
+                                `plusOnes.${index}.sponsorMemberId`,
+                              )
+                            : undefined
+                        }
+                        aria-invalid={
+                          fieldError(`plusOnes.${index}.sponsorMemberId`)
+                            ? 'true'
+                            : 'false'
+                        }
+                        value={plusOne.sponsorMemberId}
+                        onChange={(event) => {
+                          clearFieldError(`plusOnes.${index}.sponsorMemberId`);
+                          updatePlusOne(index, {
+                            sponsorMemberId: event.target.value,
+                          });
+                        }}
+                      >
+                        {eligibleSponsors.map((sponsor) => (
+                          <option key={sponsor.id} value={sponsor.id}>
+                            {sponsor.firstName} {sponsor.lastName}
+                          </option>
+                        ))}
+                      </select>
+                      <FieldError
+                        path={`plusOnes.${index}.sponsorMemberId`}
+                        errors={fieldErrors}
+                      />
+                    </label>
+                  )}
+                  <label
+                    className={
+                      fieldError(`plusOnes.${index}.dietaryNotes`)
+                        ? 'field-error'
+                        : undefined
+                    }
+                  >
+                    Dietary notes
+                    <input
+                      aria-label={`Plus-one ${index + 1} dietary notes`}
+                      aria-describedby={
+                        fieldError(`plusOnes.${index}.dietaryNotes`)
+                          ? buildFieldErrorId(`plusOnes.${index}.dietaryNotes`)
+                          : undefined
+                      }
+                      aria-invalid={
+                        fieldError(`plusOnes.${index}.dietaryNotes`)
+                          ? 'true'
+                          : 'false'
+                      }
+                      maxLength={500}
+                      placeholder="E.g., allergies"
+                      value={plusOne.dietaryNotes}
+                      onChange={(event) => {
+                        clearFieldError(`plusOnes.${index}.dietaryNotes`);
+                        updatePlusOne(index, {
+                          dietaryNotes: event.target.value,
+                        });
+                      }}
+                    />
+                    <FieldError
+                      path={`plusOnes.${index}.dietaryNotes`}
+                      errors={fieldErrors}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="secondary-button button-inline danger-button"
+                    onClick={() => removePlusOne(index)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    Remove plus-one
+                  </button>
+                </fieldset>
+              ))}
+              </div>
             );
           })}
+          </div>
             </section>
-
-            {household.maxPlusOnes > 0 && (
-              <section
-                className={cx(
-                  'subsection-card',
-                  scoped(styles, 'rsvp-plus-one-section'),
-                )}
-              >
-            <div className="section-heading">
-              <div>
-                <h2>Optional plus-one</h2>
-                <p className="form-message">
-                  Add up to {household.maxPlusOnes} guest
-                  {household.maxPlusOnes === 1 ? '' : 's'} for attending
-                  household members who are allowed a plus-one.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="secondary-button button-inline"
-                onClick={addPlusOne}
-                disabled={!canAddPlusOne}
-              >
-                <Plus aria-hidden="true" />
-                Add plus-one
-              </button>
-            </div>
-            {!canAddPlusOne && form.plusOnes.length === 0 && (
-              <p className="form-message">
-                A guest can be added once an eligible household member is marked
-                as attending.
-              </p>
-            )}
-            {form.plusOnes.map((plusOne, index) => (
-              <fieldset key={`${plusOne.sponsorMemberId}-${index}`}>
-                <legend>Plus-one {index + 1}</legend>
-                <div className="split-fields">
-                  <label
-                    className={
-                      fieldError(`plusOnes.${index}.firstName`)
-                        ? 'field-error'
-                        : undefined
-                    }
-                  >
-                    First name
-                    <input
-                      aria-label={`Plus-one ${index + 1} first name`}
-                      aria-describedby={
-                        fieldError(`plusOnes.${index}.firstName`)
-                          ? buildFieldErrorId(`plusOnes.${index}.firstName`)
-                          : undefined
-                      }
-                      aria-invalid={
-                        fieldError(`plusOnes.${index}.firstName`)
-                          ? 'true'
-                          : 'false'
-                      }
-                      maxLength={80}
-                      value={plusOne.firstName}
-                      onChange={(event) => {
-                        clearFieldError(`plusOnes.${index}.firstName`);
-                        updatePlusOne(index, { firstName: event.target.value });
-                      }}
-                    />
-                    <FieldError
-                      path={`plusOnes.${index}.firstName`}
-                      errors={fieldErrors}
-                    />
-                  </label>
-                  <label
-                    className={
-                      fieldError(`plusOnes.${index}.lastName`)
-                        ? 'field-error'
-                        : undefined
-                    }
-                  >
-                    Last name
-                    <input
-                      aria-label={`Plus-one ${index + 1} last name`}
-                      aria-describedby={
-                        fieldError(`plusOnes.${index}.lastName`)
-                          ? buildFieldErrorId(`plusOnes.${index}.lastName`)
-                          : undefined
-                      }
-                      aria-invalid={
-                        fieldError(`plusOnes.${index}.lastName`)
-                          ? 'true'
-                          : 'false'
-                      }
-                      maxLength={80}
-                      value={plusOne.lastName}
-                      onChange={(event) => {
-                        clearFieldError(`plusOnes.${index}.lastName`);
-                        updatePlusOne(index, { lastName: event.target.value });
-                      }}
-                    />
-                    <FieldError
-                      path={`plusOnes.${index}.lastName`}
-                      errors={fieldErrors}
-                    />
-                  </label>
-                </div>
-                <label
-                  className={
-                    fieldError(`plusOnes.${index}.sponsorMemberId`)
-                      ? 'field-error'
-                      : undefined
-                  }
-                >
-                  Sponsored by
-                  <select
-                    aria-label={`Plus-one ${index + 1} sponsor`}
-                    aria-describedby={
-                      fieldError(`plusOnes.${index}.sponsorMemberId`)
-                        ? buildFieldErrorId(`plusOnes.${index}.sponsorMemberId`)
-                        : undefined
-                    }
-                    aria-invalid={
-                      fieldError(`plusOnes.${index}.sponsorMemberId`)
-                        ? 'true'
-                        : 'false'
-                    }
-                    value={plusOne.sponsorMemberId}
-                    onChange={(event) => {
-                      clearFieldError(`plusOnes.${index}.sponsorMemberId`);
-                      updatePlusOne(index, {
-                        sponsorMemberId: event.target.value,
-                      });
-                    }}
-                  >
-                    {eligibleSponsors.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.firstName} {member.lastName}
-                      </option>
-                    ))}
-                  </select>
-                  <FieldError
-                    path={`plusOnes.${index}.sponsorMemberId`}
-                    errors={fieldErrors}
-                  />
-                </label>
-                <label
-                  className={
-                    fieldError(`plusOnes.${index}.dietaryNotes`)
-                      ? 'field-error'
-                      : undefined
-                  }
-                >
-                  Dietary notes
-                  <input
-                    aria-label={`Plus-one ${index + 1} dietary notes`}
-                    aria-describedby={
-                      fieldError(`plusOnes.${index}.dietaryNotes`)
-                        ? buildFieldErrorId(`plusOnes.${index}.dietaryNotes`)
-                        : undefined
-                    }
-                    aria-invalid={
-                      fieldError(`plusOnes.${index}.dietaryNotes`)
-                        ? 'true'
-                        : 'false'
-                    }
-                    maxLength={500}
-                    placeholder="E.g., allergies"
-                    value={plusOne.dietaryNotes}
-                    onChange={(event) => {
-                      clearFieldError(`plusOnes.${index}.dietaryNotes`);
-                      updatePlusOne(index, {
-                        dietaryNotes: event.target.value,
-                      });
-                    }}
-                  />
-                  <FieldError
-                    path={`plusOnes.${index}.dietaryNotes`}
-                    errors={fieldErrors}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="secondary-button button-inline danger-button"
-                  onClick={() => removePlusOne(index)}
-                >
-                  <Trash2 aria-hidden="true" />
-                  Remove plus-one
-                </button>
-              </fieldset>
-            ))}
-              </section>
-            )}
             <div className={scoped(styles, 'rsvp-step-actions')}>
               <button
                 type="button"
@@ -1211,12 +1173,6 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
   }
 
   const responseSummary = buildRsvpSummary(household, savedRsvp);
-  const plusOneCount = savedRsvp.plusOnes.length;
-  const smsStatus =
-    household.smsConsent?.status === 'opted_in'
-      ? `Text updates on for ${household.smsConsent.phone}`
-      : 'Text updates off';
-
   return (
     <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
       <section
@@ -1235,24 +1191,7 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
         <p className="page-lede">
           Thanks, {household.displayName}. Your response has been saved.
         </p>
-        <EventAtAGlance calendarHref={calendarHref} />
-        <div
-          className={scoped(styles, 'rsvp-confirmation-details')}
-          aria-label="Confirmation details"
-        >
-          <div>
-            <strong>Submitted</strong>
-            <span>{formatDateTime(savedRsvp.submittedAt)}</span>
-          </div>
-          <div>
-            <strong>Last updated</strong>
-            <span>{formatDateTime(savedRsvp.updatedAt)}</span>
-          </div>
-          <div>
-            <strong>Text updates</strong>
-            <span>{smsStatus}</span>
-          </div>
-        </div>
+        <RsvpContextPanel calendarHref={calendarHref} savedRsvp={savedRsvp} />
         <div
           className={scoped(styles, 'rsvp-response-summary')}
           aria-label="RSVP response summary"
@@ -1282,25 +1221,15 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
             )}
           </section>
           <section>
-            <h2>Plus-ones ({plusOneCount})</h2>
-            {plusOneCount ? (
+            <h2>Notes</h2>
+            {responseSummary.notes.length ? (
               <ul>
-                {savedRsvp.plusOnes.map((plusOne, index) => (
-                  <li key={`${plusOne.sponsorMemberId}-${index}`}>
-                    {plusOne.firstName} {plusOne.lastName}
-                  </li>
+                {responseSummary.notes.map((note) => (
+                  <li key={note}>{note}</li>
                 ))}
               </ul>
             ) : (
-              <p className="form-message">None added.</p>
-            )}
-          </section>
-          <section>
-            <h2>Household note</h2>
-            {savedRsvp.notes.trim() ? (
-              <p>{savedRsvp.notes}</p>
-            ) : (
-              <p className="form-message">No household note added.</p>
+              <p className="form-message">No notes added.</p>
             )}
           </section>
         </div>
@@ -1313,14 +1242,6 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
           <a className="icon-button" href={buildGuestRsvpPath(inviteCode)}>
             <Heart aria-hidden="true" />
             Review or update RSVP
-          </a>
-          <a
-            className="secondary-button"
-            href={calendarHref}
-            download="matt-alison-wedding.ics"
-          >
-            <CalendarDays aria-hidden="true" />
-            Add to calendar
           </a>
           <a className="secondary-button" href="/">
             <Home aria-hidden="true" />
@@ -1350,24 +1271,60 @@ function RsvpStepIndicator({
   );
 }
 
-function EventAtAGlance({ calendarHref }: { calendarHref: string }) {
+function RsvpContextPanel({
+  calendarHref,
+  householdGuestCount,
+  maxPlusOnes,
+  savedRsvp,
+  showLookupLink = false,
+}: {
+  calendarHref: string;
+  householdGuestCount?: number;
+  maxPlusOnes?: number;
+  savedRsvp?: StoredRsvp;
+  showLookupLink?: boolean;
+}) {
   const venueMapHref = getNativeMapUrl();
 
   return (
     <section
-      className={scoped(styles, 'event-glance')}
-      aria-label="Wedding event at a glance"
+      className={scoped(styles, 'rsvp-context-panel')}
+      aria-label="RSVP details"
     >
-      <div className={scoped(styles, 'event-glance-copy')}>
-        <p className="eyebrow">Event at a glance</p>
-        <h2>{siteContent.dateLabel}</h2>
+      <div className={scoped(styles, 'rsvp-context-status')}>
+        <div>
+          <strong>
+            {savedRsvp ? 'RSVP submitted' : `RSVP by ${siteContent.rsvpDeadline}`}
+          </strong>
+          <small>
+            {savedRsvp
+              ? `Submitted ${formatDateTime(savedRsvp.submittedAt)}. Last updated ${formatDateTime(savedRsvp.updatedAt)}.`
+              : "We can't wait to celebrate with you."}
+          </small>
+        </div>
+        {typeof householdGuestCount === 'number' && (
+          <div>
+            <strong>
+              {householdGuestCount} household guest
+              {householdGuestCount === 1 ? '' : 's'}
+            </strong>
+            <small>
+              {maxPlusOnes && maxPlusOnes > 0
+                ? `Up to ${maxPlusOnes} plus-one${maxPlusOnes === 1 ? '' : 's'}`
+                : 'No plus-ones on this invitation'}
+            </small>
+          </div>
+        )}
       </div>
-      <div className={scoped(styles, 'event-glance-grid')}>
+      <div className={scoped(styles, 'rsvp-context-grid')}>
         <div>
           <Clock aria-hidden="true" />
           <span>
-            <strong>Ceremony at {siteContent.ceremonyTime}</strong>
-            <small>Reception until {siteContent.receptionTime}</small>
+            <strong>{siteContent.dateLabel}</strong>
+            <small>
+              Ceremony at {siteContent.ceremonyTime}. Reception until{' '}
+              {siteContent.receptionTime}.
+            </small>
           </span>
         </div>
         <div>
@@ -1396,7 +1353,19 @@ function EventAtAGlance({ calendarHref }: { calendarHref: string }) {
           <CalendarDays aria-hidden="true" />
           Add to calendar
         </a>
+        {showLookupLink && (
+          <a className="secondary-button button-inline" href="/rsvp">
+            <Search aria-hidden="true" />
+            Not you?
+          </a>
+        )}
       </div>
+      {savedRsvp && showLookupLink && (
+        <p className={cx('form-message', scoped(styles, 'update-note'))}>
+          You&apos;re reviewing an existing response. Make any changes below and
+          select Save RSVP to update it.
+        </p>
+      )}
     </section>
   );
 }
