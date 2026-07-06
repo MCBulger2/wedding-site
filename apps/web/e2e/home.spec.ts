@@ -1194,8 +1194,10 @@ test('guest can look up an invite code and submit an RSVP', async ({
 
   await page.getByRole('button', { name: 'Taylor Example not attending' }).click();
   await page.getByRole('button', { name: 'Add plus-one' }).click();
+  await page.getByRole('button', { name: 'Continue to details' }).click();
   await page.getByRole('button', { name: 'Save RSVP' }).click();
 
+  await expect(page.getByText('Step 1 of 3 · Guests')).toBeVisible();
   await expect(page.getByLabel('Plus-one 1 first name')).toHaveAttribute(
     'aria-invalid',
     'true',
@@ -1210,6 +1212,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
 
   await page.getByLabel('Plus-one 1 first name').fill('Jamie');
   await page.getByLabel('Plus-one 1 last name').fill('Guest');
+  await page.getByRole('button', { name: 'Continue to details' }).click();
   await page.getByLabel('Household notes').fill('Excited to celebrate.');
   await page.getByRole('button', { name: 'Save RSVP' }).click();
 
@@ -1236,9 +1239,10 @@ test('guest can look up an invite code and submit an RSVP', async ({
   await expect(
     page.getByRole('link', { name: 'Review or update RSVP' }),
   ).toBeVisible();
-  await expect(page.getByText('submitted')).toBeVisible();
+  await expect(page.getByText('Submitted')).toBeVisible();
   await expect(page.getByText('Attending (2)')).toBeVisible();
   await expect(page.getByText('Not attending (1)')).toBeVisible();
+  await expect(page.getByText('Plus-ones (1)')).toBeVisible();
 });
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({
