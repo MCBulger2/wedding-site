@@ -245,16 +245,15 @@ describe('RsvpPage', () => {
     ).toBeTruthy();
     expect(screen.queryByLabelText('Sam Example meal choice')).toBeNull();
     expect(screen.queryByLabelText('Accessibility notes')).toBeNull();
-    expect(
-      screen.getByLabelText('Wedding event at a glance'),
-    ).not.toBeNull();
+    expect(screen.getByLabelText('RSVP details')).not.toBeNull();
+    expect(screen.queryByLabelText('Wedding event at a glance')).toBeNull();
     expect(screen.getByText('January 18, 2027')).not.toBeNull();
     expect(screen.getByText(/Ceremony at 4:30 PM/i)).not.toBeNull();
     expect(screen.getByText('Superstition Manor')).not.toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
     expect(
-      screen.getByRole('link', { name: /Add to calendar/i }),
-    ).not.toBeNull();
+      screen.getAllByRole('link', { name: /Add to calendar/i }),
+    ).toHaveLength(1);
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Taylor Example not attending' }),
@@ -267,7 +266,7 @@ describe('RsvpPage', () => {
     ).not.toBeNull();
   });
 
-  it('keeps plus-one fields on the guests step with household guests', async () => {
+  it('integrates plus-one fields with the household guest list', async () => {
     fetchRsvp.mockResolvedValue({ household });
 
     render(<RsvpPage inviteCode="invite-code-123" />);
@@ -275,7 +274,8 @@ describe('RsvpPage', () => {
     await screen.findByRole('heading', { name: "Who's coming?" });
     fireEvent.click(screen.getByRole('button', { name: 'Add plus-one' }));
 
-    expect(screen.getByText('Optional plus-one')).not.toBeNull();
+    expect(screen.queryByText('Optional plus-one')).toBeNull();
+    expect(screen.getByText('Guest of Sam Example')).not.toBeNull();
     expect(screen.getByLabelText('Plus-one 1 first name')).not.toBeNull();
     expect(screen.getByLabelText('Plus-one 1 last name')).not.toBeNull();
     expect(screen.getByLabelText('Plus-one 1 dietary notes')).not.toBeNull();
@@ -473,9 +473,12 @@ describe('RsvpSuccessPage', () => {
     expect(screen.getByText('Jamie Guest (guest of Sam Example)')).not.toBeNull();
     expect(screen.queryByText('Accessibility: Please seat near an aisle.')).toBeNull();
     expect(screen.queryByText('Meal summary')).toBeNull();
+    expect(screen.getByLabelText('RSVP details')).not.toBeNull();
+    expect(screen.queryByLabelText('Wedding event at a glance')).toBeNull();
     expect(
-      screen.getByLabelText('Wedding event at a glance'),
-    ).not.toBeNull();
+      screen.getAllByRole('link', { name: /Add to calendar/i }),
+    ).toHaveLength(1);
+    expect(screen.queryByText('Plus-ones (1)')).toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
     expect(
       screen.getByRole('link', { name: 'Review or update RSVP' }),

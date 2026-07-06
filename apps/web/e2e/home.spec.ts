@@ -1239,10 +1239,13 @@ test('guest can look up an invite code and submit an RSVP', async ({
   await expect(
     page.getByRole('link', { name: 'Review or update RSVP' }),
   ).toBeVisible();
-  await expect(page.getByText('Submitted')).toBeVisible();
+  await expect(page.getByText('RSVP submitted')).toBeVisible();
   await expect(page.getByText('Attending (2)')).toBeVisible();
   await expect(page.getByText('Not attending (1)')).toBeVisible();
-  await expect(page.getByText('Plus-ones (1)')).toBeVisible();
+  await expect(page.getByText('Plus-ones (1)')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add to calendar' })).toHaveCount(
+    1,
+  );
 });
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({

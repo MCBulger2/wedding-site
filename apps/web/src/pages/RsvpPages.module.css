@@ -164,6 +164,10 @@
 
 .rsvp-summary-band,
 .guest-response-grid,
+.rsvp-context-grid,
+.rsvp-context-status,
+.guest-list,
+.guest-party-group,
 .rsvp-notes-grid,
 .rsvp-save-bar,
 .rsvp-step-actions,
@@ -258,6 +262,70 @@
   line-height: 1.4;
 }
 
+.rsvp-context-panel {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+}
+
+.rsvp-context-status {
+  background: var(--summary-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.85rem;
+}
+
+.rsvp-context-status > div,
+.rsvp-context-grid > div {
+  min-width: 0;
+}
+
+.rsvp-context-status strong {
+  color: var(--accent-strong);
+  display: block;
+}
+
+.rsvp-context-status small,
+.rsvp-context-grid small,
+.update-note {
+  color: var(--copy-muted);
+  line-height: 1.4;
+}
+
+.rsvp-context-grid {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+.rsvp-context-grid > div {
+  align-items: flex-start;
+  background: var(--surface-tint-soft);
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.rsvp-context-grid svg {
+  color: var(--accent-strong);
+  flex: 0 0 auto;
+}
+
+.rsvp-context-grid span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.update-note {
+  margin: -0.2rem 0 0;
+}
+
 .rsvp-form-section {
   display: grid;
   gap: 0.85rem;
@@ -324,6 +392,14 @@
   padding: 1.25rem;
 }
 
+.guest-list {
+  gap: 0.85rem;
+}
+
+.guest-party-group {
+  gap: 0.55rem;
+}
+
 .guest-response-card {
   background: var(--surface-strong);
   position: relative;
@@ -385,6 +461,40 @@
 .guest-decline-note {
   align-self: center;
   margin: 0;
+}
+
+.companion-row {
+  align-items: center;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: 0.15rem;
+  padding-top: 0.85rem;
+}
+
+.companion-row p {
+  margin: 0;
+}
+
+.companion-guest-card {
+  background: var(--surface);
+  margin-left: clamp(1rem, 4vw, 3rem) !important;
+  position: relative;
+}
+
+.companion-guest-card::before {
+  background: var(--accent-border);
+  content: '';
+  height: calc(100% + 0.65rem);
+  left: calc(clamp(1rem, 4vw, 3rem) * -0.5);
+  position: absolute;
+  top: -0.65rem;
+  width: 1px;
+}
+
+.companion-guest-card legend {
+  color: var(--accent-strong);
 }
 
 .rsvp-notes-grid {
@@ -480,7 +590,7 @@
 .rsvp-response-summary {
   border: 1px solid var(--border-soft);
   border-radius: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 1.5rem 0;
   padding: 1rem;
   text-align: left;
@@ -553,11 +663,26 @@
 
   .event-glance-grid,
   .guest-response-grid,
+  .rsvp-context-grid,
+  .rsvp-context-status,
   .rsvp-confirmation-details,
   .rsvp-notes-grid,
   .rsvp-response-summary,
   .rsvp-summary-band {
     grid-template-columns: 1fr;
+  }
+
+  .companion-row {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .companion-guest-card {
+    margin-left: 0 !important;
+  }
+
+  .companion-guest-card::before {
+    display: none;
   }
 
   .rsvp-save-bar,
