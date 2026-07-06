@@ -2,11 +2,17 @@ import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, t
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
-import { Archive, CheckSquare, ChevronDown, ChevronRight, Download, Edit3, ExternalLink, Heart, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, ChevronDown, ChevronRight, Download, Edit3, ExternalLink, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { Fragment, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
 import { archiveHousehold, createHousehold, downloadInvitationLabelsPdf, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
 import { cx, scoped } from '../classNames.js';
+import {
+  LoadingPulse,
+  LoadingScreen,
+  SkeletonDashboard,
+  SkeletonStat,
+} from '../components/LoadingStates.js';
 import { createLocalAdminMockSession, localAdminMockAuthConfig, localAdminMockEnabled } from '../localAdminMock.js';
 import styles from './AdminPage.module.css';
 
@@ -1606,11 +1612,7 @@ export function AdminPage() {
   if (authStatus === 'loading' || authStatus === 'signing_in') {
     return (
       <main className={scoped(styles, 'admin-page')}>
-        <LoadingScreen
-          eyebrow="Admin"
-          title="Preparing sign-in"
-          message={message}
-        />
+        <LoadingScreen />
       </main>
     );
   }
@@ -1762,11 +1764,7 @@ export function AdminPage() {
                 className={cx('inline-loading-shell', scoped(styles, 'qr-loading-shell'))}
                 aria-live="polite"
               >
-                <LoadingPulse
-                  label="Generating QR code"
-                  message="Preparing a scannable invitation link."
-                  compact
-                />
+                <LoadingPulse compact />
               </div>
             )}
             {qrCodeStatus === 'error' && (
@@ -1904,14 +1902,16 @@ export function AdminPage() {
                 className={cx('inline-loading-shell', scoped(styles, 'dashboard-refresh'))}
                 aria-live="polite"
               >
-                <LoadingPulse
-                  label="Refreshing dashboard"
-                  message="Updating household and RSVP data."
-                  compact
-                />
+                <LoadingPulse compact />
               </div>
             )}
-            {isHouseholdsLoading && <AdminDashboardSkeleton />}
+            {isHouseholdsLoading && (
+              <SkeletonDashboard
+                householdCardClassName={scoped(styles, 'household-card')}
+                statsInlineClassName={scoped(styles, 'stats-inline')}
+                memberListClassName={scoped(styles, 'member-list')}
+              />
+            )}
             {!isHouseholdsLoading && visibleHouseholds.length === 0 && (
               <p className="form-message">
                 No households match the current filters.
@@ -3183,89 +3183,6 @@ export function HouseholdNotificationForm({
         </button>
       </div>
     </form>
-  );
-}
-
-function LoadingScreen({
-  eyebrow,
-  title,
-  message,
-}: {
-  eyebrow: string;
-  title: string;
-  message: string;
-}) {
-  return (
-    <section className="lookup-card loading-card">
-      <p className="eyebrow">{eyebrow}</p>
-      <LoadingPulse label={title} message={message} />
-      <div className="skeleton-stack" aria-hidden="true">
-        <span className="skeleton-line wide" />
-        <span className="skeleton-line" />
-        <span className="skeleton-line short" />
-      </div>
-    </section>
-  );
-}
-
-function SkeletonStat() {
-  return (
-    <article className="skeleton-stat" aria-hidden="true">
-      <span className="skeleton-line number" />
-      <span className="skeleton-line short" />
-    </article>
-  );
-}
-
-function AdminDashboardSkeleton() {
-  return (
-    <div className="admin-skeleton" aria-hidden="true">
-      {[0, 1, 2].map((item) => (
-        <article className={cx(scoped(styles, 'household-card'), 'skeleton-household-card')} key={item}>
-          <div className="section-heading">
-            <div className="skeleton-stack">
-              <span className="skeleton-line title" />
-              <span className="skeleton-line wide" />
-            </div>
-            <div className="toolbar-actions skeleton-actions">
-              <span className="skeleton-button" />
-              <span className="skeleton-button" />
-            </div>
-          </div>
-          <div className={scoped(styles, 'stats-inline')}>
-            <span className="skeleton-line short" />
-            <span className="skeleton-line short" />
-            <span className="skeleton-line short" />
-          </div>
-          <div className={scoped(styles, 'member-list')}>
-            <span className="skeleton-row" />
-            <span className="skeleton-row" />
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function LoadingPulse({
-  label,
-  message,
-  compact = false,
-}: {
-  label: string;
-  message: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className={cx('loading-pulse', compact && 'compact')}>
-      <div className="loading-mark" aria-hidden="true">
-        <Heart />
-      </div>
-      <div>
-        <h1>{label}</h1>
-        <p className="page-lede">{message}</p>
-      </div>
-    </div>
   );
 }
 

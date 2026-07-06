@@ -35,6 +35,7 @@ import {
   isLikelyPhoneRecoveryContact,
   smsPhonePlaceholder,
 } from '../components/SmsConsentFields.js';
+import { LoadingPulse, LoadingScreen } from '../components/LoadingStates.js';
 import { siteContent } from '../siteContent.js';
 import styles from './RsvpPages.module.css';
 
@@ -188,11 +189,7 @@ export function RsvpLookupPage() {
           </form>
           {status === 'submitting' && (
             <div className="inline-loading-shell">
-              <LoadingPulse
-                label="Opening your RSVP"
-                message="Following your invitation link and loading your household details."
-                compact
-              />
+              <LoadingPulse compact />
             </div>
           )}
           <div className={scoped(styles, 'lookup-divider')}>
@@ -289,11 +286,7 @@ export function RsvpLookupPage() {
               </button>
               {recoveryStatus === 'submitting' && (
                 <div className="inline-loading-shell">
-                  <LoadingPulse
-                    label="Sending your RSVP link"
-                    message="Checking for a saved household contact and sending the private link if one matches."
-                    compact
-                  />
+                  <LoadingPulse compact />
                 </div>
               )}
               {recoveryMessage && (
@@ -364,11 +357,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
   if (status === 'loading') {
     return (
       <main className="narrow-page">
-        <LoadingScreen
-          eyebrow="Private RSVP"
-          title="Loading your RSVP"
-          message="Pulling in your household details and latest response."
-        />
+        <LoadingScreen />
       </main>
     );
   }
@@ -580,11 +569,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
       <form className={scoped(styles, 'rsvp-form')} onSubmit={submit}>
         {status === 'saving' && (
           <div className="inline-loading-shell" aria-live="polite">
-            <LoadingPulse
-              label="Saving your RSVP"
-              message="Updating your response and refreshing your confirmation."
-              compact
-            />
+            <LoadingPulse compact />
           </div>
         )}
         {step === 'guests' && (
@@ -1122,11 +1107,7 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
   if (status === 'loading') {
     return (
       <main className="narrow-page">
-        <LoadingScreen
-          eyebrow="Private RSVP"
-          title="Loading your confirmation"
-          message="Pulling in your latest response and confirmation details."
-        />
+        <LoadingScreen />
       </main>
     );
   }
@@ -1678,50 +1659,6 @@ function validateRecoveryContact(value: string): string | undefined {
 
 function buildFieldErrorId(path: string): string {
   return `${path.replace(/[^a-z0-9]+/gi, '-')}-error`;
-}
-
-function LoadingScreen({
-  eyebrow,
-  title,
-  message,
-}: {
-  eyebrow: string;
-  title: string;
-  message: string;
-}) {
-  return (
-    <section className="lookup-card loading-card">
-      <p className="eyebrow">{eyebrow}</p>
-      <LoadingPulse label={title} message={message} />
-      <div className="skeleton-stack" aria-hidden="true">
-        <span className="skeleton-line wide" />
-        <span className="skeleton-line" />
-        <span className="skeleton-line short" />
-      </div>
-    </section>
-  );
-}
-
-function LoadingPulse({
-  label,
-  message,
-  compact = false,
-}: {
-  label: string;
-  message: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className={cx('loading-pulse', compact && 'compact')}>
-      <div className="loading-mark" aria-hidden="true">
-        <Heart />
-      </div>
-      <div>
-        <h1>{label}</h1>
-        <p className="page-lede">{message}</p>
-      </div>
-    </div>
-  );
 }
 
 function buildGuestRsvpPath(inviteCode: string): string {

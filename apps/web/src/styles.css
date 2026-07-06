@@ -630,6 +630,7 @@ textarea:focus {
 
 .loading-pulse {
   align-items: center;
+  display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
 

@@ -207,6 +207,24 @@ describe('RsvpLookupPage', () => {
 
     expect(window.location.assign).toHaveBeenCalledWith('/rsvp/A2B3C4D5E6');
   });
+
+  it('uses silent visual feedback while recovering an RSVP link', async () => {
+    recoverRsvpLink.mockReturnValue(new Promise(() => {}));
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
+    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send private RSVP link' }),
+    );
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).not.toMatch(
+      /Sending your RSVP link|Checking for a saved household contact/i,
+    );
+  });
 });
 
 describe('RsvpPage', () => {
@@ -264,6 +282,16 @@ describe('RsvpPage', () => {
         'No additional details needed for guests who are not attending.',
       ),
     ).not.toBeNull();
+  });
+
+  it('uses a silent skeleton fallback while loading the household', () => {
+    fetchRsvp.mockReturnValue(new Promise(() => {}));
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    expect(screen.getByRole('status').textContent).not.toMatch(
+      /Private RSVP|Loading your RSVP|Pulling in your household details/i,
+    );
   });
 
   it('integrates plus-one fields with the household guest list', async () => {
@@ -389,6 +417,20 @@ describe('RsvpPage', () => {
       ],
       accessibilityNotes: '',
     });
+  });
+
+  it('uses silent visual feedback while saving the RSVP', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+    saveRsvp.mockReturnValue(new Promise(() => {}));
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: 'The Example Household' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save RSVP' }));
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).not.toMatch(/Saving your RSVP|Updating your response/i);
   });
 
   it('shows an unchecked SMS consent checkbox and updates the submit label when selected', async () => {

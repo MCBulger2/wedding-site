@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
+import { RouteLoadingFallback } from './components/LoadingStates.js';
 import { Header, SiteFooter } from './components/SiteLayout.js';
 import {
   HomePage,
@@ -53,24 +54,24 @@ export function App() {
       {route.name === 'privacy' && <PrivacyPage />}
       {route.name === 'registry' && <RegistryPage />}
       {route.name === 'rsvp_entry' && (
-        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+        <Suspense fallback={<RouteLoadingFallback />}>
           <RsvpLookupPage />
         </Suspense>
       )}
       {route.name === 'rsvp' && (
-        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+        <Suspense fallback={<RouteLoadingFallback />}>
           <RsvpPage inviteCode={route.inviteCode} />
         </Suspense>
       )}
       {route.name === 'rsvp_success' && (
-        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+        <Suspense fallback={<RouteLoadingFallback />}>
           <RsvpSuccessPage inviteCode={route.inviteCode} />
         </Suspense>
       )}
       {route.name === 'sms_opt_in_proof' && <SmsOptInProofPage />}
       {route.name === 'terms' && <TermsPage />}
       {route.name === 'admin' && (
-        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+        <Suspense fallback={<RouteLoadingFallback />}>
           <AdminPage />
         </Suspense>
       )}

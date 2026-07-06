@@ -2,9 +2,10 @@
 
 import type { Household } from '@matt-alison-wedding/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.js';
 import {
+  AdminPage,
   AdminBulkActionsMenu,
   AdminHouseholdsTable,
   HouseholdCardActions,
@@ -34,6 +35,10 @@ const household = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 } as Household;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('HouseholdCardActions', () => {
   it('opens the menu and closes it with Escape or menu selection', () => {
@@ -201,6 +206,19 @@ describe('AdminBulkActionsMenu', () => {
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Export RSVP CSV' }));
     expect(onExportRsvps).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AdminPage loading states', () => {
+  it('uses a silent loading fallback while admin auth initializes', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+
+    const { container } = render(<AdminPage />);
+
+    expect(screen.getByRole('status').textContent).not.toMatch(
+      /Preparing sign-in|Loading admin authentication/i,
+    );
+    expect(container.querySelector('.loading-mark')).not.toBeNull();
   });
 });
 
