@@ -319,10 +319,19 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
   >('loading');
   const [message, setMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<RsvpFieldErrorMap>({});
+  const [step, setStep] = useState<'guests' | 'details'>('guests');
+  const guestHeadingRef = useRef<HTMLHeadingElement>(null);
+  const detailsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const pendingStepFocusRef = useRef(false);
   const calendarHref = useMemo(() => {
     const ics = generateIcs(siteContent.weddingEvent);
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
+
+  const moveToStep = (nextStep: 'guests' | 'details', focusHeading = true) => {
+    pendingStepFocusRef.current = focusHeading;
+    setStep(nextStep);
+  };
 
   useEffect(() => {
     fetchRsvp(inviteCode)
@@ -330,6 +339,8 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         setHousehold(response.household);
         setSavedRsvp(response.rsvp);
         setForm(toEditableRsvp(response.household, response.rsvp));
+        pendingStepFocusRef.current = false;
+        setStep('guests');
         setFieldErrors({});
         setMessage('');
         setStatus('ready');
@@ -339,6 +350,17 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         setStatus('error');
       });
   }, [inviteCode]);
+
+  useEffect(() => {
+    if (!pendingStepFocusRef.current) {
+      return;
+    }
+
+    pendingStepFocusRef.current = false;
+    const heading =
+      step === 'guests' ? guestHeadingRef.current : detailsHeadingRef.current;
+    heading?.focus({ preventScroll: true });
+  }, [step]);
 
   if (status === 'loading') {
     return (
@@ -496,6 +518,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
     if (validation) {
       setFieldErrors(validation.fieldErrors);
       setMessage(validation.formMessage);
+      if (hasGuestOrPlusOneFieldErrors(validation.fieldErrors)) {
+        moveToStep('guests');
+      }
       return;
     }
 
@@ -515,6 +540,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         const parsedError = parseRsvpApiError(error);
         setFieldErrors(parsedError.fieldErrors);
         setMessage(parsedError.formMessage);
+        if (hasGuestOrPlusOneFieldErrors(parsedError.fieldErrors)) {
+          moveToStep('guests');
+        }
         return;
       }
 
@@ -593,6 +621,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           Not you?
         </a>
       </div>
+      <RsvpStepIndicator step={step} />
       <form className={scoped(styles, 'rsvp-form')} onSubmit={submit}>
         {status === 'saving' && (
           <div className="inline-loading-shell" aria-live="polite">
@@ -603,13 +632,17 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             />
           </div>
         )}
-        <section
-          className={scoped(styles, 'rsvp-form-section')}
-          aria-labelledby="rsvp-guests-heading"
-        >
+        {step === 'guests' && (
+          <>
+            <section
+              className={scoped(styles, 'rsvp-form-section')}
+              aria-labelledby="rsvp-guests-heading"
+            >
           <div className="section-heading">
             <div>
-              <h2 id="rsvp-guests-heading">Guests</h2>
+              <h2 id="rsvp-guests-heading" ref={guestHeadingRef} tabIndex={-1}>
+                Who&apos;s coming?
+              </h2>
               <p className="form-message">
                 Choose attendance for each person, then add any dietary notes
                 for guests who are attending.
@@ -738,18 +771,18 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
               </fieldset>
             );
           })}
-        </section>
+            </section>
 
-        {household.maxPlusOnes > 0 && (
-          <section
-            className={cx(
-              'subsection-card',
-              scoped(styles, 'rsvp-plus-one-section'),
-            )}
-          >
+            {household.maxPlusOnes > 0 && (
+              <section
+                className={cx(
+                  'subsection-card',
+                  scoped(styles, 'rsvp-plus-one-section'),
+                )}
+              >
             <div className="section-heading">
               <div>
-                <h2>Plus-ones</h2>
+                <h2>Optional plus-one</h2>
                 <p className="form-message">
                   Add up to {household.maxPlusOnes} guest
                   {household.maxPlusOnes === 1 ? '' : 's'} for attending
@@ -925,16 +958,50 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                 </button>
               </fieldset>
             ))}
-          </section>
+              </section>
+            )}
+            <div className={scoped(styles, 'rsvp-step-actions')}>
+              <button
+                type="button"
+                onClick={() => {
+                  clearFormMessage();
+                  moveToStep('details');
+                }}
+              >
+                Continue to details
+              </button>
+            </div>
+          </>
         )}
 
-        <section
-          className={cx(
-            scoped(styles, 'rsvp-notes-grid'),
-            scoped(styles, 'single-notes'),
-          )}
-          aria-label="Additional notes"
-        >
+        {step === 'details' && (
+          <>
+            <section
+              className={scoped(styles, 'rsvp-form-section')}
+              aria-labelledby="rsvp-details-heading"
+            >
+              <div className="section-heading">
+                <div>
+                  <h2
+                    id="rsvp-details-heading"
+                    ref={detailsHeadingRef}
+                    tabIndex={-1}
+                  >
+                    Anything else we should know?
+                  </h2>
+                  <p className="form-message">
+                    Add optional household notes and choose whether to receive
+                    text updates.
+                  </p>
+                </div>
+              </div>
+              <div
+                className={cx(
+                  scoped(styles, 'rsvp-notes-grid'),
+                  scoped(styles, 'single-notes'),
+                )}
+                aria-label="Additional notes"
+              >
           <label className={fieldError('notes') ? 'field-error' : undefined}>
             Household notes
             <textarea
@@ -954,14 +1021,15 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             />
             <FieldError path="notes" errors={fieldErrors} />
           </label>
-        </section>
-        <section
-          className={cx(
-            scoped(styles, 'rsvp-form-section'),
-            scoped(styles, 'sms-panel'),
-          )}
-          aria-labelledby="rsvp-sms-heading"
-        >
+              </div>
+            </section>
+            <section
+              className={cx(
+                scoped(styles, 'rsvp-form-section'),
+                scoped(styles, 'sms-panel'),
+              )}
+              aria-labelledby="rsvp-sms-heading"
+            >
           <div className={scoped(styles, 'sms-panel-header')}>
             <div className={scoped(styles, 'sms-panel-icon')} aria-hidden="true">
               <MessageSquare />
@@ -1020,16 +1088,28 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
             SMS consent is optional. Email delivery and private RSVP links still
             work if you leave texts off.
           </p>
-        </section>
-        <div className={scoped(styles, 'rsvp-save-bar')}>
-          <button type="submit" disabled={status === 'saving'}>
-            {status === 'saving'
-              ? 'Saving...'
-              : form.smsConsentAccepted
-                ? 'Save RSVP and text preferences'
-                : 'Save RSVP'}
-          </button>
-        </div>
+            </section>
+            <div className={scoped(styles, 'rsvp-save-bar')}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  clearFormMessage();
+                  moveToStep('guests');
+                }}
+              >
+                Back to guests
+              </button>
+              <button type="submit" disabled={status === 'saving'}>
+                {status === 'saving'
+                  ? 'Saving...'
+                  : form.smsConsentAccepted
+                    ? 'Save RSVP and text preferences'
+                    : 'Save RSVP'}
+              </button>
+            </div>
+          </>
+        )}
         {message && (
           <p
             className={cx(
@@ -1131,6 +1211,11 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
   }
 
   const responseSummary = buildRsvpSummary(household, savedRsvp);
+  const plusOneCount = savedRsvp.plusOnes.length;
+  const smsStatus =
+    household.smsConsent?.status === 'opted_in'
+      ? `Text updates on for ${household.smsConsent.phone}`
+      : 'Text updates off';
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
@@ -1142,29 +1227,31 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
         )}
       >
         <p className="eyebrow">Private RSVP</p>
+        <RsvpStepIndicator step="confirmation" />
         <div className={scoped(styles, 'success-mark')} aria-hidden="true">
           <Check />
         </div>
         <h1>RSVP received</h1>
         <p className="page-lede">
-          Thanks, {household.displayName}. Your response was submitted{' '}
-          {formatDateTime(savedRsvp.submittedAt)} and last updated{' '}
-          {formatDateTime(savedRsvp.updatedAt)}.
+          Thanks, {household.displayName}. Your response has been saved.
         </p>
         <EventAtAGlance calendarHref={calendarHref} />
-        <div className="confirmation-row">
-          <p className="form-message">
-            Need to make a change? You can reopen your invitation link and save
-            again.
-          </p>
-          <a
-            className="secondary-button button-inline"
-            href={calendarHref}
-            download="matt-alison-wedding.ics"
-          >
-            <CalendarDays aria-hidden="true" />
-            Add to calendar
-          </a>
+        <div
+          className={scoped(styles, 'rsvp-confirmation-details')}
+          aria-label="Confirmation details"
+        >
+          <div>
+            <strong>Submitted</strong>
+            <span>{formatDateTime(savedRsvp.submittedAt)}</span>
+          </div>
+          <div>
+            <strong>Last updated</strong>
+            <span>{formatDateTime(savedRsvp.updatedAt)}</span>
+          </div>
+          <div>
+            <strong>Text updates</strong>
+            <span>{smsStatus}</span>
+          </div>
         </div>
         <div
           className={scoped(styles, 'rsvp-response-summary')}
@@ -1195,22 +1282,45 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
             )}
           </section>
           <section>
-            <h2>Notes</h2>
-            {responseSummary.notes.length ? (
+            <h2>Plus-ones ({plusOneCount})</h2>
+            {plusOneCount ? (
               <ul>
-                {responseSummary.notes.map((note) => (
-                  <li key={note}>{note}</li>
+                {savedRsvp.plusOnes.map((plusOne, index) => (
+                  <li key={`${plusOne.sponsorMemberId}-${index}`}>
+                    {plusOne.firstName} {plusOne.lastName}
+                  </li>
                 ))}
               </ul>
             ) : (
-              <p className="form-message">No notes added.</p>
+              <p className="form-message">None added.</p>
+            )}
+          </section>
+          <section>
+            <h2>Household note</h2>
+            {savedRsvp.notes.trim() ? (
+              <p>{savedRsvp.notes}</p>
+            ) : (
+              <p className="form-message">No household note added.</p>
             )}
           </section>
         </div>
+        <p className="form-message">
+          We&apos;ll see you at {siteContent.venueName} on{' '}
+          {siteContent.dateLabel}. Need to make a change? Reopen this
+          invitation and save again.
+        </p>
         <div className="hero-actions compact-actions">
           <a className="icon-button" href={buildGuestRsvpPath(inviteCode)}>
             <Heart aria-hidden="true" />
             Review or update RSVP
+          </a>
+          <a
+            className="secondary-button"
+            href={calendarHref}
+            download="matt-alison-wedding.ics"
+          >
+            <CalendarDays aria-hidden="true" />
+            Add to calendar
           </a>
           <a className="secondary-button" href="/">
             <Home aria-hidden="true" />
@@ -1219,6 +1329,24 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function RsvpStepIndicator({
+  step,
+}: {
+  step: 'guests' | 'details' | 'confirmation';
+}) {
+  const labels = {
+    guests: 'Step 1 of 3 · Guests',
+    details: 'Step 2 of 3 · Details',
+    confirmation: 'Step 3 of 3 · Confirmation complete',
+  };
+
+  return (
+    <p className={scoped(styles, 'rsvp-step-indicator')} aria-live="polite">
+      {labels[step]}
+    </p>
   );
 }
 
@@ -1490,6 +1618,12 @@ function parseRsvpApiError(error: ApiError): {
         ? 'Please fix the highlighted fields and try again.'
         : error.message),
   };
+}
+
+function hasGuestOrPlusOneFieldErrors(fieldErrors: RsvpFieldErrorMap): boolean {
+  return Object.keys(fieldErrors).some(
+    (path) => path.startsWith('members.') || path.startsWith('plusOnes.'),
+  );
 }
 
 function parseRecoveryApiError(error: ApiError): {

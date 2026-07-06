@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../api.js';
 import { RsvpLookupPage, RsvpPage, RsvpSuccessPage } from './RsvpPages.js';
 
 const { fetchRsvp, recoverRsvpLink, saveRsvp } = vi.hoisted(() => ({
@@ -230,6 +231,10 @@ describe('RsvpPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'The Example Household' }),
     ).not.toBeNull();
+    expect(screen.getByText('Step 1 of 3 · Guests')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: "Who's coming?" })).not.toBeNull();
+    expect(screen.queryByLabelText('Household notes')).toBeNull();
+    expect(screen.queryByText('Text updates')).toBeNull();
     expect(
       screen
         .getByRole('button', { name: 'Sam Example attending' })
@@ -262,6 +267,107 @@ describe('RsvpPage', () => {
     ).not.toBeNull();
   });
 
+  it('keeps plus-one fields on the guests step with household guests', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: "Who's coming?" });
+    fireEvent.click(screen.getByRole('button', { name: 'Add plus-one' }));
+
+    expect(screen.getByText('Optional plus-one')).not.toBeNull();
+    expect(screen.getByLabelText('Plus-one 1 first name')).not.toBeNull();
+    expect(screen.getByLabelText('Plus-one 1 last name')).not.toBeNull();
+    expect(screen.getByLabelText('Plus-one 1 dietary notes')).not.toBeNull();
+    expect(screen.queryByLabelText('Household notes')).toBeNull();
+  });
+
+  it('moves details-only fields to the second RSVP step', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: "Who's coming?" });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+
+    expect(screen.getByText('Step 2 of 3 · Details')).not.toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Anything else we should know?' }),
+    ).not.toBeNull();
+    expect(screen.getByLabelText('Household notes')).not.toBeNull();
+    expect(screen.getByText('Text updates')).not.toBeNull();
+    expect(screen.queryByLabelText('Plus-one 1 first name')).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('heading', {
+          name: 'Anything else we should know?',
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to guests' }));
+
+    expect(screen.getByRole('heading', { name: "Who's coming?" })).not.toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('heading', { name: "Who's coming?" }),
+      ),
+    );
+  });
+
+  it('returns to guests when hidden plus-one fields fail validation on submit', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: "Who's coming?" });
+    fireEvent.click(screen.getByRole('button', { name: 'Add plus-one' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save RSVP' }));
+
+    expect(screen.getByText('Step 1 of 3 · Guests')).not.toBeNull();
+    expect(
+      screen
+        .getByLabelText('Plus-one 1 first name')
+        .getAttribute('aria-invalid'),
+    ).toBe('true');
+    expect(
+      screen
+        .getByLabelText('Plus-one 1 last name')
+        .getAttribute('aria-invalid'),
+    ).toBe('true');
+  });
+
+  it('returns to guests when the API reports hidden plus-one field errors', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+    saveRsvp.mockRejectedValue(
+      new ApiError('Invalid RSVP', 422, [
+        'plusOnes.0.firstName: First name is required.',
+      ]),
+    );
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: "Who's coming?" });
+    fireEvent.click(screen.getByRole('button', { name: 'Add plus-one' }));
+    fireEvent.change(screen.getByLabelText('Plus-one 1 first name'), {
+      target: { value: 'Jamie' },
+    });
+    fireEvent.change(screen.getByLabelText('Plus-one 1 last name'), {
+      target: { value: 'Guest' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save RSVP' }));
+
+    await screen.findByText('Please fix the highlighted fields and try again.');
+    expect(screen.getByText('Step 1 of 3 · Guests')).not.toBeNull();
+    expect(
+      screen
+        .getByLabelText('Plus-one 1 first name')
+        .getAttribute('aria-invalid'),
+    ).toBe('true');
+  });
+
   it('keeps meal choice support in the saved payload without exposing controls', async () => {
     fetchRsvp.mockResolvedValue({ household });
     saveRsvp.mockResolvedValue({ household, rsvp: savedRsvp });
@@ -272,6 +378,7 @@ describe('RsvpPage', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Taylor Example not attending' }),
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save RSVP' }));
 
     await waitFor(() => expect(saveRsvp).toHaveBeenCalled());
@@ -290,6 +397,7 @@ describe('RsvpPage', () => {
     render(<RsvpPage inviteCode="invite-code-123" />);
 
     await screen.findByRole('heading', { name: 'The Example Household' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
     expect(
       screen.getByText('Text updates'),
     ).not.toBeNull();
@@ -334,6 +442,7 @@ describe('RsvpPage', () => {
     render(<RsvpPage inviteCode="invite-code-123" />);
 
     await screen.findByRole('heading', { name: 'The Example Household' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
 
     expect(screen.getByText('Consent recorded')).not.toBeNull();
     expect(screen.getByText('+14805550100')).not.toBeNull();
@@ -355,6 +464,10 @@ describe('RsvpSuccessPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'RSVP received' }),
     ).not.toBeNull();
+    expect(screen.getByText('Step 3 of 3 · Confirmation complete')).not.toBeNull();
+    expect(
+      screen.getByText('Thanks, The Example Household. Your response has been saved.'),
+    ).not.toBeNull();
     expect(screen.getByText('Sam Example')).not.toBeNull();
     expect(screen.getByText('Taylor Example')).not.toBeNull();
     expect(screen.getByText('Jamie Guest (guest of Sam Example)')).not.toBeNull();
@@ -364,5 +477,12 @@ describe('RsvpSuccessPage', () => {
       screen.getByLabelText('Wedding event at a glance'),
     ).not.toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'Review or update RSVP' }),
+    ).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Back home' })).not.toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Submit RSVP/i }),
+    ).toBeNull();
   });
 });
