@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 describe('Vite production build config', () => {
-  it('emits source maps for deployed JavaScript bundles', async () => {
+  it('uses explicit minification and hidden source maps for deployed bundles', async () => {
     const { default: viteConfig } = await import('../vite.config.ts');
     const config =
       typeof viteConfig === 'function'
@@ -13,6 +13,8 @@ describe('Vite production build config', () => {
           })
         : viteConfig;
 
-    expect(config.build?.sourcemap).toBe(true);
+    expect(config.build?.minify).toBe('esbuild');
+    expect(config.build?.cssMinify).toBe('esbuild');
+    expect(config.build?.sourcemap).toBe('hidden');
   });
 });

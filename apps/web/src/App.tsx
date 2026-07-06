@@ -8,11 +8,25 @@ import {
   SmsOptInProofPage,
   TermsPage,
 } from './pages/PublicPages.js';
-import { RsvpLookupPage, RsvpPage, RsvpSuccessPage } from './pages/RsvpPages.js';
 
 const AdminPage = lazy(() =>
   import('./pages/AdminPage.js').then((module) => ({
     default: module.AdminPage,
+  })),
+);
+const RsvpLookupPage = lazy(() =>
+  import('./pages/RsvpPages.js').then((module) => ({
+    default: module.RsvpLookupPage,
+  })),
+);
+const RsvpPage = lazy(() =>
+  import('./pages/RsvpPages.js').then((module) => ({
+    default: module.RsvpPage,
+  })),
+);
+const RsvpSuccessPage = lazy(() =>
+  import('./pages/RsvpPages.js').then((module) => ({
+    default: module.RsvpSuccessPage,
   })),
 );
 
@@ -38,10 +52,20 @@ export function App() {
       {route.name === 'our_story' && <OurStoryPage />}
       {route.name === 'privacy' && <PrivacyPage />}
       {route.name === 'registry' && <RegistryPage />}
-      {route.name === 'rsvp_entry' && <RsvpLookupPage />}
-      {route.name === 'rsvp' && <RsvpPage inviteCode={route.inviteCode} />}
+      {route.name === 'rsvp_entry' && (
+        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+          <RsvpLookupPage />
+        </Suspense>
+      )}
+      {route.name === 'rsvp' && (
+        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+          <RsvpPage inviteCode={route.inviteCode} />
+        </Suspense>
+      )}
       {route.name === 'rsvp_success' && (
-        <RsvpSuccessPage inviteCode={route.inviteCode} />
+        <Suspense fallback={<main className="page-shell">Loading...</main>}>
+          <RsvpSuccessPage inviteCode={route.inviteCode} />
+        </Suspense>
       )}
       {route.name === 'sms_opt_in_proof' && <SmsOptInProofPage />}
       {route.name === 'terms' && <TermsPage />}
