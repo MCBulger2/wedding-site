@@ -50,7 +50,7 @@ jobs:
         run: npm run report:ci
       - name: Upload test and coverage artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ci-test-and-coverage-reports
           path: |
