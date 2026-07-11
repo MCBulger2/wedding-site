@@ -199,6 +199,44 @@ describe('handleRequest', () => {
     expect(JSON.stringify(logs)).not.toContain('203.0.113.10');
   });
 
+  it('routes nested SMS preferences before the generic RSVP update', async () => {
+    const updateSmsPreferences = vi.fn(async () => ({
+      householdId: 'h1',
+      displayName: 'Test Household',
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_in' as const,
+        phone: '+14805550100',
+        source: 'sms_preferences' as const,
+        consentedAt: '2026-07-03T20:00:00.000Z',
+        consentTextVersion: 'twilio-tollfree-v1' as const,
+      },
+      members: [{ id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: false }],
+      maxPlusOnes: 0,
+      rsvpStatus: 'not_started' as const,
+      inviteLifecycleStatus: 'generated' as const,
+      createdAt: '2026-07-03T20:00:00.000Z',
+      updatedAt: '2026-07-03T20:00:00.000Z',
+    }));
+    const updateRsvp = vi.fn();
+    const service = createServiceDouble({ updateSmsPreferences, updateRsvp });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/A2B3C4D5E6/sms-preferences', 'PUT', {
+        enabled: true,
+        phone: '(480) 555-0100',
+      }),
+    );
+
+    expect((response as Exclude<typeof response, string>).statusCode).toBe(200);
+    expect(updateSmsPreferences).toHaveBeenCalledWith('A2B3C4D5E6', {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+    expect(updateRsvp).not.toHaveBeenCalled();
+  });
+
   it('logs public request errors without raw request details', async () => {
     vi.stubEnv('FRONTEND_BASE_URL', '');
     const requestRsvpRecovery = vi.fn(async () => acceptedRecoveryResponse);
@@ -442,6 +480,7 @@ function createServiceDouble(
     updateHouseholdMember: notUsed,
     updateInviteLifecycle: notUsed,
     updateRsvp: notUsed,
+    updateSmsPreferences: notUsed,
     removeHouseholdMember: notUsed,
     ...overrides,
   };

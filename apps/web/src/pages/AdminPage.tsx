@@ -357,9 +357,7 @@ export function AdminHouseholdsTable({
             {(row.original.household.phone ||
               row.original.household.smsConsent) && (
               <small>
-                {hasRecordedSmsConsent(row.original.household)
-                  ? 'SMS consent recorded'
-                  : 'SMS consent missing'}
+                {smsPreferenceLabel(row.original.household)}
               </small>
             )}
           </div>
@@ -2011,9 +2009,7 @@ export function AdminPage() {
                         {(record.household.phone || record.household.smsConsent) && (
                           <span>
                             <MessageSquare aria-hidden="true" />
-                            {hasRecordedSmsConsent(record.household)
-                              ? `SMS consent on file for ${record.household.smsConsent?.phone}`
-                              : 'SMS consent not recorded'}
+                            {smsPreferenceLabel(record.household)}
                           </span>
                         )}
                       </div>
@@ -2613,6 +2609,19 @@ function hasRecordedSmsConsent(household: Household): boolean {
   );
 }
 
+function smsPreferenceLabel(household: Household): string {
+  if (hasRecordedSmsConsent(household)) {
+    return `SMS active for ${household.smsConsent?.phone}`;
+  }
+  if (household.smsConsent?.status === 'pending_confirmation') {
+    return `SMS confirmation pending for ${household.smsConsent.phone}`;
+  }
+  if (household.smsConsent?.status === 'opted_out') {
+    return 'SMS opted out';
+  }
+  return 'SMS consent not recorded';
+}
+
 function inviteStatusLabel(household: Household): string {
   if (
     household.inviteCodeHash &&
@@ -3119,7 +3128,7 @@ export function HouseholdNotificationForm({
       {!canSms && household.phone && (
         <p className={cx('form-message', scoped(styles, 'compact-message'))}>
           SMS delivery stays disabled until this household opts in through the
-          RSVP or recovery form.
+          standalone text preferences page.
         </p>
       )}
       <label>

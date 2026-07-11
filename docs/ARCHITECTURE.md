@@ -53,7 +53,9 @@ Guests can:
 - submit or revise their RSVP,
 - and request recovery of their RSVP link through `/rsvp/recovery`.
 
-The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, SMS consent, and stored RSVP state.
+The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
+
+SMS enrollment is independent from RSVP submission and recovery. A guest uses `/rsvp/{inviteCode}/sms-updates`; enabling stores `pending_confirmation`, sends the required Twilio confirmation, and moves to `opted_in` only after Twilio returns HTTP 2xx. Provider failure leaves the preference pending and retryable. Disabling immediately records `opted_out` without clearing the household phone. Only an `opted_in` record whose phone matches the household's current phone authorizes recovery or admin-authored application SMS. Email recovery and SES behavior are unchanged.
 
 The intended security model is:
 
@@ -174,6 +176,7 @@ Current API routes implemented by `apps/api/src/handler.ts`:
 
 - `GET /api/rsvp/{inviteCode}`
 - `PUT /api/rsvp/{inviteCode}`
+- `PUT /api/rsvp/{inviteCode}/sms-preferences`
 - `POST /api/rsvp/recovery`
 
 ### Admin routes

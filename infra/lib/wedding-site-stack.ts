@@ -347,6 +347,12 @@ export class WeddingSiteStack extends Stack {
     });
 
     api.addRoutes({
+      path: '/api/rsvp/{inviteCode}/sms-preferences',
+      methods: [apigwv2.HttpMethod.PUT],
+      integration: apiIntegration,
+    });
+
+    api.addRoutes({
       path: '/api/rsvp/recovery',
       methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration,
@@ -363,6 +369,10 @@ export class WeddingSiteStack extends Stack {
         ThrottlingRateLimit: 10,
       },
       'PUT /api/rsvp/{inviteCode}': {
+        ThrottlingBurstLimit: 10,
+        ThrottlingRateLimit: 5,
+      },
+      'PUT /api/rsvp/{inviteCode}/sms-preferences': {
         ThrottlingBurstLimit: 10,
         ThrottlingRateLimit: 5,
       },

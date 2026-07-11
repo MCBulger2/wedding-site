@@ -8,6 +8,7 @@ import type {
   RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequest,
   RsvpUpdate,
+  SmsPreferencesRequest,
   SendInvitationEmailResponse,
   SendHouseholdNotificationInput,
   SendHouseholdNotificationResponse,
@@ -89,6 +90,16 @@ export async function saveRsvp(inviteCode: string, payload: RsvpPayload): Promis
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+export async function saveSmsPreferences(
+  inviteCode: string,
+  payload: SmsPreferencesRequest,
+): Promise<Household> {
+  return request<Household>(
+    `/rsvp/${encodeURIComponent(inviteCode)}/sms-preferences`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+  );
 }
 
 export async function recoverRsvpLink(

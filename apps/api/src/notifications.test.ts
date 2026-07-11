@@ -275,7 +275,7 @@ describe('notifications', () => {
     const body = fetchRecorder.requests[0].init.body as URLSearchParams;
     expect(body.get('To')).toBe('+14805550100');
     expect(body.get('Body')).toBe(
-      'Please RSVP this week. Reply HELP for help or STOP to opt out.',
+      'Matt & Alison Wedding: Please RSVP this week. Reply HELP for help or STOP to opt out.',
     );
     expect(body.get('MessagingServiceSid')).toBe('MG123');
     expect(body.toString()).not.toContain('twilio-secret-value');
@@ -315,6 +315,31 @@ describe('notifications', () => {
     expect(body.get('Body')).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(body.get('Body')).not.toContain('Invitation code');
     expect(body.get('Body')).toContain('Reply HELP for help or STOP to opt out.');
+  });
+
+  it('sends the exact standalone SMS preference confirmation', async () => {
+    const fetchRecorder = createRecordingFetch();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        recipientEmails: [],
+        twilio: {
+          accountSid: 'AC123',
+          apiKeySid: 'SK123',
+          apiKeySecretArn: 'twilio-secret-arn',
+          messagingServiceSid: 'MG123',
+        },
+      },
+      new RecordingSesClient() as unknown as SESv2Client,
+      new RecordingSecretsManagerClient('twilio-secret-value') as unknown as SecretsManagerClient,
+      fetchRecorder.fetch,
+    );
+
+    await client.sendSmsPreferenceConfirmation({ householdId: 'h1', phone: '+14805550100' });
+
+    const body = fetchRecorder.requests[0].init.body as URLSearchParams;
+    expect(body.get('Body')).toBe(
+      'Matt & Alison Wedding: You’re enrolled for RSVP recovery, schedule, and wedding logistics texts. Fewer than 10 msgs/month. Msg & data rates may apply. Help: contact@matt-alison.com. Reply HELP for help or STOP to opt out.',
+    );
   });
 
   it('fails SMS sends with a sanitized error when Twilio is incomplete', async () => {

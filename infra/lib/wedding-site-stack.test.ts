@@ -696,6 +696,10 @@ describe('WeddingSiteStack infrastructure', () => {
             ThrottlingBurstLimit: 20,
             ThrottlingRateLimit: 10,
           },
+          'PUT /api/rsvp/{inviteCode}/sms-preferences': {
+            ThrottlingBurstLimit: 10,
+            ThrottlingRateLimit: 5,
+          },
         },
       },
     });
