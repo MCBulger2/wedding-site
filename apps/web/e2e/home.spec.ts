@@ -1110,10 +1110,11 @@ test('standalone SMS preferences require fresh consent and support website opt-o
   });
 
   await page.goto('/rsvp/A2B3C4D5E6/sms-updates');
-  await expect(page.getByRole('heading', { name: 'Text updates' })).toBeVisible();
-  await expect(page.getByRole('checkbox')).not.toBeChecked();
-  await expect(page.getByRole('link', { name: 'Terms' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
+  const smsPreferencesMain = page.getByRole('main');
+  await expect(smsPreferencesMain.getByRole('heading', { name: 'Text updates' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('checkbox')).not.toBeChecked();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Terms' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
   await page.getByRole('button', { name: 'Enable text updates' }).click();
   await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
   expect(requests).toEqual([]);
@@ -1125,7 +1126,7 @@ test('standalone SMS preferences require fresh consent and support website opt-o
     { enabled: true, phone: '(480) 555-0100' },
   ]);
   await expect(page.getByText('Text updates are active.')).toBeVisible();
-  await expect(page.getByText('Active')).toBeVisible();
+  await expect(smsPreferencesMain.getByText('Active', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox')).not.toBeChecked();
 
   await page.getByRole('button', { name: 'Turn off text updates' }).click();
