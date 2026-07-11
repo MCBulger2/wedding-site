@@ -30,6 +30,11 @@ const RsvpSuccessPage = lazy(() =>
     default: module.RsvpSuccessPage,
   })),
 );
+const RsvpSmsUpdatesPage = lazy(() =>
+  import('./pages/RsvpPages.js').then((module) => ({
+    default: module.RsvpSmsUpdatesPage,
+  })),
+);
 
 type Route =
   | { name: 'home' }
@@ -39,6 +44,7 @@ type Route =
   | { name: 'rsvp_entry' }
   | { name: 'rsvp'; inviteCode: string }
   | { name: 'rsvp_success'; inviteCode: string }
+  | { name: 'rsvp_sms_updates'; inviteCode: string }
   | { name: 'sms_opt_in_proof' }
   | { name: 'terms' }
   | { name: 'admin' };
@@ -48,7 +54,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Header activeRoute={route.name} />
+      <Header activeRoute={route.name === 'rsvp_sms_updates' ? 'rsvp' : route.name} />
       {route.name === 'home' && <HomePage />}
       {route.name === 'our_story' && <OurStoryPage />}
       {route.name === 'privacy' && <PrivacyPage />}
@@ -66,6 +72,11 @@ export function App() {
       {route.name === 'rsvp_success' && (
         <Suspense fallback={<RouteLoadingFallback />}>
           <RsvpSuccessPage inviteCode={route.inviteCode} />
+        </Suspense>
+      )}
+      {route.name === 'rsvp_sms_updates' && (
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <RsvpSmsUpdatesPage inviteCode={route.inviteCode} />
         </Suspense>
       )}
       {route.name === 'sms_opt_in_proof' && <SmsOptInProofPage />}
@@ -92,6 +103,14 @@ function parseRoute(pathname: string): Route {
   }
   if (pathname === '/rsvp') {
     return { name: 'rsvp_entry' };
+  }
+  if (pathname.startsWith('/rsvp/') && pathname.endsWith('/sms-updates')) {
+    return {
+      name: 'rsvp_sms_updates',
+      inviteCode: decodeURIComponent(
+        pathname.slice('/rsvp/'.length, -'/sms-updates'.length),
+      ),
+    };
   }
   if (pathname.startsWith('/rsvp/') && pathname.endsWith('/success')) {
     return {

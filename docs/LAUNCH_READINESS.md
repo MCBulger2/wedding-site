@@ -118,6 +118,7 @@ Run a full staging rehearsal before printing invitations:
 - verify exported or sent households do not accidentally rotate to new mailed URLs without explicit confirmation
 - submit and update RSVPs from invite links
 - verify RSVP recovery by stored email and stored phone flows
+- verify phone recovery sends only for a matching current phone with active `opted_in` consent; recovery must never enroll or reactivate SMS
 - confirm recovery messages contain the private RSVP link and do not expose extra plaintext invite-code fields
 - verify admin login, household editing, archive behavior, CSV export, and label export
 - verify public pages, RSVP routes, admin routes, and SPA refresh behavior
@@ -131,4 +132,9 @@ Immediately before production launch:
 - review alarms, dashboards, and log groups
 - confirm operations alert recipients have accepted SNS subscriptions
 - confirm contact, notification, and recovery destinations are correct
+- confirm the Twilio toll-free sender is in the intended Messaging Service sender pool and the public `/sms-opt-in-proof`, Terms, and Privacy pages match the submitted consent flow
+- confirm the toll-free verification identifies sole proprietor `Matthew Bulger`, brand `Matt & Alison Wedding`, and `contact@matt-alison.com`
+- use the non-promotional, invited-guest estimate of approximately 100 messages for the verification submission; complete an internal pre-review before submitting
+- after approval, test live HELP, STOP, and START behavior end to end from a real handset before enabling guest messaging
+- verify standalone SMS preferences transition pending to active only after a Twilio HTTP 2xx, failed confirmation remains retryable, and website opt-out blocks recovery and admin-authored SMS
 - rerun the highest-risk production smoke checks after deploy

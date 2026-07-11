@@ -1,6 +1,11 @@
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
-import { SMS_HELP_STOP_NOTICE, siteContent } from '@matt-alison-wedding/shared';
+import {
+  SMS_BRAND_PREFIX,
+  SMS_HELP_STOP_NOTICE,
+  SMS_PREFERENCE_CONFIRMATION,
+  siteContent,
+} from '@matt-alison-wedding/shared';
 import type {
   Household,
   InvitationEmailResult,
@@ -31,6 +36,10 @@ export interface HouseholdMessenger {
   sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult>;
   sendRecoveryEmail(input: RecoveryMessageInput): Promise<void>;
   sendRecoverySms(input: RecoveryMessageInput): Promise<void>;
+  sendSmsPreferenceConfirmation(input: {
+    householdId: string;
+    phone: string;
+  }): Promise<void>;
 }
 
 export interface InvitationEmailInput {
@@ -402,6 +411,37 @@ export class AwsWeddingNotificationsClient
         event: 'recovery.delivery.failed',
         message: 'Recovery SMS failed',
         householdId: input.household.householdId,
+        channel: 'sms',
+        outcome: 'failed',
+        provider: 'twilio',
+        statusCode: getErrorStatusCode(error),
+        ...describeError(error),
+      });
+      throw error;
+    }
+  }
+
+  async sendSmsPreferenceConfirmation(input: {
+    householdId: string;
+    phone: string;
+  }): Promise<void> {
+    try {
+      await this.sendTwilioSms(input.phone, SMS_PREFERENCE_CONFIRMATION);
+      logStructured({
+        level: 'info',
+        event: 'sms.preferenceConfirmation.completed',
+        message: 'SMS preference confirmation delivered',
+        householdId: input.householdId,
+        channel: 'sms',
+        outcome: 'success',
+        provider: 'twilio',
+      });
+    } catch (error) {
+      logStructured({
+        level: 'error',
+        event: 'sms.preferenceConfirmation.failed',
+        message: 'SMS preference confirmation failed',
+        householdId: input.householdId,
         channel: 'sms',
         outcome: 'failed',
         provider: 'twilio',
@@ -912,7 +952,10 @@ function decodeSecretBinary(secretBinary: Uint8Array | undefined): string | unde
 }
 
 function appendSmsComplianceNotice(message: string): string {
-  const trimmed = message.trim();
+  const initial = message.trim();
+  const trimmed = initial.toLowerCase().startsWith(SMS_BRAND_PREFIX.toLowerCase())
+    ? initial
+    : `${SMS_BRAND_PREFIX} ${initial}`;
   if (
     trimmed.toLowerCase().includes(SMS_HELP_STOP_NOTICE.toLowerCase())
   ) {

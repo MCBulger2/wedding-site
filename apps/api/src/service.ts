@@ -10,6 +10,7 @@ import {
   type InvitationDetails,
   type InvitationEmailResult,
   SMS_CONSENT_TEXT_VERSION,
+  SmsPreferencesRequestSchema,
   type SmsConsent,
   type RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequestSchema,
@@ -121,12 +122,6 @@ export class WeddingService {
     this.validateRsvpAgainstHousehold(household, parsed.data);
 
     const now = new Date().toISOString();
-    const optedInSmsPhone = parsed.data.smsConsentAccepted
-      ? normalizeRequiredPhoneNumber(
-          parsed.data.smsPhone,
-          'Enter a mobile number to receive text updates.',
-        )
-      : undefined;
     const existing = await this.getStoredRsvp(household.householdId);
     const rsvp: StoredRsvp = {
       ...parsed.data,
@@ -135,10 +130,6 @@ export class WeddingService {
     };
     const updatedHousehold: Household = {
       ...household,
-      phone: optedInSmsPhone ?? household.phone,
-      smsConsent: optedInSmsPhone
-        ? createSmsConsent(optedInSmsPhone, 'rsvp_form', now)
-        : household.smsConsent,
       rsvpStatus: deriveRsvpStatus(rsvp),
       updatedAt: now,
     };
@@ -158,6 +149,83 @@ export class WeddingService {
       plusOneCount: counts.plusOneCount,
     });
     return { household: updatedHousehold, rsvp };
+  }
+
+  async updateSmsPreferences(inviteCode: string, input: unknown): Promise<Household> {
+    const household = await this.findHouseholdByInviteCode(inviteCode);
+    const parsed = SmsPreferencesRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError(
+        'SMS preferences are invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
+    }
+
+    const now = new Date().toISOString();
+    if (!parsed.data.enabled) {
+      const phone = household.phone ?? household.smsConsent?.phone;
+      if (!phone) {
+        return household;
+      }
+      const optedOut: Household = {
+        ...household,
+        smsConsent: createSmsConsent(phone, 'sms_preferences', now, 'opted_out'),
+        updatedAt: now,
+      };
+      await this.repository.saveHousehold(optedOut);
+      return optedOut;
+    }
+
+    const phone = normalizeRequiredPhoneNumber(
+      parsed.data.phone,
+      'Enter a mobile number to receive text updates.',
+    );
+    const pending: Household = {
+      ...household,
+      phone,
+      smsConsent: createSmsConsent(
+        phone,
+        'sms_preferences',
+        now,
+        'pending_confirmation',
+      ),
+      updatedAt: now,
+    };
+    await this.repository.saveHousehold(pending);
+
+    if (!this.householdMessenger) {
+      throw new PublicError('SMS provider is temporarily unavailable', 503);
+    }
+    try {
+      await this.householdMessenger.sendSmsPreferenceConfirmation({
+        householdId: household.householdId,
+        phone,
+      });
+    } catch {
+      throw new PublicError('SMS provider is temporarily unavailable', 503);
+    }
+
+    const current = await this.repository.getHousehold(household.householdId);
+    if (
+      !current ||
+      current.smsConsent?.status !== 'pending_confirmation' ||
+      current.smsConsent.phone !== phone
+    ) {
+      return current ?? pending;
+    }
+    const optedIn: Household = {
+      ...current,
+      smsConsent: createSmsConsent(
+        phone,
+        'sms_preferences',
+        new Date().toISOString(),
+        'opted_in',
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.repository.saveHousehold(optedIn);
+    return optedIn;
   }
 
   async requestRsvpRecovery(
@@ -221,14 +289,16 @@ export class WeddingService {
         continue;
       }
 
-      const consentedHousehold =
-        contact.kind === 'phone'
-          ? await this.recordSmsConsentIfNeeded(
-              household,
-              contact.value,
-              'recovery_form',
-            )
-          : household;
+      if (
+        contact.kind === 'phone' &&
+        !(
+          household.phone === contact.value &&
+          household.smsConsent?.status === 'opted_in' &&
+          household.smsConsent.phone === contact.value
+        )
+      ) {
+        continue;
+      }
 
       try {
         const inviteCode = await this.getRecoverableInviteCode(household);
@@ -246,7 +316,7 @@ export class WeddingService {
         }
         if (contact.kind === 'email') {
           await this.householdMessenger.sendRecoveryEmail({
-            household: consentedHousehold,
+            household,
             invitation,
           });
           logStructured({
@@ -260,7 +330,7 @@ export class WeddingService {
           });
         } else {
           await this.householdMessenger.sendRecoverySms({
-            household: consentedHousehold,
+            household,
             invitation,
           });
           logStructured({
@@ -1326,29 +1396,6 @@ export class WeddingService {
     }
   }
 
-  private async recordSmsConsentIfNeeded(
-    household: Household,
-    phone: string,
-    source: SmsConsent['source'],
-  ): Promise<Household> {
-    if (
-      household.phone === phone &&
-      household.smsConsent?.status === 'opted_in' &&
-      household.smsConsent.phone === phone
-    ) {
-      return household;
-    }
-
-    const updatedHousehold: Household = {
-      ...household,
-      phone,
-      smsConsent: createSmsConsent(phone, source, new Date().toISOString()),
-      updatedAt: new Date().toISOString(),
-    };
-    await this.repository.saveHousehold(updatedHousehold);
-    return updatedHousehold;
-  }
-
   private async notifyRsvpChanged(
     household: Household,
     rsvp: StoredRsvp,
@@ -1653,9 +1700,10 @@ function createSmsConsent(
   phone: string,
   source: SmsConsent['source'],
   consentedAt: string,
+  status: SmsConsent['status'] = 'opted_in',
 ): SmsConsent {
   return {
-    status: 'opted_in',
+    status,
     phone,
     source,
     consentedAt,

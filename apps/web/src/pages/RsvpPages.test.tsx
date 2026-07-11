@@ -3,12 +3,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api.js';
-import { RsvpLookupPage, RsvpPage, RsvpSuccessPage } from './RsvpPages.js';
+import {
+  RsvpLookupPage,
+  RsvpPage,
+  RsvpSmsUpdatesPage,
+  RsvpSuccessPage,
+} from './RsvpPages.js';
 
-const { fetchRsvp, recoverRsvpLink, saveRsvp } = vi.hoisted(() => ({
+const { fetchRsvp, recoverRsvpLink, saveRsvp, saveSmsPreferences } = vi.hoisted(() => ({
   fetchRsvp: vi.fn(),
   recoverRsvpLink: vi.fn(),
   saveRsvp: vi.fn(),
+  saveSmsPreferences: vi.fn(),
 }));
 
 vi.mock('../api.js', () => ({
@@ -24,6 +30,7 @@ vi.mock('../api.js', () => ({
   fetchRsvp,
   recoverRsvpLink,
   saveRsvp,
+  saveSmsPreferences,
 }));
 
 const household = {
@@ -81,6 +88,39 @@ const savedRsvp = {
   submittedAt: '2026-06-15T22:05:00.000Z',
   updatedAt: '2026-06-15T22:07:00.000Z',
 };
+
+describe('RsvpSmsUpdatesPage', () => {
+  it('requires a fresh unchecked consent and supports website opt-out', async () => {
+    fetchRsvp.mockResolvedValue({
+      household: {
+        ...household,
+        phone: '+14805550100',
+        smsConsent: {
+          status: 'opted_in',
+          phone: '+14805550100',
+          source: 'rsvp_form',
+          consentedAt: '2026-06-15T22:05:00.000Z',
+          consentTextVersion: 'twilio-tollfree-v1',
+        },
+      },
+    });
+    saveSmsPreferences.mockResolvedValue({ ...household, smsConsent: { status: 'opted_out' } });
+
+    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
+
+    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
+    expect(screen.getByText('Active')).not.toBeNull();
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole('link', { name: 'Terms' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off text updates' }));
+    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
+      'invite-code-123',
+      { enabled: false },
+    ));
+  });
+});
 
 describe('RsvpLookupPage', () => {
   beforeEach(() => {
@@ -159,7 +199,8 @@ describe('RsvpLookupPage', () => {
     ).not.toBeNull();
   });
 
-  it('requires explicit SMS consent before phone recovery submits', async () => {
+  it('submits phone recovery without SMS enrollment fields', async () => {
+    recoverRsvpLink.mockResolvedValue({ accepted: true, message: 'Accepted' });
     render(<RsvpLookupPage />);
 
     fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
@@ -167,24 +208,6 @@ describe('RsvpLookupPage', () => {
       target: { value: '(480) 555-0100' },
     });
 
-    expect(
-      await screen.findByText(/I agree to receive SMS messages from Matt & Alison Wedding/i),
-    ).not.toBeNull();
-    const consentCheckbox = screen.getByRole('checkbox');
-    expect((consentCheckbox as HTMLInputElement).checked).toBe(false);
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    );
-
-    expect(recoverRsvpLink).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(
-        'Please confirm SMS consent before requesting a texted RSVP link.',
-      ),
-    ).not.toBeNull();
-
-    fireEvent.click(consentCheckbox);
     fireEvent.click(
       screen.getByRole('button', { name: 'Send private RSVP link' }),
     );
@@ -192,9 +215,9 @@ describe('RsvpLookupPage', () => {
     await waitFor(() =>
       expect(recoverRsvpLink).toHaveBeenCalledWith({
         contact: '(480) 555-0100',
-        smsConsentAccepted: true,
       }),
     );
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
   it('preserves the invitation-code submit flow', () => {
@@ -323,7 +346,7 @@ describe('RsvpPage', () => {
       screen.getByRole('heading', { name: 'Anything else we should know?' }),
     ).not.toBeNull();
     expect(screen.getByLabelText('Household notes')).not.toBeNull();
-    expect(screen.getByText('Text updates')).not.toBeNull();
+    expect(screen.getByText(/Text updates are managed separately/i)).not.toBeNull();
     expect(screen.queryByLabelText('Plus-one 1 first name')).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(
@@ -433,40 +456,21 @@ describe('RsvpPage', () => {
     expect(status.textContent).not.toMatch(/Saving your RSVP|Updating your response/i);
   });
 
-  it('shows an unchecked SMS consent checkbox and updates the submit label when selected', async () => {
+  it('links to standalone text preferences without SMS controls in RSVP', async () => {
     fetchRsvp.mockResolvedValue({ household });
 
     render(<RsvpPage inviteCode="invite-code-123" />);
 
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
-    expect(
-      screen.getByText('Text updates'),
-    ).not.toBeNull();
-    expect(
-      screen.getByText(/Get RSVP recovery, schedule updates, and wedding logistics by text./i),
-    ).not.toBeNull();
-    expect(
-      screen.getByText('Consent not recorded'),
-    ).not.toBeNull();
-    expect(
-      screen.getByText(/I agree to receive SMS messages from Matt & Alison Wedding/i),
-    ).not.toBeNull();
-
-    const consentCheckbox = screen.getByRole('checkbox');
-    expect((consentCheckbox as HTMLInputElement).checked).toBe(false);
-    expect(
-      screen.getByRole('button', { name: 'Save RSVP' }),
-    ).not.toBeNull();
-
-    fireEvent.click(consentCheckbox);
-
-    expect(
-      screen.getByRole('button', { name: 'Save RSVP and text preferences' }),
-    ).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Manage text updates' }).getAttribute('href'))
+      .toBe('/rsvp/invite-code-123/sms-updates');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByLabelText('Mobile phone')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save RSVP' })).not.toBeNull();
   });
 
-  it('shows recorded SMS consent in the text updates panel', async () => {
+  it('keeps existing SMS consent out of the RSVP form', async () => {
     fetchRsvp.mockResolvedValue({
       household: {
         ...household,
@@ -486,8 +490,8 @@ describe('RsvpPage', () => {
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
 
-    expect(screen.getByText('Consent recorded')).not.toBeNull();
-    expect(screen.getByText('+14805550100')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Manage text updates' })).not.toBeNull();
+    expect(screen.queryByText('+14805550100')).toBeNull();
   });
 });
 
