@@ -42,8 +42,8 @@ In `apps/web/e2e/home.spec.ts`, update the existing mobile footer test loop imme
     await expect(
       footer.getByRole('link', { name: 'contact@matt-alison.com' }),
     ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
-    await expect(footerLinks.getByText('Terms')).toBeVisible();
-    await expect(footerLinks.getByText('Privacy')).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Terms' })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy' })).toBeVisible();
 ```
 
 - [ ] **Step 2: Run the focused test and verify the new assertion fails**
@@ -51,7 +51,13 @@ In `apps/web/e2e/home.spec.ts`, update the existing mobile footer test loop imme
 Run:
 
 ```powershell
-$env:E2E_PORT='4187'; npx playwright test apps/web/e2e/home.spec.ts --grep "mobile footer links stay aligned"
+$listener = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.1'), 0)
+$listener.Start()
+$port = $listener.LocalEndpoint.Port
+$listener.Stop()
+$env:E2E_PORT="$port"
+npx playwright test apps/web/e2e/home.spec.ts --grep "mobile footer links stay aligned"
+Remove-Item Env:\E2E_PORT -ErrorAction SilentlyContinue
 ```
 
 Expected: FAIL because the footer does not contain `Matt & Alison Wedding` and has no `contact@matt-alison.com` link.
@@ -63,8 +69,10 @@ In `apps/web/src/components/SiteLayout.tsx`, replace the current leading `<span>
 ```tsx
       <span className={scoped(styles, 'footer-details')}>
         <span>Matt &amp; Alison Wedding · {siteContent.dateLabel}</span>
-        <span aria-hidden="true">·</span>
-        <a href={siteContent.contact.href}>{siteContent.contact.email}</a>
+        <a href={siteContent.contact.href}>
+          <span aria-hidden="true">· </span>
+          {siteContent.contact.email}
+        </a>
       </span>
 ```
 
@@ -84,7 +92,13 @@ and add `.footer-details` to the existing selector group that applies `align-ite
 Run:
 
 ```powershell
-$env:E2E_PORT='4187'; npx playwright test apps/web/e2e/home.spec.ts --grep "mobile footer links stay aligned"
+$listener = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.1'), 0)
+$listener.Start()
+$port = $listener.LocalEndpoint.Port
+$listener.Stop()
+$env:E2E_PORT="$port"
+npx playwright test apps/web/e2e/home.spec.ts --grep "mobile footer links stay aligned"
+Remove-Item Env:\E2E_PORT -ErrorAction SilentlyContinue
 npm run typecheck
 npm run lint
 ```
@@ -93,7 +107,7 @@ Expected: the focused Playwright test passes on all three routes; TypeScript and
 
 - [ ] **Step 5: Perform rendered desktop and mobile verification**
 
-Start the Vite app on an unused port and inspect `/`, `/rsvp`, and `/admin` at 1440x900 and 390x844. Confirm:
+Start the Vite app on an unused port with `VITE_ENABLE_LOCAL_ADMIN_MOCKS=true` and inspect `/`, `/rsvp`, and `/admin` at 1440x900 and 390x844. Confirm:
 
 - `Matt & Alison Wedding`, the date, and the clickable contact email are visible.
 - Footer content wraps without overlap or horizontal scrolling.
@@ -105,7 +119,13 @@ Start the Vite app on an unused port and inspect `/`, `/rsvp`, and `/admin` at 1
 Run:
 
 ```powershell
-$env:E2E_PORT='4187'; npm run test:e2e
+$listener = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.1'), 0)
+$listener.Start()
+$port = $listener.LocalEndpoint.Port
+$listener.Stop()
+$env:E2E_PORT="$port"
+npm run test:e2e
+Remove-Item Env:\E2E_PORT -ErrorAction SilentlyContinue
 ```
 
 Expected: all Playwright tests pass.
