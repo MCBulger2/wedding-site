@@ -182,6 +182,7 @@ function templateResourcesOfType(
 type SynthesizedResource = {
   Type?: string;
   Properties?: Record<string, any>;
+  DependsOn?: string | string[];
   DeletionPolicy?: string;
   UpdateReplacePolicy?: string;
 };
@@ -704,6 +705,37 @@ describe('WeddingSiteStack infrastructure', () => {
       },
     });
     expect(JSON.stringify(stage)).not.toContain('throttlingBurstLimit');
+  });
+
+  it('creates the configured API routes before applying stage route settings', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const routeLogicalIds = templateResourceEntries(template)
+      .filter(
+        ([, resource]) =>
+          resource.Type === 'AWS::ApiGatewayV2::Route' &&
+          [
+            'GET /api/rsvp/{inviteCode}',
+            'PUT /api/rsvp/{inviteCode}',
+            'PUT /api/rsvp/{inviteCode}/sms-preferences',
+            'POST /api/rsvp/recovery',
+          ].includes(resource.Properties?.RouteKey as string),
+      )
+      .map(([logicalId]) => logicalId);
+    const stage = templateResourceEntries(template).find(
+      ([, resource]) =>
+        resource.Type === 'AWS::ApiGatewayV2::Stage' &&
+        resource.Properties?.RouteSettings,
+    )?.[1];
+
+    expect(routeLogicalIds).toHaveLength(4);
+    expect(stage).toBeDefined();
+    expect(stage?.DependsOn).toEqual(expect.arrayContaining(routeLogicalIds));
   });
 
   it('creates a one-month API access log group with safe stage access logs', () => {
