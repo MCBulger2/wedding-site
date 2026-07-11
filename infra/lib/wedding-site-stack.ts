@@ -340,23 +340,31 @@ export class WeddingSiteStack extends Stack {
       apiHandler,
     );
 
-    api.addRoutes({
+    const rsvpRoutes = api.addRoutes({
       path: '/api/rsvp/{inviteCode}',
       methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
       integration: apiIntegration,
     });
 
-    api.addRoutes({
+    const smsPreferencesRoutes = api.addRoutes({
       path: '/api/rsvp/{inviteCode}/sms-preferences',
       methods: [apigwv2.HttpMethod.PUT],
       integration: apiIntegration,
     });
 
-    api.addRoutes({
+    const recoveryRoutes = api.addRoutes({
       path: '/api/rsvp/recovery',
       methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration,
     });
+
+    for (const route of [
+      ...rsvpRoutes,
+      ...smsPreferencesRoutes,
+      ...recoveryRoutes,
+    ]) {
+      defaultApiStage.node.addDependency(route);
+    }
 
     defaultApiStage.defaultRouteSettings = {
       throttlingBurstLimit: 100,
