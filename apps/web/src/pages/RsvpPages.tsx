@@ -1029,7 +1029,7 @@ export function RsvpSmsUpdatesPage({ inviteCode }: { inviteCode: string }) {
       setHousehold(updated);
       setConsentAccepted(false);
       setStatus('ready');
-      setMessage('Text updates are active.');
+      setMessage(smsPreferenceUpdateMessage(updated.smsConsent?.status));
     } catch (error) {
       const providerMessage = error instanceof Error
         ? error.message
@@ -1095,6 +1095,18 @@ export function RsvpSmsUpdatesPage({ inviteCode }: { inviteCode: string }) {
       <a className="secondary-button button-inline" href={buildGuestRsvpPath(inviteCode)}>Back to RSVP</a>
     </main>
   );
+}
+
+function smsPreferenceUpdateMessage(
+  status: 'pending_confirmation' | 'opted_in' | 'opted_out' | undefined,
+): string {
+  if (status === 'opted_in') {
+    return 'Text updates are active.';
+  }
+  if (status === 'pending_confirmation') {
+    return 'Text updates are pending confirmation. Re-check consent to retry.';
+  }
+  return 'Text updates remain off because preferences changed in another request.';
 }
 
 export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {

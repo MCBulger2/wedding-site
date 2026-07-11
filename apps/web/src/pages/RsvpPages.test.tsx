@@ -141,6 +141,35 @@ describe('RsvpSmsUpdatesPage', () => {
     expect(screen.getByText('Active')).not.toBeNull();
   });
 
+  it('shows truthful off messaging when a resolved enable loses to opt-out', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+    saveSmsPreferences.mockResolvedValue({
+      ...household,
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_out',
+        phone: '+14805550100',
+        source: 'sms_preferences',
+        consentedAt: '2026-07-11T18:00:00.000Z',
+        consentTextVersion: 'twilio-tollfree-v1',
+      },
+    });
+
+    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
+    await screen.findByRole('heading', { name: 'Text updates' });
+    fireEvent.change(screen.getByLabelText('Mobile phone'), {
+      target: { value: '(480) 555-0100' },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
+
+    expect(await screen.findByText('Off')).not.toBeNull();
+    expect(
+      screen.getByText('Text updates remain off because preferences changed in another request.'),
+    ).not.toBeNull();
+    expect(screen.queryByText('Text updates are active.')).toBeNull();
+  });
+
   it('refetches a pending preference after provider failure during an active phone change', async () => {
     const activeHousehold = {
       ...household,
