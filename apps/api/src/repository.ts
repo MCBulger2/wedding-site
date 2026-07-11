@@ -6,7 +6,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { Household, StoredRsvp } from '@matt-alison-wedding/shared';
+import type { Household, SmsConsent, StoredRsvp } from '@matt-alison-wedding/shared';
 
 export interface InviteCodeLookup {
   inviteCodeHash: string;
@@ -30,6 +30,12 @@ export interface RecoveryRateLimitRecord {
   updatedAt: string;
 }
 
+export interface SmsPreferenceActivation {
+  householdId: string;
+  expectedPending: SmsConsent;
+  activatedAt: string;
+}
+
 export interface WeddingRepository {
   getHousehold(householdId: string): Promise<Household | undefined>;
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
@@ -39,6 +45,7 @@ export interface WeddingRepository {
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
   recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number>;
+  activateSmsPreference(input: SmsPreferenceActivation): Promise<Household | undefined>;
   saveHousehold(household: Household): Promise<void>;
   saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
@@ -168,6 +175,46 @@ export class DynamoWeddingRepository implements WeddingRepository {
   async saveHousehold(household: Household): Promise<void> {
     const existingRsvp = await this.getRsvp(household.householdId);
     await this.putHouseholdItem(household, existingRsvp);
+  }
+
+  async activateSmsPreference(
+    input: SmsPreferenceActivation,
+  ): Promise<Household | undefined> {
+    const activatedConsent: SmsConsent = {
+      ...input.expectedPending,
+      status: 'opted_in',
+      consentedAt: input.activatedAt,
+    };
+    try {
+      const result = await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: householdKey(input.householdId),
+          UpdateExpression: 'SET smsConsent = :activatedConsent, updatedAt = :activatedAt',
+          ConditionExpression:
+            'smsConsent.#status = :pendingStatus AND smsConsent.phone = :phone AND smsConsent.consentedAt = :pendingConsentedAt',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+          },
+          ExpressionAttributeValues: {
+            ':activatedConsent': activatedConsent,
+            ':activatedAt': input.activatedAt,
+            ':pendingStatus': 'pending_confirmation',
+            ':phone': input.expectedPending.phone,
+            ':pendingConsentedAt': input.expectedPending.consentedAt,
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      return result.Attributes
+        ? fromHouseholdItem(result.Attributes as StoredHouseholdItem)
+        : undefined;
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+      return this.getHousehold(input.householdId);
+    }
   }
 
   async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
@@ -326,6 +373,33 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     });
   }
 
+  async activateSmsPreference(
+    input: SmsPreferenceActivation,
+  ): Promise<Household | undefined> {
+    const current = this.households.get(input.householdId);
+    if (!current) {
+      return undefined;
+    }
+    if (
+      current.smsConsent?.status !== 'pending_confirmation' ||
+      current.smsConsent.phone !== input.expectedPending.phone ||
+      current.smsConsent.consentedAt !== input.expectedPending.consentedAt
+    ) {
+      return this.getHousehold(input.householdId);
+    }
+    const activated: Household = {
+      ...current,
+      smsConsent: {
+        ...input.expectedPending,
+        status: 'opted_in',
+        consentedAt: input.activatedAt,
+      },
+      updatedAt: input.activatedAt,
+    };
+    await this.saveHousehold(activated);
+    return this.getHousehold(input.householdId);
+  }
+
   async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
     const mapKey = `${record.scope}:${record.keyHash}:${record.windowStartsAt}`;
     const nextAttempts = (this.recoveryRateLimits.get(mapKey)?.attempts ?? 0) + 1;
@@ -413,4 +487,8 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function isConditionalCheckFailed(error: unknown): boolean {
+  return error instanceof Error && error.name === 'ConditionalCheckFailedException';
 }

@@ -945,6 +945,28 @@ describe('WeddingService', () => {
     });
   });
 
+  it('never reactivates when opt-out interleaves immediately before activation', async () => {
+    const repository = new InterleavingSmsActivationRepository();
+    const householdMessenger = new RecordingHouseholdMessenger(
+      undefined,
+      () => repository.armOptOutBeforeActivation(),
+    );
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+      { repository },
+    );
+
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+
+    expect(result.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+  });
+
   it('opts out immediately without clearing the household phone', async () => {
     const { service, repository } = await createSeededService({
       phone: '+14805550100',
@@ -1243,6 +1265,30 @@ class FailingRsvpUpdateRepository extends InMemoryWeddingRepository {
   }
 }
 
+class InterleavingSmsActivationRepository extends InMemoryWeddingRepository {
+  private optOutBeforeActivation = false;
+
+  armOptOutBeforeActivation(): void {
+    this.optOutBeforeActivation = true;
+  }
+
+  async activateSmsPreference(
+    input: Parameters<InMemoryWeddingRepository['activateSmsPreference']>[0],
+  ) {
+    if (this.optOutBeforeActivation) {
+      this.optOutBeforeActivation = false;
+      const current = await this.getHousehold(input.householdId);
+      if (current?.smsConsent) {
+        await this.saveHousehold({
+          ...current,
+          smsConsent: { ...current.smsConsent, status: 'opted_out' },
+        });
+      }
+    }
+    return super.activateSmsPreference(input);
+  }
+}
+
 class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly calls: Parameters<
     HouseholdMessenger['sendHouseholdNotification']
@@ -1260,7 +1306,10 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
     HouseholdMessenger['sendSmsPreferenceConfirmation']
   >[0][] = [];
 
-  constructor(private readonly failure?: Error) {}
+  constructor(
+    private readonly failure?: Error,
+    private readonly onSmsPreferenceConfirmation?: () => void,
+  ) {}
 
   async sendHouseholdNotification(
     input: Parameters<HouseholdMessenger['sendHouseholdNotification']>[0],
@@ -1318,6 +1367,7 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
     input: Parameters<HouseholdMessenger['sendSmsPreferenceConfirmation']>[0],
   ): Promise<void> {
     this.smsPreferenceConfirmationCalls.push(input);
+    this.onSmsPreferenceConfirmation?.();
     if (this.failure) {
       throw this.failure;
     }

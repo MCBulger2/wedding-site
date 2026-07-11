@@ -219,3 +219,87 @@ describe('Recovery rate limit persistence', () => {
     });
   });
 });
+
+describe('SMS preference activation', () => {
+  it('does not activate when the in-memory pending attempt was replaced by opt-out', async () => {
+    const repository = new InMemoryWeddingRepository();
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+    await repository.saveHousehold(householdItem('h1', {
+      smsConsent: { ...pending, status: 'opted_out' },
+    }) as Household);
+
+    const result = await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect(result?.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+  });
+
+  it('uses a conditional Dynamo update for the exact pending attempt', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository).mockResolvedValue({
+      Attributes: householdItem('h1'),
+    });
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+
+    await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      ConditionExpression:
+        'smsConsent.#status = :pendingStatus AND smsConsent.phone = :phone AND smsConsent.consentedAt = :pendingConsentedAt',
+      ExpressionAttributeValues: expect.objectContaining({
+        ':pendingStatus': 'pending_confirmation',
+        ':phone': '+14805550111',
+        ':pendingConsentedAt': '2026-07-11T18:00:00.000Z',
+      }),
+      ReturnValues: 'ALL_NEW',
+    });
+  });
+
+  it('returns the current Dynamo preference when activation loses the race', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+    const conditionalFailure = new Error('condition failed');
+    conditionalFailure.name = 'ConditionalCheckFailedException';
+    mockRepositorySend(repository)
+      .mockRejectedValueOnce(conditionalFailure)
+      .mockResolvedValueOnce({
+        Item: householdItem('h1', {
+          smsConsent: { ...pending, status: 'opted_out' },
+        }),
+      });
+
+    const result = await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect(result?.smsConsent?.status).toBe('opted_out');
+  });
+});

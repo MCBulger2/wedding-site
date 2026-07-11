@@ -181,15 +181,16 @@ export class WeddingService {
       parsed.data.phone,
       'Enter a mobile number to receive text updates.',
     );
+    const pendingConsent = createSmsConsent(
+      phone,
+      'sms_preferences',
+      now,
+      'pending_confirmation',
+    );
     const pending: Household = {
       ...household,
       phone,
-      smsConsent: createSmsConsent(
-        phone,
-        'sms_preferences',
-        now,
-        'pending_confirmation',
-      ),
+      smsConsent: pendingConsent,
       updatedAt: now,
     };
     await this.repository.saveHousehold(pending);
@@ -206,26 +207,14 @@ export class WeddingService {
       throw new PublicError('SMS provider is temporarily unavailable', 503);
     }
 
-    const current = await this.repository.getHousehold(household.householdId);
-    if (
-      !current ||
-      current.smsConsent?.status !== 'pending_confirmation' ||
-      current.smsConsent.phone !== phone
-    ) {
-      return current ?? pending;
-    }
-    const optedIn: Household = {
-      ...current,
-      smsConsent: createSmsConsent(
-        phone,
-        'sms_preferences',
-        new Date().toISOString(),
-        'opted_in',
-      ),
-      updatedAt: new Date().toISOString(),
-    };
-    await this.repository.saveHousehold(optedIn);
-    return optedIn;
+    const activatedAt = new Date().toISOString();
+    return (
+      (await this.repository.activateSmsPreference({
+        householdId: household.householdId,
+        expectedPending: pendingConsent,
+        activatedAt,
+      })) ?? pending
+    );
   }
 
   async requestRsvpRecovery(
