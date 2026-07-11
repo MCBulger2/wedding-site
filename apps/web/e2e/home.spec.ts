@@ -1090,8 +1090,9 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
 
 test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {
   const requests: unknown[] = [];
+  const smsHousehold = { ...household, smsConsent: undefined };
   await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household: smsHousehold }) });
   });
   await page.route('**/api/rsvp/A2B3C4D5E6/sms-preferences', async (route) => {
     const payload = route.request().postDataJSON();
@@ -1100,10 +1101,10 @@ test('standalone SMS preferences require fresh consent and support website opt-o
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        ...household,
+        ...smsHousehold,
         smsConsent: payload.enabled
           ? { status: 'opted_in', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' }
-          : { ...household.smsConsent, status: 'opted_out' },
+          : { status: 'opted_out', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' },
       }),
     });
   });
@@ -1113,8 +1114,25 @@ test('standalone SMS preferences require fresh consent and support website opt-o
   await expect(page.getByRole('checkbox')).not.toBeChecked();
   await expect(page.getByRole('link', { name: 'Terms' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
+  expect(requests).toEqual([]);
+
+  await page.getByRole('checkbox').check();
+  await page.getByLabel('Mobile phone').fill('(480) 555-0100');
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+  ]);
+  await expect(page.getByText('Text updates are active.')).toBeVisible();
+  await expect(page.getByText('Active')).toBeVisible();
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+
   await page.getByRole('button', { name: 'Turn off text updates' }).click();
-  await expect.poll(() => requests).toEqual([{ enabled: false }]);
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+    { enabled: false },
+  ]);
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {

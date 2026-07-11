@@ -90,6 +90,96 @@ const savedRsvp = {
 };
 
 describe('RsvpSmsUpdatesPage', () => {
+  beforeEach(() => {
+    fetchRsvp.mockReset();
+    saveSmsPreferences.mockReset();
+  });
+
+  it('shows a recoverable error when the initial preferences lookup fails', async () => {
+    fetchRsvp
+      .mockRejectedValueOnce(new Error('Network unavailable'))
+      .mockResolvedValueOnce({ household });
+
+    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
+
+    expect(await screen.findByRole('heading', { name: 'Unable to load text preferences' })).not.toBeNull();
+    expect(screen.getByText('Network unavailable')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
+  });
+
+  it('blocks enable while unchecked, then activates after explicit consent', async () => {
+    fetchRsvp.mockResolvedValue({ household });
+    saveSmsPreferences.mockResolvedValue({
+      ...household,
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_in',
+        phone: '+14805550100',
+        source: 'sms_preferences',
+        consentedAt: '2026-07-11T18:00:00.000Z',
+        consentTextVersion: 'twilio-tollfree-v1',
+      },
+    });
+
+    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
+    await screen.findByRole('heading', { name: 'Text updates' });
+    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(480) 555-0100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
+
+    expect(saveSmsPreferences).not.toHaveBeenCalled();
+    expect(screen.getByText('Check the consent box to enable or update text messages.')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
+
+    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
+      'invite-code-123',
+      { enabled: true, phone: '(480) 555-0100' },
+    ));
+    expect(await screen.findByText('Text updates are active.')).not.toBeNull();
+    expect(screen.getByText('Active')).not.toBeNull();
+  });
+
+  it('refetches a pending preference after provider failure during an active phone change', async () => {
+    const activeHousehold = {
+      ...household,
+      phone: '+14805550100',
+      smsConsent: {
+        status: 'opted_in' as const,
+        phone: '+14805550100',
+        source: 'rsvp_form' as const,
+        consentedAt: '2026-06-15T22:05:00.000Z',
+        consentTextVersion: 'twilio-tollfree-v1' as const,
+      },
+    };
+    const pendingHousehold = {
+      ...activeHousehold,
+      phone: '+16025550199',
+      smsConsent: {
+        ...activeHousehold.smsConsent,
+        status: 'pending_confirmation' as const,
+        phone: '+16025550199',
+        source: 'sms_preferences' as const,
+      },
+    };
+    fetchRsvp
+      .mockResolvedValueOnce({ household: activeHousehold })
+      .mockResolvedValueOnce({ household: pendingHousehold });
+    saveSmsPreferences.mockRejectedValue(new ApiError('SMS provider is temporarily unavailable', 503));
+
+    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
+    await screen.findByText('Active');
+    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(602) 555-0199' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Update text updates' }));
+
+    expect(await screen.findByText('Pending confirmation')).not.toBeNull();
+    expect(screen.getByText(/SMS provider is temporarily unavailable/i)).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Enable text updates' })).not.toBeNull();
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  });
+
   it('requires a fresh unchecked consent and supports website opt-out', async () => {
     fetchRsvp.mockResolvedValue({
       household: {

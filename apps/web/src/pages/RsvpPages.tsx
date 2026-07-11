@@ -21,7 +21,7 @@ import {
   Send,
   Trash2,
 } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiError,
   fetchRsvp,
@@ -972,18 +972,38 @@ export function RsvpSmsUpdatesPage({ inviteCode }: { inviteCode: string }) {
   const [household, setHousehold] = useState<Household>();
   const [phone, setPhone] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'saving'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    void fetchRsvp(inviteCode)
-      .then(({ household: loaded }) => {
-        setHousehold(loaded);
-        setPhone(loaded.smsConsent?.phone ?? loaded.phone ?? '');
-        setStatus('ready');
-      })
-      .catch(() => setMessage('Unable to load text preferences.'));
+  const loadPreferences = useCallback(async () => {
+    setStatus('loading');
+    setMessage('');
+    try {
+      const { household: loaded } = await fetchRsvp(inviteCode);
+      setHousehold(loaded);
+      setPhone(loaded.smsConsent?.phone ?? loaded.phone ?? '');
+      setStatus('ready');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to load text preferences.');
+      setStatus('error');
+    }
   }, [inviteCode]);
+
+  useEffect(() => {
+    void loadPreferences();
+  }, [loadPreferences]);
+
+  if (status === 'error') {
+    return (
+      <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
+        <section className="lookup-card">
+          <h1>Unable to load text preferences</h1>
+          <p className="form-message" role="alert">{message}</p>
+          <button type="button" onClick={() => void loadPreferences()}>Try again</button>
+        </section>
+      </main>
+    );
+  }
 
   if (!household || status === 'loading') {
     return <LoadingScreen />;
@@ -1011,8 +1031,19 @@ export function RsvpSmsUpdatesPage({ inviteCode }: { inviteCode: string }) {
       setStatus('ready');
       setMessage('Text updates are active.');
     } catch (error) {
+      const providerMessage = error instanceof Error
+        ? error.message
+        : 'Unable to update text preferences.';
+      try {
+        const { household: reconciled } = await fetchRsvp(inviteCode);
+        setHousehold(reconciled);
+        setPhone(reconciled.smsConsent?.phone ?? reconciled.phone ?? phone);
+        setConsentAccepted(false);
+      } catch {
+        // Preserve the provider failure and the current form as a retry path.
+      }
       setStatus('ready');
-      setMessage(error instanceof Error ? error.message : 'Unable to update text preferences.');
+      setMessage(providerMessage);
     }
   };
 
