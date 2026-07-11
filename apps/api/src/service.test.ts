@@ -945,6 +945,27 @@ describe('WeddingService', () => {
     });
   });
 
+  it('does not start pending or send confirmation when opt-out wins before pending write', async () => {
+    const repository = new InterleavingSmsPendingRepository();
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+      { repository },
+    );
+    repository.armOptOutBeforePendingStart();
+
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+
+    expect(result.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+    expect(householdMessenger.smsPreferenceConfirmationCalls).toHaveLength(0);
+  });
+
   it('never reactivates when opt-out interleaves immediately before activation', async () => {
     const repository = new InterleavingSmsActivationRepository();
     const householdMessenger = new RecordingHouseholdMessenger(
@@ -1286,6 +1307,51 @@ class InterleavingSmsActivationRepository extends InMemoryWeddingRepository {
       }
     }
     return super.activateSmsPreference(input);
+  }
+}
+
+class InterleavingSmsPendingRepository extends InMemoryWeddingRepository {
+  private optOutBeforePendingStart = false;
+
+  armOptOutBeforePendingStart(): void {
+    this.optOutBeforePendingStart = true;
+  }
+
+  async saveHousehold(household: Household): Promise<void> {
+    if (
+      this.optOutBeforePendingStart &&
+      household.smsConsent?.status === 'pending_confirmation'
+    ) {
+      this.optOutBeforePendingStart = false;
+      const current = await this.getHousehold(household.householdId);
+      if (current) {
+        await super.saveHousehold({
+          ...current,
+          phone: household.phone,
+          smsConsent: { ...household.smsConsent, status: 'opted_out' },
+          updatedAt: household.updatedAt,
+        });
+      }
+    }
+    return super.saveHousehold(household);
+  }
+
+  async beginSmsPreference(
+    input: Parameters<InMemoryWeddingRepository['beginSmsPreference']>[0],
+  ) {
+    if (this.optOutBeforePendingStart) {
+      this.optOutBeforePendingStart = false;
+      const current = await this.getHousehold(input.householdId);
+      if (current) {
+        await super.saveHousehold({
+          ...current,
+          phone: input.pendingConsent.phone,
+          smsConsent: { ...input.pendingConsent, status: 'opted_out' },
+          updatedAt: input.pendingConsent.consentedAt,
+        });
+      }
+    }
+    return super.beginSmsPreference(input);
   }
 }
 

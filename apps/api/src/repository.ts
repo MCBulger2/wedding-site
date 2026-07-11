@@ -36,6 +36,18 @@ export interface SmsPreferenceActivation {
   activatedAt: string;
 }
 
+export interface SmsPreferencePendingStart {
+  householdId: string;
+  expectedUpdatedAt: string;
+  expectedConsent?: SmsConsent;
+  pendingConsent: SmsConsent;
+}
+
+export interface SmsPreferencePendingStartResult {
+  started: boolean;
+  household?: Household;
+}
+
 export interface WeddingRepository {
   getHousehold(householdId: string): Promise<Household | undefined>;
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
@@ -45,6 +57,7 @@ export interface WeddingRepository {
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
   recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number>;
+  beginSmsPreference(input: SmsPreferencePendingStart): Promise<SmsPreferencePendingStartResult>;
   activateSmsPreference(input: SmsPreferenceActivation): Promise<Household | undefined>;
   saveHousehold(household: Household): Promise<void>;
   saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void>;
@@ -214,6 +227,58 @@ export class DynamoWeddingRepository implements WeddingRepository {
         throw error;
       }
       return this.getHousehold(input.householdId);
+    }
+  }
+
+  async beginSmsPreference(
+    input: SmsPreferencePendingStart,
+  ): Promise<SmsPreferencePendingStartResult> {
+    const hasExpectedConsent = Boolean(input.expectedConsent);
+    const consentCondition = hasExpectedConsent
+      ? 'smsConsent.#status = :expectedStatus AND smsConsent.phone = :expectedPhone AND smsConsent.consentedAt = :expectedConsentedAt'
+      : 'attribute_not_exists(smsConsent)';
+    const expectedConsentValues = input.expectedConsent
+      ? {
+          ':expectedStatus': input.expectedConsent.status,
+          ':expectedPhone': input.expectedConsent.phone,
+          ':expectedConsentedAt': input.expectedConsent.consentedAt,
+        }
+      : {};
+    try {
+      const result = await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: householdKey(input.householdId),
+          UpdateExpression:
+            'SET phone = :phone, smsConsent = :pendingConsent, updatedAt = :pendingAt',
+          ConditionExpression: `updatedAt = :expectedUpdatedAt AND ${consentCondition}`,
+          ExpressionAttributeNames: hasExpectedConsent
+            ? { '#status': 'status' }
+            : undefined,
+          ExpressionAttributeValues: {
+            ':phone': input.pendingConsent.phone,
+            ':pendingConsent': input.pendingConsent,
+            ':pendingAt': input.pendingConsent.consentedAt,
+            ':expectedUpdatedAt': input.expectedUpdatedAt,
+            ...expectedConsentValues,
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      return {
+        started: true,
+        household: result.Attributes
+          ? fromHouseholdItem(result.Attributes as StoredHouseholdItem)
+          : undefined,
+      };
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+      return {
+        started: false,
+        household: await this.getHousehold(input.householdId),
+      };
     }
   }
 
@@ -400,6 +465,29 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     return this.getHousehold(input.householdId);
   }
 
+  async beginSmsPreference(
+    input: SmsPreferencePendingStart,
+  ): Promise<SmsPreferencePendingStartResult> {
+    const current = this.households.get(input.householdId);
+    if (!current) {
+      return { started: false };
+    }
+    if (
+      current.updatedAt !== input.expectedUpdatedAt ||
+      !smsConsentMatches(current.smsConsent, input.expectedConsent)
+    ) {
+      return { started: false, household: current };
+    }
+    const pending: Household = {
+      ...current,
+      phone: input.pendingConsent.phone,
+      smsConsent: input.pendingConsent,
+      updatedAt: input.pendingConsent.consentedAt,
+    };
+    this.households.set(input.householdId, pending);
+    return { started: true, household: pending };
+  }
+
   async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
     const mapKey = `${record.scope}:${record.keyHash}:${record.windowStartsAt}`;
     const nextAttempts = (this.recoveryRateLimits.get(mapKey)?.attempts ?? 0) + 1;
@@ -491,4 +579,18 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
 
 function isConditionalCheckFailed(error: unknown): boolean {
   return error instanceof Error && error.name === 'ConditionalCheckFailedException';
+}
+
+function smsConsentMatches(
+  current: SmsConsent | undefined,
+  expected: SmsConsent | undefined,
+): boolean {
+  if (!current || !expected) {
+    return current === expected;
+  }
+  return (
+    current.status === expected.status &&
+    current.phone === expected.phone &&
+    current.consentedAt === expected.consentedAt
+  );
 }

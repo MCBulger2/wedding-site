@@ -193,7 +193,15 @@ export class WeddingService {
       smsConsent: pendingConsent,
       updatedAt: now,
     };
-    await this.repository.saveHousehold(pending);
+    const pendingStart = await this.repository.beginSmsPreference({
+      householdId: household.householdId,
+      expectedUpdatedAt: household.updatedAt,
+      expectedConsent: household.smsConsent,
+      pendingConsent,
+    });
+    if (!pendingStart.started) {
+      return pendingStart.household ?? household;
+    }
 
     if (!this.householdMessenger) {
       throw new PublicError('SMS provider is temporarily unavailable', 503);
