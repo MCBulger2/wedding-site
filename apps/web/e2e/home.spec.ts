@@ -345,7 +345,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect(
     page
@@ -440,7 +442,9 @@ test('homepage details render on mobile', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect
     .poll(() =>
@@ -1083,9 +1087,16 @@ test('mobile footer links stay aligned across public, RSVP, and admin routes', a
 
   for (const route of ['/', '/rsvp', '/admin']) {
     await page.goto(route);
-    const footerLinks = page.getByRole('contentinfo').getByRole('link');
-    await expect(footerLinks.getByText('Terms')).toBeVisible();
-    await expect(footerLinks.getByText('Privacy')).toBeVisible();
+    const footer = page.getByRole('contentinfo');
+    const footerLinks = footer.getByRole('link', {
+      name: /^(Terms|Privacy|Admin)$/,
+    });
+    await expect(footer).toContainText('Matt & Alison Wedding');
+    await expect(
+      footer.getByRole('link', { name: 'contact@matt-alison.com' }),
+    ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
+    await expect(footer.getByRole('link', { name: 'Terms' })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy' })).toBeVisible();
     const boxes = await footerLinks.evaluateAll((links) =>
       links.map((link) => {
         const rect = link.getBoundingClientRect();

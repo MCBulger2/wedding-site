@@ -16,6 +16,7 @@
 .header-actions,
 .site-header nav,
 .site-footer,
+.footer-details,
 .hero-facts,
 .hero-actions,
 .plain-list li,
@@ -106,6 +107,11 @@ button svg,
   font-size: 0.8rem;
   justify-content: space-between;
   padding: 1rem 5vw 1.35rem;
+}
+
+.footer-details {
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
 .footer-links {
