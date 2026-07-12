@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Household } from '@matt-alison-wedding/shared';
-import { DynamoWeddingRepository, InMemoryWeddingRepository } from './repository.js';
+import type { Household, SmsConsent } from '@matt-alison-wedding/shared';
+import {
+  DynamoWeddingRepository,
+  InMemoryWeddingRepository,
+  type SmsSubscription,
+} from './repository.js';
 
 interface CommandWithInput {
   input: Record<string, unknown>;
@@ -396,3 +400,197 @@ describe('SMS preference pending start', () => {
     expect(result.household?.smsConsent?.status).toBe('opted_out');
   });
 });
+
+describe('Standalone SMS subscription persistence', () => {
+  const firstPending: SmsConsent = {
+    status: 'pending_confirmation',
+    phone: '+14805550111',
+    source: 'sms_preferences',
+    consentedAt: '2026-07-11T20:00:00.000Z',
+    consentTextVersion: 'twilio-tollfree-v1',
+  };
+  const subscription: SmsSubscription = {
+    subscriptionId: 'peppered-phone-id',
+    consent: firstPending,
+    createdAt: '2026-07-11T20:00:00.000Z',
+    updatedAt: '2026-07-11T20:00:00.000Z',
+  };
+
+  it('uses one atomic Dynamo update for pending consent without putting the raw phone in either key', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository).mockResolvedValue({});
+
+    await repository.beginSmsSubscription(subscription);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const command = send.mock.calls[0][0] as CommandWithInput;
+    expect(command.input).toMatchObject({
+      TableName: 'wedding-table',
+      Key: {
+        pk: 'SMS_SUBSCRIPTION#peppered-phone-id',
+        sk: 'METADATA',
+      },
+      UpdateExpression:
+        'SET entityType = :entityType, subscriptionId = :subscriptionId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':entityType': 'SmsSubscription',
+        ':subscriptionId': 'peppered-phone-id',
+        ':consent': firstPending,
+        ':createdAt': '2026-07-11T20:00:00.000Z',
+        ':updatedAt': '2026-07-11T20:00:00.000Z',
+      },
+    });
+    expect(JSON.stringify(command.input.Key)).not.toContain(firstPending.phone);
+  });
+
+  it('preserves createdAt across in-memory re-consent while replacing pending consent', async () => {
+    const repository = new InMemoryWeddingRepository();
+    const secondPending: SmsConsent = {
+      ...firstPending,
+      consentedAt: '2026-07-11T21:00:00.000Z',
+    };
+
+    await repository.beginSmsSubscription(subscription);
+    await repository.beginSmsSubscription({
+      subscriptionId: subscription.subscriptionId,
+      consent: secondPending,
+      createdAt: '2026-07-11T21:00:00.000Z',
+      updatedAt: '2026-07-11T21:00:00.000Z',
+    });
+
+    expect(repository.smsSubscriptions.get(subscription.subscriptionId)).toEqual({
+      subscriptionId: subscription.subscriptionId,
+      consent: secondPending,
+      createdAt: subscription.createdAt,
+      updatedAt: '2026-07-11T21:00:00.000Z',
+    });
+  });
+
+  it('activates the exact in-memory pending attempt', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.beginSmsSubscription(subscription);
+
+    const result = await repository.activateSmsSubscription({
+      subscriptionId: subscription.subscriptionId,
+      expectedPending: firstPending,
+      activatedAt: '2026-07-11T20:01:00.000Z',
+    });
+
+    expect(result).toEqual({
+      ...subscription,
+      consent: {
+        ...firstPending,
+        status: 'opted_in',
+        consentedAt: '2026-07-11T20:01:00.000Z',
+      },
+      updatedAt: '2026-07-11T20:01:00.000Z',
+    });
+  });
+
+  it('returns the current in-memory record when activation is stale', async () => {
+    const repository = new InMemoryWeddingRepository();
+    const replacement: SmsConsent = {
+      ...firstPending,
+      consentedAt: '2026-07-11T20:00:30.000Z',
+    };
+    await repository.beginSmsSubscription({
+      ...subscription,
+      consent: replacement,
+      updatedAt: replacement.consentedAt,
+    });
+
+    const result = await repository.activateSmsSubscription({
+      subscriptionId: subscription.subscriptionId,
+      expectedPending: firstPending,
+      activatedAt: '2026-07-11T20:01:00.000Z',
+    });
+
+    expect(result?.consent).toEqual(replacement);
+    expect(repository.smsSubscriptions.get(subscription.subscriptionId)?.consent).toEqual(replacement);
+  });
+
+  it('conditions Dynamo activation on the exact pending status, phone, and timestamp', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository).mockResolvedValue({
+      Attributes: {
+        ...subscription,
+        consent: {
+          ...firstPending,
+          status: 'opted_in',
+          consentedAt: '2026-07-11T20:01:00.000Z',
+        },
+        pk: 'SMS_SUBSCRIPTION#peppered-phone-id',
+        sk: 'METADATA',
+        entityType: 'SmsSubscription',
+        updatedAt: '2026-07-11T20:01:00.000Z',
+      },
+    });
+
+    const result = await repository.activateSmsSubscription({
+      subscriptionId: subscription.subscriptionId,
+      expectedPending: firstPending,
+      activatedAt: '2026-07-11T20:01:00.000Z',
+    });
+
+    expect(result?.consent.status).toBe('opted_in');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      Key: {
+        pk: 'SMS_SUBSCRIPTION#peppered-phone-id',
+        sk: 'METADATA',
+      },
+      UpdateExpression: 'SET consent = :activatedConsent, updatedAt = :activatedAt',
+      ConditionExpression:
+        'consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+      },
+      ExpressionAttributeValues: expect.objectContaining({
+        ':pendingStatus': 'pending_confirmation',
+        ':phone': firstPending.phone,
+        ':pendingConsentedAt': firstPending.consentedAt,
+      }),
+      ReturnValues: 'ALL_NEW',
+    });
+  });
+
+  it('returns the current Dynamo record when conditional activation loses the race', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const conditionalFailure = new Error('condition failed');
+    conditionalFailure.name = 'ConditionalCheckFailedException';
+    const current = {
+      ...subscription,
+      consent: { ...firstPending, status: 'opted_out' as const },
+      pk: 'SMS_SUBSCRIPTION#peppered-phone-id',
+      sk: 'METADATA',
+      entityType: 'SmsSubscription',
+    };
+    const send = mockRepositorySend(repository)
+      .mockRejectedValueOnce(conditionalFailure)
+      .mockResolvedValueOnce({ Item: current });
+
+    const result = await repository.activateSmsSubscription({
+      subscriptionId: subscription.subscriptionId,
+      expectedPending: firstPending,
+      activatedAt: '2026-07-11T20:01:00.000Z',
+    });
+
+    expect(result).toEqual(subscriptionFromStoredItem(current));
+    expect(send).toHaveBeenCalledTimes(2);
+    expect((send.mock.calls[1][0] as CommandWithInput).input).toMatchObject({
+      Key: {
+        pk: 'SMS_SUBSCRIPTION#peppered-phone-id',
+        sk: 'METADATA',
+      },
+    });
+  });
+});
+
+function subscriptionFromStoredItem(item: SmsSubscription): SmsSubscription {
+  return {
+    subscriptionId: item.subscriptionId,
+    consent: item.consent,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
