@@ -248,12 +248,21 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 auto;
   max-width: 1180px;
+  scroll-margin-top: 88px;
 }
 
 .travel-section {
   background: var(--travel-bg);
   max-width: none;
   padding-inline: max(clamp(1.25rem, 5vw, 4rem), calc((100vw - 1180px) / 2));
+}
+
+.travel-section-without-hotels {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.travel-section-without-hotels > div {
+  max-width: 560px;
 }
 
 .registry-section {
@@ -347,6 +356,7 @@
   box-shadow: var(--map-shadow);
   margin-top: 1.25rem;
   overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
@@ -355,6 +365,31 @@
   display: block;
   height: 100%;
   width: 100%;
+}
+
+.venue-map-marker {
+  align-items: center;
+  background: var(--accent-strong);
+  border: 3px solid var(--surface-strong);
+  border-radius: 999px 999px 999px 0;
+  box-shadow: 0 6px 14px rgba(15, 45, 35, 0.3);
+  color: var(--hero-text);
+  display: flex;
+  height: 2.5rem;
+  justify-content: center;
+  left: 56.9%;
+  pointer-events: none;
+  position: absolute;
+  top: 53.2%;
+  transform: translate(-50%, -100%) rotate(-45deg);
+  width: 2.5rem;
+  z-index: 1;
+}
+
+.venue-map-marker svg {
+  height: 1.15rem;
+  transform: rotate(45deg);
+  width: 1.15rem;
 }
 
 .hotel-list {
@@ -682,6 +717,16 @@
 }
 
 @media (max-width: 560px) {
+  .section-grid {
+    scroll-margin-top: 128px;
+  }
+
+  .section-grid .venue-map-frame {
+    aspect-ratio: auto;
+    height: 260px;
+    min-height: 0;
+  }
+
   .registry-card-with-image .registry-card-body,
   .registry-card-with-image .registry-card-action {
     padding-left: 1.25rem;

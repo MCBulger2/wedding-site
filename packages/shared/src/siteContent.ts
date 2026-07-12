@@ -54,7 +54,7 @@ const venue = {
       'https://www.google.com/maps/place/Superstition+Manor+Wedding+%26+Event+Center/@33.437824,-111.6011223,1301m/data=!3m2!1e3!4b1!4m6!3m5!1s0x872bb099b11510fd:0x63a10ccbb2e45498!8m2!3d33.437824!4d-111.5985474!16s%2Fg%2F11b5plb0_6?entry=ttu&g_ep=EgoyMDI2MDYyNC4wIKXMDSoASAFQAw%3D%3D',
     appleMaps: 'https://maps.apple/p/.MpX6qJ9zEasjg',
     openStreetMapEmbed:
-      'https://www.openstreetmap.org/export/embed.html?bbox=-111.60154044628145%2C33.43481681617157%2C-111.59690022468568%2C33.44042143559003&layer=mapnik&marker=33.4374400%2C-111.5989000',
+      'https://www.openstreetmap.org/export/embed.html?bbox=-111.60154044628145%2C33.43481681617157%2C-111.59690022468568%2C33.44042143559003&layer=mapnik',
   },
 };
 
@@ -67,25 +67,13 @@ const weddingEvent: CalendarEvent = {
   description: 'Ceremony, dinner, and reception for Matt and Alison.',
 };
 
-const hotels: HotelBlock[] = [
-  {
-    name: 'TBD Hotel',
-    address: '123 TBD, Mesa, AZ 85251',
-    bookingUrl: 'https://example.com/hotel-block',
-    phoneNumber: '480-555-0127',
-    groupCode: 'MATTALISON2027',
-    cutoffDate: 'November 30, 2026',
-    nightlyRateNotes: 'Wedding block rate available while rooms last.',
-    transportationNotes: 'Ten minutes from the venue by rideshare.',
-    publiclyShareable: true,
-  },
-];
+const hotels: HotelBlock[] = [];
 
 const registry: RegistryContent = {
   title: 'Wedding Registry',
   intro:
-    'Your presence is the best gift. For guests who have asked, registry details will be shared here once they are finalized.',
-  note: 'We are keeping everything simple and will link directly to our selected registries from this page.',
+    'Your presence at our celebration is the greatest gift. If you would like to contribute, our honeymoon and future-home funds are available below.',
+  note: 'Both funds are hosted securely through Joy.',
   comingSoonTitle: 'Registry details coming soon',
   comingSoonMessage:
     'Check back closer to the celebration for registry links and any gift notes from Matt and Alison.',
@@ -127,8 +115,7 @@ const contact = {
 
 const ourStory: OurStoryContent = {
   title: 'Our Story',
-  intro:
-    'A few placeholder notes about who we are, how we met, and the moments that brought us here.',
+  intro: 'A little about the moments and everyday joys that brought us here.',
   heroImage: {
     src: '/hero-wedding.jpg',
     alt: 'Matt proposing to Alison by the lake',
@@ -141,7 +128,7 @@ const ourStory: OurStoryContent = {
         'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
       image: {
         src: '/ring.jpg',
-        alt: 'Temporary desert garden ceremony aisle placeholder',
+        alt: "Alison's engagement ring",
         objectPosition: 'center',
       },
     },
@@ -151,7 +138,7 @@ const ourStory: OurStoryContent = {
         'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
       image: {
         src: '/smile.jpg',
-        alt: 'Temporary outdoor wedding cocktail hour placeholder',
+        alt: 'Alison and Matt smiling after the proposal',
         objectPosition: 'center',
       },
     },
