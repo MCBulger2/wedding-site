@@ -667,6 +667,34 @@
 }
 
 @media (max-width: 760px) {
+  .admin-page {
+    padding: 1.25rem;
+  }
+
+  .admin-login-shell {
+    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .admin-login-intro,
+  .admin-login-card {
+    min-width: 0;
+  }
+
+  .admin-login-shell > .admin-login-card {
+    order: 0;
+  }
+
+  .admin-login-intro {
+    min-height: 300px;
+    padding: 1.75rem;
+  }
+
+  .admin-login-intro h1 {
+    font-size: clamp(2.6rem, 14vw, 3.8rem);
+  }
+
   .admin-table-shell {
     display: none;
   }

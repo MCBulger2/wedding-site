@@ -81,8 +81,12 @@ export function Header({ activeRoute }: { activeRoute: HeaderRoute }) {
 export function SiteFooter({ showAdminLink }: { showAdminLink: boolean }) {
   return (
     <footer className={scoped(styles, 'site-footer')}>
-      <span>
-        {siteContent.coupleNames} · {siteContent.dateLabel}
+      <span className={scoped(styles, 'footer-details')}>
+        <span>Matt &amp; Alison Wedding · {siteContent.dateLabel}</span>
+        <a href={siteContent.contact.href}>
+          <span aria-hidden="true">· </span>
+          {siteContent.contact.email}
+        </a>
       </span>
       <div className={scoped(styles, 'footer-links')}>
         <a className={scoped(styles, 'footer-admin-link')} href="/terms">

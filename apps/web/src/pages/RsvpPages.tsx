@@ -108,12 +108,14 @@ export function RsvpLookupPage() {
         className={cx('lookup-card', scoped(styles, 'rsvp-lookup-card'))}
       >
         <div className={scoped(styles, 'rsvp-lookup-guide')}>
-          <p className="eyebrow">Private RSVP</p>
-          <h1>Enter your invitation code</h1>
-          <p className="page-lede">
-            Your mailed invitation includes a private RSVP code. Enter it here
-            to view or update your household&apos;s response.
-          </p>
+          <div className={scoped(styles, 'rsvp-lookup-intro')}>
+            <p className="eyebrow">Private RSVP</p>
+            <h1>Enter your invitation code</h1>
+            <p className="page-lede">
+              Your mailed invitation includes a private RSVP code. Enter it
+              here to view or update your household&apos;s response.
+            </p>
+          </div>
           <ol
             className={scoped(styles, 'rsvp-step-list')}
             aria-label="RSVP steps"

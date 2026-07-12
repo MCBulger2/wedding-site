@@ -53,6 +53,91 @@ type Route =
 export function App() {
   const route = useMemo(() => parseRoute(window.location.pathname), []);
 
+  useEffect(() => {
+    let targetId: string;
+    try {
+      targetId = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
+
+    if (!targetId) {
+      return;
+    }
+
+    const animationFrames = new Set<number>();
+    const deferredScrolls = new Set<number>();
+    let cancelledByUser = false;
+    const scrollToTarget = () => {
+      if (cancelledByUser) {
+        return;
+      }
+      document.getElementById(targetId)?.scrollIntoView({ block: 'start' });
+    };
+    const clearPendingCorrections = () => {
+      for (const timeoutId of deferredScrolls) {
+        window.clearTimeout(timeoutId);
+      }
+      deferredScrolls.clear();
+      if (typeof window.cancelAnimationFrame === 'function') {
+        for (const frameId of animationFrames) {
+          window.cancelAnimationFrame(frameId);
+        }
+      }
+      animationFrames.clear();
+    };
+    const cancelForUserIntent = () => {
+      cancelledByUser = true;
+      clearPendingCorrections();
+    };
+    const cancelForNavigationKey = (event: KeyboardEvent) => {
+      if (
+        [
+          'ArrowDown',
+          'ArrowUp',
+          'End',
+          'Home',
+          'PageDown',
+          'PageUp',
+          ' ',
+          'Spacebar',
+        ].includes(event.key)
+      ) {
+        cancelForUserIntent();
+      }
+    };
+    const synchronizeHashScroll = () => {
+      if (cancelledByUser) {
+        return;
+      }
+      scrollToTarget();
+      if (typeof window.requestAnimationFrame === 'function') {
+        animationFrames.add(window.requestAnimationFrame(scrollToTarget));
+      }
+      deferredScrolls.add(window.setTimeout(scrollToTarget, 450));
+    };
+
+    window.addEventListener('keydown', cancelForNavigationKey);
+    window.addEventListener('pointerdown', cancelForUserIntent, {
+      passive: true,
+    });
+    window.addEventListener('touchstart', cancelForUserIntent, {
+      passive: true,
+    });
+    window.addEventListener('wheel', cancelForUserIntent, { passive: true });
+    synchronizeHashScroll();
+    window.addEventListener('pageshow', synchronizeHashScroll);
+
+    return () => {
+      window.removeEventListener('keydown', cancelForNavigationKey);
+      window.removeEventListener('pageshow', synchronizeHashScroll);
+      window.removeEventListener('pointerdown', cancelForUserIntent);
+      window.removeEventListener('touchstart', cancelForUserIntent);
+      window.removeEventListener('wheel', cancelForUserIntent);
+      clearPendingCorrections();
+    };
+  }, [route]);
+
   return (
     <div className="app-shell">
       <Header activeRoute={route.name === 'rsvp_sms_updates' ? 'rsvp' : route.name} />

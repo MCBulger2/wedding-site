@@ -242,8 +242,12 @@ describe('SmsPreferencesRequestSchema', () => {
         phone: '(480) 555-0100',
       }).success,
     ).toBe(true);
-    expect(SmsPreferencesRequestSchema.safeParse({ enabled: true }).success).toBe(false);
-    expect(SmsPreferencesRequestSchema.safeParse({ enabled: false }).success).toBe(true);
+    expect(
+      SmsPreferencesRequestSchema.safeParse({ enabled: true }).success,
+    ).toBe(false);
+    expect(
+      SmsPreferencesRequestSchema.safeParse({ enabled: false }).success,
+    ).toBe(true);
   });
 });
 
@@ -363,13 +367,31 @@ describe('structured public planning data', () => {
     }
   });
 
-  it('uses a parseable OpenStreetMap embed URL with a venue marker', () => {
+  it('uses a parseable OpenStreetMap embed URL without third-party marker copy', () => {
     const embedUrl = new URL(siteContent.venueMapEmbedUrl);
 
     expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
     expect(embedUrl.hostname).toBe('www.openstreetmap.org');
     expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
-    expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
+    expect(embedUrl.searchParams.has('marker')).toBe(false);
+  });
+
+  it('does not publish unfinished hotel, story, or registry placeholder copy', () => {
+    expect(siteContent.hotels).toEqual([]);
+    expect(siteContent.ourStory.intro).not.toMatch(/placeholder|temporary/i);
+    expect(
+      siteContent.ourStory.sections.flatMap((section) =>
+        section.image ? [section.image.alt] : [],
+      ),
+    ).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/placeholder|temporary/i)]),
+    );
+    expect(siteContent.registry.intro).not.toMatch(
+      /shared here|finalized|coming soon/i,
+    );
+    expect(siteContent.registry.note).not.toMatch(
+      /will link|selected registries/i,
+    );
   });
 
   it('validates hotel block data', () => {

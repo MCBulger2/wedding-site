@@ -32,6 +32,9 @@ export function HomePage() {
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
   const venueMapHref = getNativeMapUrl();
+  const publicHotels = siteContent.hotels.filter(
+    (hotel) => hotel.publiclyShareable,
+  );
 
   return (
     <main>
@@ -114,6 +117,13 @@ export function HomePage() {
               loading="lazy"
               referrerPolicy="no-referrer"
             />
+            <span
+              className={scoped(styles, 'venue-map-marker')}
+              role="img"
+              aria-label={`${siteContent.venueName} location`}
+            >
+              <MapPin aria-hidden="true" />
+            </span>
           </div>
           <div
             className={cx('hero-actions', scoped(styles, 'compact-actions'))}
@@ -144,6 +154,8 @@ export function HomePage() {
         className={cx(
           scoped(styles, 'section-grid'),
           scoped(styles, 'travel-section'),
+          publicHotels.length === 0 &&
+            scoped(styles, 'travel-section-without-hotels'),
         )}
       >
         <div>
@@ -158,13 +170,12 @@ export function HomePage() {
             ))}
           </ul>
         </div>
-        <div>
-          <p className="eyebrow">Hotel block</p>
-          <h2>Where to stay</h2>
-          <div className={scoped(styles, 'hotel-list')}>
-            {siteContent.hotels
-              .filter((hotel) => hotel.publiclyShareable)
-              .map((hotel) => (
+        {publicHotels.length > 0 && (
+          <div>
+            <p className="eyebrow">Hotel block</p>
+            <h2>Where to stay</h2>
+            <div className={scoped(styles, 'hotel-list')}>
+              {publicHotels.map((hotel) => (
                 <article
                   key={hotel.name}
                   className={scoped(styles, 'hotel-card')}
@@ -217,8 +228,9 @@ export function HomePage() {
                   </div>
                 </article>
               ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section id="registry" className={scoped(styles, 'registry-section')}>
