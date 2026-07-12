@@ -42,7 +42,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, contact information, and the unauthenticated wedding-text enrollment page at the canonical `/sms-updates` URL. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
 
-The venue map uses an OpenStreetMap embed without third-party marker text and renders the venue marker in the application so its accessible label and presentation remain under the site's control.
+The venue map uses an OpenStreetMap embed with its native venue marker, so the marker stays synchronized while guests pan or zoom; the application retains the descriptive frame title and outbound map link.
 
 Frontend image delivery is optimized through generated responsive assets under `apps/web/public/images` and shared asset manifests under `apps/web/src/generated`.
 

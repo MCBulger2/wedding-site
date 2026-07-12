@@ -209,6 +209,10 @@ describe('Recovery rate limit persistence', () => {
         sk: 'WINDOW#1720094400000',
       },
       UpdateExpression: expect.stringMatching(/^SET .+ ADD attempts :attemptIncrement$/),
+      ExpressionAttributeNames: {
+        '#scope': 'scope',
+        '#ttl': 'ttl',
+      },
       ExpressionAttributeValues: {
         ':attemptIncrement': 1,
         ':entityType': 'RecoveryRateLimit',
