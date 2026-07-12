@@ -15,3 +15,6 @@ infra/cdk.context.json
 *.tsbuildinfo
 apps/web/.vite/
 apps/web/public/images/
+apps/web/src/generated/responsiveImageAssets.ts
+apps/web/src/generated/responsiveImageBackgrounds.css
+docs/superpowers/

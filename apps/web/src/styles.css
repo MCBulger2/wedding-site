@@ -690,11 +690,16 @@ textarea:focus {
 }
 
 .admin-skeleton {
+  gap: 1.25rem;
   width: 100%;
 }
 
 .skeleton-household-card {
   animation: rise-in 360ms ease-out both;
+}
+
+.skeleton-household-card .skeleton-actions {
+  gap: 0.75rem;
 }
 
 .skeleton-household-card:nth-child(2) {
