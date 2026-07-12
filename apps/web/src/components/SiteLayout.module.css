@@ -122,18 +122,36 @@ button svg,
 
 @media (max-width: 760px) {
   .site-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.6rem;
-    justify-content: center;
-    min-height: 96px;
-    padding-bottom: 1rem;
-    padding-top: 1rem;
+    display: grid;
+    gap: 0.4rem 1rem;
+    grid-template-areas:
+      'brand theme'
+      'nav nav';
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 0;
+    padding-bottom: 0.7rem;
+    padding-top: 0.65rem;
+  }
+
+  .brand {
+    grid-area: brand;
   }
 
   .header-actions {
+    display: contents;
+  }
+
+  .site-header nav {
+    gap: 0.2rem;
+    grid-area: nav;
     justify-content: space-between;
     width: 100%;
+  }
+
+  .theme-toggle-button {
+    grid-area: theme;
+    min-height: 44px;
+    width: 44px;
   }
 
   .site-footer {
@@ -153,16 +171,15 @@ button svg,
   }
 
   .site-header nav {
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    width: auto;
-  }
-
-  .header-actions {
-    align-items: flex-start;
+    flex-wrap: nowrap;
   }
 
   .site-header nav a {
-    padding: 0.5rem 0.55rem;
+    align-items: center;
+    display: flex;
+    font-size: 0.78rem;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 clamp(0.25rem, 2vw, 0.5rem);
   }
 }
