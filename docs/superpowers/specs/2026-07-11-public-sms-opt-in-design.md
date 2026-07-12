@@ -24,7 +24,7 @@ SMS consent remains separate from RSVP. No invitation code, RSVP submission, or 
 
 Add a public `POST /api/sms-subscriptions` endpoint. Its request accepts a mobile number and an affirmative consent flag. Shared validation requires affirmative consent and validates the phone; the service normalizes the number before persistence or delivery.
 
-Standalone SMS subscription records will use the existing DynamoDB table but remain separate from household and RSVP records. Each record stores the normalized phone, consent lifecycle status, source, consent-text version, and timestamps. A deterministic normalized-phone hash will identify a subscription so repeat submissions update the same record instead of creating duplicates. This follows the repository's current practice of storing household contact phone numbers in DynamoDB while preventing the raw phone from appearing in partition keys, request logs, or application logs.
+Standalone SMS subscription records will use the existing DynamoDB table but remain separate from household and RSVP records. Each record stores the normalized phone, consent lifecycle status, source, consent-text version, and timestamps. A deterministic normalized-phone hash will identify a subscription so repeat submissions update the same record instead of creating duplicates while preserving the original creation timestamp. This follows the repository's current practice of storing household contact phone numbers in DynamoDB while preventing the raw phone or any phone-derived subscription identifier from appearing in application logs.
 
 The lifecycle mirrors private SMS preferences:
 
@@ -32,6 +32,7 @@ The lifecycle mirrors private SMS preferences:
 2. Send the existing Twilio confirmation message.
 3. Atomically transition that exact pending consent to `opted_in` only after Twilio returns HTTP 2xx.
 4. If Twilio fails, retain the pending state and return a retryable provider error.
+5. If a concurrent resubmission replaces the pending attempt, the older request must not activate or report success for the replacement.
 
 Repeat submissions are safe. An already active number may receive a fresh confirmation and an updated consent timestamp, providing current evidence for the public form submission.
 
@@ -39,9 +40,11 @@ Repeat submissions are safe. An already active number may receive a fresh confir
 
 The endpoint will apply service-level rate limits per normalized phone and source IP using hashed rate-limit keys and the existing expiring DynamoDB rate-limit mechanism. API Gateway will also receive route-specific throttling. The limits must permit normal reviewer retries while reducing SMS-bombing risk.
 
-Request logging will use a fixed route name and will not include the submitted number. Application logs may include outcome and provider metadata but never the raw phone. Responses will not reveal whether the number belongs to an invited household.
+Request logging will use a fixed route name and will not include the submitted number. Application logs may include outcome and provider metadata but never the raw phone or phone-derived subscription identifier. Responses will not reveal whether the number belongs to an invited household.
 
 The standalone record establishes consent for the public Matt & Alison Wedding SMS program. It does not create an invitation, disclose guest data, or grant access to a private RSVP. Existing household consent, RSVP recovery authorization, and admin household messaging rules remain unchanged.
+
+Terms and Privacy will explicitly describe standalone public phone and consent collection while preserving the limited, non-promotional wedding-program scope. Twilio remains responsible for carrier-level STOP enforcement; website-side STOP synchronization and standalone bulk broadcasts are outside this change and must not be implied by the public copy.
 
 ## Error Handling
 
@@ -49,7 +52,8 @@ The standalone record establishes consent for the public Matt & Alison Wedding S
 - Unchecked consent: block submission in the UI and API with a clear consent-required message.
 - Rate limit exceeded: return a retry-later response without exposing stored data.
 - Twilio unavailable or rejected request: keep the record pending and show a retryable service message.
-- Success: show that text updates are active and remind the subscriber they can reply STOP to opt out.
+- Success: show that enrollment is active after Twilio accepts the confirmation message request and remind the subscriber they can reply STOP to opt out; do not claim handset delivery.
+- Concurrent replacement: return a conflict/retry response rather than reporting a stale request as active.
 
 ## Routing and Compatibility
 
@@ -72,10 +76,11 @@ Add tests proving:
 
 Final verification will run relevant unit tests, type checking, lint, the web build, end-to-end tests on a fresh local port, and manual browser inspection of the public flow. Any local server started for inspection will be stopped and its port checked before completion.
 
+After an authorized deployment and before Twilio resubmission, a controlled-handset smoke test must prove the exact public URL works without authentication, a real branded confirmation containing HELP/STOP is received, DynamoDB transitions the one subscription record from pending to active, repeat enrollment does not create a duplicate, and logs contain no raw number. The URL should not be sent to the Twilio representative until this live gate passes.
+
 ## Non-Goals
 
 - Do not change RSVP submission or private invitation consent behavior.
 - Do not add promotional messaging or broaden the stated use case.
 - Do not build a new bulk-broadcast interface in this change.
 - Do not deploy production infrastructure or resubmit Twilio verification automatically.
-

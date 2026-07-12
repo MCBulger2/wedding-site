@@ -16,6 +16,7 @@
 - Keep the program limited to RSVP recovery, schedule updates, and wedding logistics.
 - Keep Matt & Alison Wedding branding, Matthew Bulger ownership, `contact@matt-alison.com`, HELP/STOP, frequency, message/data rates, Terms, and Privacy visible.
 - Do not log raw phone numbers or include them in DynamoDB keys.
+- Do not log phone-derived standalone subscription identifiers.
 - Preserve private RSVP, recovery authorization, household consent, email delivery, and admin household messaging behavior.
 - Do not add a bulk-broadcast interface or deploy production infrastructure.
 
@@ -38,6 +39,7 @@
 - `apps/web/src/pages/PublicPages.module.css`: responsive form presentation using existing tokens.
 - `apps/web/src/App.tsx`: canonical route and legacy redirect.
 - `apps/web/src/App.test.tsx`: route, form, copy, and redirect component tests.
+- `apps/web/src/pages/PublicPages.test.tsx`: Terms/Privacy and public opt-in policy-copy tests.
 - `apps/web/e2e/home.spec.ts`: browser-level public submission flow.
 - `apps/web/src/components/SiteLayout.tsx`: replace obsolete route type with the canonical public route.
 - `infra/lib/wedding-site-stack.ts`: API route and route-specific throttling.
@@ -157,7 +159,7 @@ activateSmsSubscription(input: {
 }): Promise<SmsSubscription | undefined>;
 ```
 
-Use a `PutCommand` for pending/re-consent writes and an `UpdateCommand` with conditions matching the exact pending status, phone, and consent timestamp for activation. Mirror behavior in `InMemoryWeddingRepository` with a dedicated map.
+Use one atomic `UpdateCommand` for pending/re-consent writes with `createdAt = if_not_exists(createdAt, :createdAt)` so repeat enrollment preserves history, plus an activation `UpdateCommand` whose condition matches the exact pending status, phone, and consent timestamp. Mirror behavior in `InMemoryWeddingRepository` with a dedicated map. A conditional activation miss returns the current record so the service can reject stale success.
 
 - [ ] **Step 4: Verify repository tests pass**
 
@@ -188,7 +190,7 @@ git commit -m "Persist standalone SMS consent"
 
 - [ ] **Step 1: Write failing service and notification tests**
 
-Test normalization to `+14805550100`, peppered deterministic ID generation, `public_sms_opt_in`, `pending_confirmation`, Twilio confirmation, conditional `opted_in` activation, pending preservation on provider failure, validation errors, per-phone limit 3/hour, per-IP limit 10/hour, and absence of raw phone in structured logs. Update the notification double so confirmation accepts either `householdId` or `subscriptionId` and logs only the identifier supplied.
+Test normalization to `+14805550100`, peppered deterministic ID generation, `public_sms_opt_in`, `pending_confirmation`, Twilio confirmation, conditional `opted_in` activation, stale-request conflict handling, pending preservation on provider failure, validation errors whose detail path is `phone`, per-phone limit 3/hour, per-IP limit 10/hour, and absence of raw phone or subscription hash in structured logs. Update the notification double so standalone confirmation needs no persisted identifier.
 
 - [ ] **Step 2: Verify focused tests fail**
 
@@ -207,19 +209,20 @@ async createPublicSmsSubscription(
 ): Promise<PublicSmsSubscriptionResponse>
 ```
 
-Parse the request, normalize the phone, compute peppered hashes with distinct `sms-subscription-record`, `sms-subscription-phone-rate`, and `sms-subscription-ip-rate` namespaces, enforce limits using the existing expiring rate-limit repository method, write pending consent with `createSmsConsent(phone, 'public_sms_opt_in', now, 'pending_confirmation')`, send confirmation, and conditionally activate. Throw `PublicError('Too many SMS enrollment attempts. Try again later.', 429)` when limited and the existing provider-unavailable 503 on delivery failure.
+Parse the request, normalize the phone with public field detail `phone`, compute peppered hashes with distinct `sms-subscription-record`, `sms-subscription-phone-rate`, and `sms-subscription-ip-rate` namespaces, enforce limits using the existing expiring rate-limit repository method, write pending consent with `createSmsConsent(phone, 'public_sms_opt_in', now, 'pending_confirmation')`, send confirmation, and conditionally activate. Return `opted_in` only when the exact pending attempt becomes active; throw a retryable 409 when a newer attempt replaced it. Throw `PublicError('Too many SMS enrollment attempts. Try again later.', 429)` when limited and the existing provider-unavailable 503 on delivery failure.
 
 - [ ] **Step 4: Generalize safe confirmation identity**
 
-Change the messenger input to a discriminated identity without exposing phone:
+Make household identity optional for the existing confirmation operation:
 
 ```ts
-type SmsPreferenceConfirmationInput =
-  | { householdId: string; phone: string }
-  | { subscriptionId: string; phone: string };
+type SmsPreferenceConfirmationInput = {
+  householdId?: string;
+  phone: string;
+};
 ```
 
-Structured logs include `householdId` or `subscriptionId`, never `phone`.
+Private flow logs may include `householdId`; public flow logs contain outcome/provider/status and request correlation only, never `phone` or the phone-derived subscription ID.
 
 - [ ] **Step 5: Verify focused tests pass**
 
@@ -250,7 +253,7 @@ git commit -m "Enroll public SMS subscribers"
 
 - [ ] **Step 1: Write failing handler and synth tests**
 
-Assert the handler forwards the parsed body and `event.requestContext.http.sourceIp`, resolves the stable route name `POST /sms-subscriptions`, returns service JSON, and never serializes the submitted phone into logs. Assert CDK creates the POST route, stage dependency, and settings with burst 3 and rate 1.
+Assert the handler forwards the parsed body and `event.requestContext.http.sourceIp`, resolves the stable route name `POST /sms-subscriptions`, returns service JSON, and never serializes the submitted phone into logs. Add a handler/service integration test using the in-memory repository and messenger double to prove the unauthenticated route reaches pending persistence and confirmation delivery. Assert CDK creates the POST route, stage dependency, and settings with burst 3 and rate 1.
 
 - [ ] **Step 2: Verify route tests fail**
 
@@ -300,6 +303,7 @@ git commit -m "Expose public SMS subscription endpoint"
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/components/SiteLayout.tsx`
 - Test: `apps/web/src/App.test.tsx`
+- Test: `apps/web/src/pages/PublicPages.test.tsx`
 
 **Interfaces:**
 - Produces: `createPublicSmsSubscription(payload)` in the web API client.
@@ -308,7 +312,7 @@ git commit -m "Expose public SMS subscription endpoint"
 
 - [ ] **Step 1: Write failing component and routing tests**
 
-Mock the API client and assert: heading `Wedding text updates`; empty phone; unchecked checkbox; visible program scope, frequency, rates, HELP/STOP, operator identity, email, Terms, and Privacy; no proof/example/non-enrollment language; consentless submit shows an error and makes no request; checked submit calls `{ phone, consentAccepted: true }`; success says `Text updates are active`; provider failure leaves a retry path; `/sms-opt-in-proof` calls `window.location.replace('/sms-updates')`.
+Mock the API client and assert: heading `Wedding text updates`; empty phone; unchecked checkbox; visible program scope, frequency, rates, HELP/STOP, operator identity, email, Terms, and Privacy; no proof/example/non-enrollment language; consentless submit shows an error and makes no request; checked submit calls `{ phone, consentAccepted: true }`; success describes active enrollment without claiming handset delivery; 429/503 preserve the form and retry path; `/sms-opt-in-proof` calls `window.location.replace('/sms-updates')` without obsolete-content flash. Add policy tests proving Terms and Privacy describe public standalone phone/consent collection without claiming the program is restricted only to preexisting invite records.
 
 - [ ] **Step 2: Verify component tests fail**
 
@@ -331,7 +335,7 @@ export function createPublicSmsSubscription(
 
 - [ ] **Step 4: Implement the live page**
 
-Rename the component to `SmsUpdatesPage`. Use controlled `phone`, `consentAccepted`, `status`, `consentError`, and `message` state. Keep the checkbox unchecked after initial render and reset it after success. Submit only after affirmative consent; render direct Terms/Privacy links through `SmsConsentCheckboxField`. Use public copy that accurately describes enrollment and the separate RSVP relationship.
+Rename the component to `SmsUpdatesPage`. Use controlled `phone`, `consentAccepted`, `status`, `consentError`, and `message` state. Keep the checkbox unchecked after initial render and reset it after success. Submit only after affirmative consent; render direct Terms/Privacy links through `SmsConsentCheckboxField`. Use public copy that accurately describes enrollment and the separate RSVP relationship. Update Terms and Privacy on the same page module to cover this standalone collection and retain the limited wedding-program purpose.
 
 - [ ] **Step 5: Update canonical and legacy routing**
 
@@ -350,7 +354,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit the public UI**
 
 ```powershell
-git add -- apps/web/src/api.ts apps/web/src/pages/PublicPages.tsx apps/web/src/pages/PublicPages.module.css apps/web/src/App.tsx apps/web/src/App.test.tsx apps/web/src/components/SiteLayout.tsx
+git add -- apps/web/src/api.ts apps/web/src/pages/PublicPages.tsx apps/web/src/pages/PublicPages.module.css apps/web/src/pages/PublicPages.test.tsx apps/web/src/App.tsx apps/web/src/App.test.tsx apps/web/src/components/SiteLayout.tsx
 git commit -m "Replace SMS proof with live opt-in"
 ```
 
@@ -368,7 +372,7 @@ git commit -m "Replace SMS proof with live opt-in"
 
 - [ ] **Step 1: Replace the proof E2E with a failing live-flow test**
 
-Intercept `**/api/sms-subscriptions`, assert POST body `{ phone: '(480) 555-0100', consentAccepted: true }`, return `{ status: 'opted_in' }`, and exercise the page from empty/unchecked state through visible success. Assert Terms and Privacy links and prohibited-copy absence. Add a legacy-route redirect assertion.
+Intercept `**/api/sms-subscriptions`, assert POST body `{ phone: '(480) 555-0100', consentAccepted: true }`, return `{ status: 'opted_in' }`, and exercise the page from empty/unchecked state through visible success. Assert Terms and Privacy links and prohibited-copy absence. Add a legacy-route redirect assertion that ends with pathname `/sms-updates` and never renders obsolete proof/example content.
 
 - [ ] **Step 2: Verify the E2E test fails before final wiring**
 
@@ -387,6 +391,8 @@ Expected: FAIL until the final route/UI wiring is complete.
 - [ ] **Step 3: Update current-state documentation**
 
 Document standalone records, pending-to-active delivery, rate limits, the canonical URL, and the explicit Twilio review checklist. Remove launch references to `/sms-opt-in-proof`.
+
+Document that a production deploy requires separate authorization. Add the post-deploy controlled-handset gate: exact public URL works without auth; real branded SMS includes HELP/STOP; DynamoDB shows one record transitioning pending to active; repeat enrollment does not duplicate; logs contain no raw phone. Do not send the URL to Twilio before this gate passes.
 
 - [ ] **Step 4: Run focused and full verification**
 
@@ -449,4 +455,3 @@ Run `git diff --check`, `git status --short`, focused tests for every changed la
 - [ ] **Step 4: Push and open a draft PR**
 
 Push `codex/public-sms-opt-in` and create a draft PR whose body lists the Twilio-driven behavior, test commands/results, reviewer decision, deployment note, and the manual step to send the live URL to the Twilio representative after deployment.
-
