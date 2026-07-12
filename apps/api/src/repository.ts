@@ -376,9 +376,10 @@ export class DynamoWeddingRepository implements WeddingRepository {
           record.windowStartsAt,
         ),
         UpdateExpression:
-          'SET entityType = :entityType, ttl = :ttl, #scope = :scope, keyHash = :keyHash, windowStartsAt = :windowStartsAt, windowExpiresAt = :windowExpiresAt, updatedAt = :updatedAt ADD attempts :attemptIncrement',
+          'SET entityType = :entityType, #ttl = :ttl, #scope = :scope, keyHash = :keyHash, windowStartsAt = :windowStartsAt, windowExpiresAt = :windowExpiresAt, updatedAt = :updatedAt ADD attempts :attemptIncrement',
         ExpressionAttributeNames: {
           '#scope': 'scope',
+          '#ttl': 'ttl',
         },
         ExpressionAttributeValues: {
           ':attemptIncrement': 1,
