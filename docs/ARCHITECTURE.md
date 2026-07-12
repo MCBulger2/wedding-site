@@ -40,7 +40,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 ### Public Site
 
-The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, and contact information. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
+The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, contact information, and the unauthenticated wedding-text enrollment page at the canonical `/sms-updates` URL. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
 
 The venue map uses an OpenStreetMap embed without third-party marker text and renders the venue marker in the application so its accessible label and presentation remain under the site's control.
 
@@ -58,6 +58,10 @@ Guests can:
 The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
 
 SMS enrollment is independent from RSVP submission and recovery. A guest uses `/rsvp/{inviteCode}/sms-updates`; enabling stores `pending_confirmation`, sends the required Twilio confirmation, and moves to `opted_in` only after Twilio returns HTTP 2xx. Provider failure leaves the preference pending and retryable. Disabling immediately records `opted_out` without clearing the household phone. Only an `opted_in` record whose phone matches the household's current phone authorizes recovery or admin-authored application SMS. Email recovery and SES behavior are unchanged.
+
+The canonical public `/sms-updates` page provides the same affirmative-consent flow without requiring an invitation or RSVP. It submits to `POST /api/sms-subscriptions`. Public enrollments are stored as standalone `SmsSubscription` records rather than household records. The API normalizes the phone number and derives a stable, peppered subscription identifier, so repeat enrollment updates one record instead of creating duplicates. Each pending write also receives a unique opaque attempt identifier; activation conditions on that identifier so concurrent requests remain ordered even when their consent timestamps match. The attempt identifier stays internal to persistence and is never logged or sent to Twilio. The API writes `pending_confirmation` before asking Twilio to send the branded confirmation and conditionally changes that same record to `opted_in` only after Twilio returns HTTP 2xx. Delivery failure leaves the record pending and retryable.
+
+Public enrollment has two abuse-control layers: API Gateway throttles `POST /api/sms-subscriptions` to 1 request per second with a burst of 3, while the service allows 3 attempts per normalized phone and 10 attempts per source IP in a fixed one-hour window. The rate-limit keys are peppered hashes, and structured application logs record stable event names and outcomes without raw phone numbers or source IPs.
 
 The intended security model is:
 
@@ -180,6 +184,7 @@ Current API routes implemented by `apps/api/src/handler.ts`:
 - `PUT /api/rsvp/{inviteCode}`
 - `PUT /api/rsvp/{inviteCode}/sms-preferences`
 - `POST /api/rsvp/recovery`
+- `POST /api/sms-subscriptions`
 
 ### Admin routes
 

@@ -1,4 +1,7 @@
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import {
   SMS_BRAND_PREFIX,
@@ -29,17 +32,23 @@ export type HouseholdNotificationInput = SendHouseholdNotificationInput & {
   household: Household;
 };
 
+export type SmsPreferenceConfirmationInput = {
+  householdId?: string;
+  phone: string;
+};
+
 export interface HouseholdMessenger {
   sendHouseholdNotification(
     input: HouseholdNotificationInput,
   ): Promise<SendHouseholdNotificationResponse>;
-  sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult>;
+  sendInvitationEmail(
+    input: InvitationEmailInput,
+  ): Promise<InvitationEmailResult>;
   sendRecoveryEmail(input: RecoveryMessageInput): Promise<void>;
   sendRecoverySms(input: RecoveryMessageInput): Promise<void>;
-  sendSmsPreferenceConfirmation(input: {
-    householdId: string;
-    phone: string;
-  }): Promise<void>;
+  sendSmsPreferenceConfirmation(
+    input: SmsPreferenceConfirmationInput,
+  ): Promise<void>;
 }
 
 export interface InvitationEmailInput {
@@ -96,10 +105,15 @@ export class AwsWeddingNotificationsClient
       this.config.recipientEmails.length === 0 ||
       !this.config.adminDashboardUrl
     ) {
-      throw new Error('RSVP admin email notifications are not fully configured');
+      throw new Error(
+        'RSVP admin email notifications are not fully configured',
+      );
     }
 
-    const email = buildRsvpNotificationEmail(input, this.config.adminDashboardUrl);
+    const email = buildRsvpNotificationEmail(
+      input,
+      this.config.adminDashboardUrl,
+    );
     try {
       await this.sesClient.send(
         new SendEmailCommand({
@@ -161,7 +175,10 @@ export class AwsWeddingNotificationsClient
         throw new Error('Household does not have a contact email address');
       }
 
-      const email = buildHouseholdNotificationEmail(input, this.config.publicWebsiteUrl);
+      const email = buildHouseholdNotificationEmail(
+        input,
+        this.config.publicWebsiteUrl,
+      );
 
       try {
         await this.sesClient.send(
@@ -259,7 +276,9 @@ export class AwsWeddingNotificationsClient
     };
   }
 
-  async sendInvitationEmail(input: InvitationEmailInput): Promise<InvitationEmailResult> {
+  async sendInvitationEmail(
+    input: InvitationEmailInput,
+  ): Promise<InvitationEmailResult> {
     if (!this.config.senderEmail) {
       throw new Error('Email notifications are not configured');
     }
@@ -421,10 +440,9 @@ export class AwsWeddingNotificationsClient
     }
   }
 
-  async sendSmsPreferenceConfirmation(input: {
-    householdId: string;
-    phone: string;
-  }): Promise<void> {
+  async sendSmsPreferenceConfirmation(
+    input: SmsPreferenceConfirmationInput,
+  ): Promise<void> {
     try {
       await this.sendTwilioSms(input.phone, SMS_PREFERENCE_CONFIRMATION);
       logStructured({
@@ -463,7 +481,9 @@ export class AwsWeddingNotificationsClient
       throw new Error('SMS notifications are not configured');
     }
 
-    const apiKeySecret = await this.getTwilioApiKeySecret(twilio.apiKeySecretArn);
+    const apiKeySecret = await this.getTwilioApiKeySecret(
+      twilio.apiKeySecretArn,
+    );
     const requestBody = new URLSearchParams({
       To: to,
       Body: body,
@@ -503,7 +523,8 @@ export class AwsWeddingNotificationsClient
     const result = await this.secretsManagerClient.send(
       new GetSecretValueCommand({ SecretId: secretArn }),
     );
-    const secret = result.SecretString ?? decodeSecretBinary(result.SecretBinary);
+    const secret =
+      result.SecretString ?? decodeSecretBinary(result.SecretBinary);
     if (!secret) {
       throw new Error('SMS notifications are not configured');
     }
@@ -517,7 +538,9 @@ export function buildRsvpNotificationEmail(
   { household, rsvp }: RsvpNotificationInput,
   adminDashboardUrl: string,
 ): { subject: string; text: string; html: string } {
-  const attendingMembers = rsvp.members.filter((member) => member.attending).length;
+  const attendingMembers = rsvp.members.filter(
+    (member) => member.attending,
+  ).length;
   const declinedMembers = rsvp.members.length - attendingMembers;
   const plusOnes = rsvp.plusOnes.length;
   const totalAttending = attendingMembers + plusOnes;
@@ -721,11 +744,13 @@ export function buildRecoverySms({
   household,
   invitation,
 }: RecoveryMessageInput): string {
-  return appendSmsComplianceNotice([
-    `${household.displayName}: your private RSVP link for Matt & Alison's wedding:`,
-    invitation.rsvpUrl,
-    'Please do not forward this link.',
-  ].join(' '));
+  return appendSmsComplianceNotice(
+    [
+      `${household.displayName}: your private RSVP link for Matt & Alison's wedding:`,
+      invitation.rsvpUrl,
+      'Please do not forward this link.',
+    ].join(' '),
+  );
 }
 
 export function createNotifierFromEnvironment(): RsvpNotifier | undefined {
@@ -733,8 +758,12 @@ export function createNotifierFromEnvironment(): RsvpNotifier | undefined {
     process.env.NOTIFICATION_SENDER_EMAIL,
     process.env.RSVP_NOTIFICATION_SENDER_EMAIL,
   );
-  const recipientEmails = splitCsv(process.env.RSVP_NOTIFICATION_RECIPIENT_EMAILS);
-  const adminDashboardUrl = resolveOptionalValue(process.env.ADMIN_DASHBOARD_URL);
+  const recipientEmails = splitCsv(
+    process.env.RSVP_NOTIFICATION_RECIPIENT_EMAILS,
+  );
+  const adminDashboardUrl = resolveOptionalValue(
+    process.env.ADMIN_DASHBOARD_URL,
+  );
 
   if (!senderEmail || recipientEmails.length === 0 || !adminDashboardUrl) {
     return undefined;
@@ -887,20 +916,17 @@ function escapeHtmlAttribute(value: string): string {
 }
 
 const styles = {
-  body:
-    'margin:0;padding:0;background:#f7f2ec;color:#2e3432;font-family:Georgia, Times, serif;',
+  body: 'margin:0;padding:0;background:#f7f2ec;color:#2e3432;font-family:Georgia, Times, serif;',
   page: 'background:#f7f2ec;margin:0;padding:0;width:100%;',
   preview:
     'display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;color:#f7f2ec;',
   outer: 'padding:32px 16px;',
-  card:
-    'max-width:640px;background:#fffffb;border:1px solid #e8dccd;border-radius:8px;overflow:hidden;border-collapse:separate;',
+  card: 'max-width:640px;background:#fffffb;border:1px solid #e8dccd;border-radius:8px;overflow:hidden;border-collapse:separate;',
   header:
     'padding:42px 40px 34px;background:#315f53;color:#fffffb;text-align:center;border-bottom:6px solid #c78f57;',
   names:
     'margin:0;font-family:Georgia, Times, serif;font-size:36px;line-height:42px;font-weight:400;letter-spacing:0;color:#fffffb;',
-  date:
-    'margin:14px 0 0;font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:22px;font-weight:700;letter-spacing:0;color:#f4e6d8;text-transform:uppercase;',
+  date: 'margin:14px 0 0;font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:22px;font-weight:700;letter-spacing:0;color:#f4e6d8;text-transform:uppercase;',
   content: 'padding:34px 40px 38px;',
   intro:
     'padding:0 0 22px;font-family:Arial, Helvetica, sans-serif;font-size:17px;line-height:27px;color:#3d464c;',
@@ -913,8 +939,7 @@ const styles = {
   detailValue:
     'padding:10px 0;font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:22px;color:#2e3432;vertical-align:top;',
   ctaWrap: 'padding:28px 0 8px;',
-  cta:
-    'display:inline-block;background:#9b5f40;color:#fffffb;text-decoration:none;border-radius:4px;padding:14px 24px;font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:20px;font-weight:700;',
+  cta: 'display:inline-block;background:#9b5f40;color:#fffffb;text-decoration:none;border-radius:4px;padding:14px 24px;font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:20px;font-weight:700;',
   section: 'padding:26px 0 0;',
   sectionTitle:
     'margin:0 0 12px;font-family:Georgia, Times, serif;font-size:24px;line-height:30px;font-weight:400;color:#315f53;',
@@ -933,7 +958,9 @@ function splitCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function resolveOptionalValue(...values: Array<string | undefined>): string | undefined {
+function resolveOptionalValue(
+  ...values: Array<string | undefined>
+): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
 }
 
@@ -941,24 +968,30 @@ function readTwilioConfigFromEnvironment(): TwilioSmsConfig {
   return {
     accountSid: resolveOptionalValue(process.env.TWILIO_ACCOUNT_SID),
     apiKeySid: resolveOptionalValue(process.env.TWILIO_API_KEY_SID),
-    apiKeySecretArn: resolveOptionalValue(process.env.TWILIO_API_KEY_SECRET_ARN),
-    messagingServiceSid: resolveOptionalValue(process.env.TWILIO_MESSAGING_SERVICE_SID),
+    apiKeySecretArn: resolveOptionalValue(
+      process.env.TWILIO_API_KEY_SECRET_ARN,
+    ),
+    messagingServiceSid: resolveOptionalValue(
+      process.env.TWILIO_MESSAGING_SERVICE_SID,
+    ),
     fromPhoneNumber: resolveOptionalValue(process.env.TWILIO_FROM_PHONE_NUMBER),
   };
 }
 
-function decodeSecretBinary(secretBinary: Uint8Array | undefined): string | undefined {
+function decodeSecretBinary(
+  secretBinary: Uint8Array | undefined,
+): string | undefined {
   return secretBinary ? Buffer.from(secretBinary).toString('utf8') : undefined;
 }
 
 function appendSmsComplianceNotice(message: string): string {
   const initial = message.trim();
-  const trimmed = initial.toLowerCase().startsWith(SMS_BRAND_PREFIX.toLowerCase())
+  const trimmed = initial
+    .toLowerCase()
+    .startsWith(SMS_BRAND_PREFIX.toLowerCase())
     ? initial
     : `${SMS_BRAND_PREFIX} ${initial}`;
-  if (
-    trimmed.toLowerCase().includes(SMS_HELP_STOP_NOTICE.toLowerCase())
-  ) {
+  if (trimmed.toLowerCase().includes(SMS_HELP_STOP_NOTICE.toLowerCase())) {
     return trimmed;
   }
 

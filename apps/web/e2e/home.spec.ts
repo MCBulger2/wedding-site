@@ -1235,7 +1235,7 @@ test('phone recovery submits without SMS enrollment fields', async ({
   expect(recoveryRequests).toEqual([{ contact: '(480) 555-0100' }]);
 });
 
-test('privacy, terms, and SMS proof pages render public compliance content', async ({
+test('privacy and terms pages render public compliance content', async ({
   page,
 }) => {
   await page.goto('/privacy');
@@ -1251,23 +1251,66 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
   await expect(
     page.getByText('Reply HELP for help or STOP to opt out.'),
   ).toBeVisible();
+});
+
+test('public SMS signup submits affirmative consent and legacy proof URL redirects', async ({
+  page,
+}) => {
+  let submittedPayload: unknown;
+  await page.route('**/api/sms-subscriptions', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    submittedPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'opted_in' }),
+    });
+  });
+
+  await page.goto('/sms-updates');
+
+  await expect(
+    page.getByRole('heading', { name: 'Wedding text updates', exact: true }),
+  ).toBeVisible();
+  const smsPreferences = page.getByLabel('Standalone SMS preferences');
+  const phoneInput = smsPreferences.getByLabel('Mobile phone');
+  const consentCheckbox = smsPreferences.getByRole('checkbox');
+  await expect(phoneInput).toHaveValue('');
+  await expect(consentCheckbox).not.toBeChecked();
+  await expect(
+    smsPreferences.getByRole('link', { name: 'Terms' }),
+  ).toHaveAttribute('href', '/terms');
+  await expect(
+    smsPreferences.getByRole('link', { name: 'Privacy Policy' }),
+  ).toHaveAttribute('href', '/privacy');
+  await expect(page.locator('body')).not.toContainText(
+    /SMS opt-in proof|non-submitting example|does not submit|does not enroll/i,
+  );
+
+  await phoneInput.fill('(480) 555-0100');
+  await consentCheckbox.check();
+  await page.getByRole('button', { name: 'Sign up for text updates' }).click();
+
+  await expect(
+    page.getByRole('status').filter({
+      hasText: 'You’re enrolled for Matt & Alison Wedding text updates.',
+    }),
+  ).toBeVisible();
+  expect(submittedPayload).toEqual({
+    phone: '(480) 555-0100',
+    consentAccepted: true,
+  });
 
   await page.goto('/sms-opt-in-proof');
+  await expect
+    .poll(() => new URL(page.url()).pathname)
+    .toBe('/sms-updates');
   await expect(
-    page.getByRole('heading', { name: 'SMS opt-in proof' }),
+    page.getByRole('heading', { name: 'Wedding text updates', exact: true }),
   ).toBeVisible();
-  const proofRsvpCard = page.locator('article').filter({
-    has: page.getByRole('heading', {
-      name: 'Optional wedding text updates',
-    }),
-  });
-  await expect(
-    proofRsvpCard.getByText(
-      /I agree to receive SMS messages from Matt & Alison Wedding/i,
-    ),
-  ).toBeVisible();
-  await expect(proofRsvpCard.getByRole('checkbox')).not.toBeChecked();
-  await expect(proofRsvpCard.getByRole('button')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(
+    /SMS opt-in proof|non-submitting example|does not submit|does not enroll/i,
+  );
 });
 
 test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {

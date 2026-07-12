@@ -65,6 +65,7 @@ export async function handleRequest(
     WeddingService,
     | 'archiveHousehold'
     | 'createHousehold'
+    | 'createPublicSmsSubscription'
     | 'exportInvitations'
     | 'exportInvitationLabels'
     | 'exportRsvps'
@@ -103,6 +104,16 @@ export async function handleRequest(
     const method = event.requestContext.http.method;
     const path = normalizePath(event.rawPath);
     const body = parseBody(event.body);
+
+    if (method === 'POST' && path === '/sms-subscriptions') {
+      return completeRequest(
+        json(
+          await service.createPublicSmsSubscription(body, {
+            sourceIp: event.requestContext.http.sourceIp,
+          }),
+        ),
+      );
+    }
 
     const smsPreferencesMatch = path.match(/^\/rsvp\/([^/]+)\/sms-preferences$/);
     if (method === 'PUT' && smsPreferencesMatch) {
@@ -446,6 +457,10 @@ function buildRequestLogContext(
 }
 
 function resolveRouteName(method: string, path: string): string {
+  if (method === 'POST' && path === '/sms-subscriptions') {
+    return 'POST /sms-subscriptions';
+  }
+
   if (method === 'PUT' && /^\/rsvp\/[^/]+\/sms-preferences$/.test(path)) {
     return 'PUT /rsvp/{inviteCode}/sms-preferences';
   }

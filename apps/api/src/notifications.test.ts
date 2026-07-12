@@ -161,7 +161,9 @@ describe('notifications', () => {
     expect(email.subject).toBe("You're invited to Matt and Alison's wedding");
     expect(email.text).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.text).toContain('Invitation code: A2B3C4D5E6');
-    expect(email.text).toContain('Questions? Email us at contact@matt-alison.com.');
+    expect(email.text).toContain(
+      'Questions? Email us at contact@matt-alison.com.',
+    );
     expect(email.html).toContain('Open your RSVP');
     expect(email.html).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
     expect(email.html).toContain('Invitation code');
@@ -234,7 +236,9 @@ describe('notifications', () => {
   });
 
   it('sends household SMS notifications through Twilio with form body and API key auth', async () => {
-    const secretsClient = new RecordingSecretsManagerClient('twilio-secret-value');
+    const secretsClient = new RecordingSecretsManagerClient(
+      'twilio-secret-value',
+    );
     const fetchRecorder = createRecordingFetch();
     const client = new AwsWeddingNotificationsClient(
       {
@@ -243,7 +247,8 @@ describe('notifications', () => {
         twilio: {
           accountSid: 'AC123',
           apiKeySid: 'SK123',
-          apiKeySecretArn: 'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio',
+          apiKeySecretArn:
+            'arn:aws:secretsmanager:us-west-1:123456789012:secret:twilio',
           messagingServiceSid: 'MG123',
         },
       },
@@ -295,7 +300,9 @@ describe('notifications', () => {
         },
       },
       new RecordingSesClient() as unknown as SESv2Client,
-      new RecordingSecretsManagerClient('twilio-secret-value') as unknown as SecretsManagerClient,
+      new RecordingSecretsManagerClient(
+        'twilio-secret-value',
+      ) as unknown as SecretsManagerClient,
       fetchRecorder.fetch,
     );
 
@@ -312,9 +319,13 @@ describe('notifications', () => {
     const body = fetchRecorder.requests[0].init.body as URLSearchParams;
     expect(body.get('To')).toBe('+14805550100');
     expect(body.get('From')).toBe('+18005550100');
-    expect(body.get('Body')).toContain('https://wedding.example.com/rsvp/A2B3C4D5E6');
+    expect(body.get('Body')).toContain(
+      'https://wedding.example.com/rsvp/A2B3C4D5E6',
+    );
     expect(body.get('Body')).not.toContain('Invitation code');
-    expect(body.get('Body')).toContain('Reply HELP for help or STOP to opt out.');
+    expect(body.get('Body')).toContain(
+      'Reply HELP for help or STOP to opt out.',
+    );
   });
 
   it('sends the exact standalone SMS preference confirmation', async () => {
@@ -330,20 +341,63 @@ describe('notifications', () => {
         },
       },
       new RecordingSesClient() as unknown as SESv2Client,
-      new RecordingSecretsManagerClient('twilio-secret-value') as unknown as SecretsManagerClient,
+      new RecordingSecretsManagerClient(
+        'twilio-secret-value',
+      ) as unknown as SecretsManagerClient,
       fetchRecorder.fetch,
     );
 
-    await client.sendSmsPreferenceConfirmation({ householdId: 'h1', phone: '+14805550100' });
+    await client.sendSmsPreferenceConfirmation({ phone: '+14805550100' });
 
     const body = fetchRecorder.requests[0].init.body as URLSearchParams;
     expect(body.get('Body')).toBe(
       'Matt & Alison Wedding: You’re enrolled for RSVP recovery, schedule, and wedding logistics texts. Fewer than 10 msgs/month. Msg & data rates may apply. Help: contact@matt-alison.com. Reply HELP for help or STOP to opt out.',
     );
+    const logs = parseConsoleJson(consoleLog);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        event: 'sms.preferenceConfirmation.completed',
+        provider: 'twilio',
+        outcome: 'success',
+      }),
+    );
+    expect(JSON.stringify(logs)).not.toContain('+14805550100');
+    expect(JSON.stringify(logs)).not.toContain('householdId');
+  });
+
+  it('keeps private household identity in SMS preference confirmation logs', async () => {
+    const fetchRecorder = createRecordingFetch();
+    const client = new AwsWeddingNotificationsClient(
+      {
+        recipientEmails: [],
+        twilio: {
+          accountSid: 'AC123',
+          apiKeySid: 'SK123',
+          apiKeySecretArn: 'twilio-secret-arn',
+          messagingServiceSid: 'MG123',
+        },
+      },
+      new RecordingSesClient() as unknown as SESv2Client,
+      new RecordingSecretsManagerClient(
+        'twilio-secret-value',
+      ) as unknown as SecretsManagerClient,
+      fetchRecorder.fetch,
+    );
+
+    await client.sendSmsPreferenceConfirmation({
+      householdId: 'h1',
+      phone: '+14805550100',
+    });
+
+    expect(parseConsoleJson(consoleLog)).toContainEqual(
+      expect.objectContaining({ householdId: 'h1', outcome: 'success' }),
+    );
   });
 
   it('fails SMS sends with a sanitized error when Twilio is incomplete', async () => {
-    const secretsClient = new RecordingSecretsManagerClient('twilio-secret-value');
+    const secretsClient = new RecordingSecretsManagerClient(
+      'twilio-secret-value',
+    );
     const fetchRecorder = createRecordingFetch();
     const client = new AwsWeddingNotificationsClient(
       {
@@ -386,7 +440,9 @@ class RecordingSecretsManagerClient {
 
   constructor(private readonly secret = 'secret-value') {}
 
-  async send(command: GetSecretValueCommand): Promise<{ SecretString: string }> {
+  async send(
+    command: GetSecretValueCommand,
+  ): Promise<{ SecretString: string }> {
     this.commands.push(command);
     return { SecretString: this.secret };
   }
@@ -438,6 +494,8 @@ function createHousehold(overrides: Partial<Household> = {}): Household {
   };
 }
 
-function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+function parseConsoleJson(
+  spy: ReturnType<typeof vi.spyOn>,
+): Array<Record<string, unknown>> {
   return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }

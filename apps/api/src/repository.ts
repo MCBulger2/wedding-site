@@ -30,6 +30,14 @@ export interface RecoveryRateLimitRecord {
   updatedAt: string;
 }
 
+export interface SmsSubscription {
+  subscriptionId: string;
+  attemptId: string;
+  consent: SmsConsent;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SmsPreferenceActivation {
   householdId: string;
   expectedPending: SmsConsent;
@@ -57,6 +65,13 @@ export interface WeddingRepository {
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
   recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number>;
+  beginSmsSubscription(input: SmsSubscription): Promise<void>;
+  activateSmsSubscription(input: {
+    subscriptionId: string;
+    expectedAttemptId: string;
+    expectedPending: SmsConsent;
+    activatedAt: string;
+  }): Promise<SmsSubscription | undefined>;
   beginSmsPreference(input: SmsPreferencePendingStart): Promise<SmsPreferencePendingStartResult>;
   activateSmsPreference(input: SmsPreferenceActivation): Promise<Household | undefined>;
   saveHousehold(household: Household): Promise<void>;
@@ -89,6 +104,12 @@ interface StoredRecoveryRateLimitItem extends RecoveryRateLimitRecord {
   sk: string;
   entityType: 'RecoveryRateLimit';
   ttl: number;
+}
+
+interface StoredSmsSubscriptionItem extends SmsSubscription {
+  pk: string;
+  sk: string;
+  entityType: 'SmsSubscription';
 }
 
 export class DynamoWeddingRepository implements WeddingRepository {
@@ -188,6 +209,69 @@ export class DynamoWeddingRepository implements WeddingRepository {
   async saveHousehold(household: Household): Promise<void> {
     const existingRsvp = await this.getRsvp(household.householdId);
     await this.putHouseholdItem(household, existingRsvp);
+  }
+
+  async beginSmsSubscription(input: SmsSubscription): Promise<void> {
+    await this.client.send(
+      new UpdateCommand({
+        TableName: this.tableName,
+        Key: smsSubscriptionKey(input.subscriptionId),
+        UpdateExpression:
+          'SET entityType = :entityType, subscriptionId = :subscriptionId, attemptId = :attemptId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
+        ExpressionAttributeValues: {
+          ':entityType': 'SmsSubscription',
+          ':subscriptionId': input.subscriptionId,
+          ':attemptId': input.attemptId,
+          ':consent': input.consent,
+          ':createdAt': input.createdAt,
+          ':updatedAt': input.updatedAt,
+        },
+      }),
+    );
+  }
+
+  async activateSmsSubscription(input: {
+    subscriptionId: string;
+    expectedAttemptId: string;
+    expectedPending: SmsConsent;
+    activatedAt: string;
+  }): Promise<SmsSubscription | undefined> {
+    const activatedConsent: SmsConsent = {
+      ...input.expectedPending,
+      status: 'opted_in',
+      consentedAt: input.activatedAt,
+    };
+    try {
+      const result = await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: smsSubscriptionKey(input.subscriptionId),
+          UpdateExpression: 'SET consent = :activatedConsent, updatedAt = :activatedAt',
+          ConditionExpression:
+            'attemptId = :expectedAttemptId AND consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+          },
+          ExpressionAttributeValues: {
+            ':activatedConsent': activatedConsent,
+            ':activatedAt': input.activatedAt,
+            ':expectedAttemptId': input.expectedAttemptId,
+            ':pendingStatus': 'pending_confirmation',
+            ':phone': input.expectedPending.phone,
+            ':pendingConsentedAt': input.expectedPending.consentedAt,
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      return result.Attributes
+        ? fromSmsSubscriptionItem(result.Attributes as StoredSmsSubscriptionItem)
+        : undefined;
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+      return this.getSmsSubscription(input.subscriptionId);
+    }
   }
 
   async activateSmsPreference(
@@ -368,6 +452,20 @@ export class DynamoWeddingRepository implements WeddingRepository {
     );
   }
 
+  private async getSmsSubscription(
+    subscriptionId: string,
+  ): Promise<SmsSubscription | undefined> {
+    const result = await this.client.send(
+      new GetCommand({
+        TableName: this.tableName,
+        Key: smsSubscriptionKey(subscriptionId),
+      }),
+    );
+    return result.Item
+      ? fromSmsSubscriptionItem(result.Item as StoredSmsSubscriptionItem)
+      : undefined;
+  }
+
   private async scanHouseholds(input: {
     FilterExpression: string;
     ExpressionAttributeValues: Record<string, unknown>;
@@ -397,6 +495,7 @@ export class InMemoryWeddingRepository implements WeddingRepository {
   readonly inviteLookups = new Map<string, InviteCodeLookup>();
   readonly inviteCodeSecrets = new Map<string, InviteCodeSecret>();
   readonly recoveryRateLimits = new Map<string, RecoveryRateLimitRecord>();
+  readonly smsSubscriptions = new Map<string, SmsSubscription>();
   readonly rsvps = new Map<string, StoredRsvp>();
 
   async getHousehold(householdId: string): Promise<Household | undefined> {
@@ -436,6 +535,45 @@ export class InMemoryWeddingRepository implements WeddingRepository {
       ...household,
       rsvpStatus: existingRsvp ? deriveRsvpStatus(existingRsvp) : household.rsvpStatus,
     });
+  }
+
+  async beginSmsSubscription(input: SmsSubscription): Promise<void> {
+    const existing = this.smsSubscriptions.get(input.subscriptionId);
+    this.smsSubscriptions.set(input.subscriptionId, {
+      ...input,
+      createdAt: existing?.createdAt ?? input.createdAt,
+    });
+  }
+
+  async activateSmsSubscription(input: {
+    subscriptionId: string;
+    expectedAttemptId: string;
+    expectedPending: SmsConsent;
+    activatedAt: string;
+  }): Promise<SmsSubscription | undefined> {
+    const current = this.smsSubscriptions.get(input.subscriptionId);
+    if (!current) {
+      return undefined;
+    }
+    if (
+      current.attemptId !== input.expectedAttemptId ||
+      current.consent.status !== 'pending_confirmation' ||
+      current.consent.phone !== input.expectedPending.phone ||
+      current.consent.consentedAt !== input.expectedPending.consentedAt
+    ) {
+      return current;
+    }
+    const activated: SmsSubscription = {
+      ...current,
+      consent: {
+        ...input.expectedPending,
+        status: 'opted_in',
+        consentedAt: input.activatedAt,
+      },
+      updatedAt: input.activatedAt,
+    };
+    this.smsSubscriptions.set(input.subscriptionId, activated);
+    return activated;
   }
 
   async activateSmsPreference(
@@ -554,6 +692,10 @@ function recoveryRateLimitKey(
   };
 }
 
+function smsSubscriptionKey(subscriptionId: string) {
+  return { pk: `SMS_SUBSCRIPTION#${subscriptionId}`, sk: 'METADATA' };
+}
+
 function fromHouseholdItem(item: StoredHouseholdItem): Household {
   return {
     householdId: item.householdId,
@@ -572,6 +714,16 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
     inviteSentAt: item.inviteSentAt,
     inviteCodeLastRotatedAt: item.inviteCodeLastRotatedAt,
     archivedAt: item.archivedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function fromSmsSubscriptionItem(item: StoredSmsSubscriptionItem): SmsSubscription {
+  return {
+    subscriptionId: item.subscriptionId,
+    attemptId: item.attemptId,
+    consent: item.consent,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };

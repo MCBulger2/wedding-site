@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { handleRequest } from './handler.js';
-import { PublicError } from './service.js';
+import type { HouseholdMessenger } from './notifications.js';
+import { InMemoryWeddingRepository } from './repository.js';
+import { PublicError, WeddingService } from './service.js';
 
 const acceptedRecoveryResponse = {
   accepted: true as const,
@@ -21,6 +23,80 @@ describe('handleRequest', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+  });
+
+  it('forwards public SMS subscriptions with source IP and logs a stable redacted route', async () => {
+    const createPublicSmsSubscription = vi.fn(async () => ({
+      status: 'opted_in' as const,
+    }));
+    const service = createServiceDouble({ createPublicSmsSubscription });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/sms-subscriptions', 'POST', {
+        phone: '(480) 555-0100',
+        consentAccepted: true,
+      }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(JSON.parse(httpResponse.body as string)).toEqual({
+      status: 'opted_in',
+    });
+    expect(createPublicSmsSubscription).toHaveBeenCalledWith(
+      { phone: '(480) 555-0100', consentAccepted: true },
+      { sourceIp: '203.0.113.10' },
+    );
+    expect(parseConsoleJson(consoleLog)).toContainEqual(
+      expect.objectContaining({
+        event: 'api.request.completed',
+        routeName: 'POST /sms-subscriptions',
+        method: 'POST',
+        statusCode: 200,
+        isAdminRoute: false,
+      }),
+    );
+    const serializedLogs = JSON.stringify([
+      ...parseConsoleJson(consoleLog),
+      ...parseConsoleJson(consoleError),
+    ]);
+    expect(serializedLogs).not.toContain('(480) 555-0100');
+  });
+
+  it('integrates the unauthenticated route with pending persistence and confirmation delivery', async () => {
+    const repository = new InMemoryWeddingRepository();
+    let consentStatusDuringDelivery: string | undefined;
+    const messenger = createMessengerDouble({
+      sendSmsPreferenceConfirmation: vi.fn(async () => {
+        consentStatusDuringDelivery = [
+          ...repository.smsSubscriptions.values(),
+        ][0]?.consent.status;
+      }),
+    });
+    const service = new WeddingService(
+      repository,
+      'handler-integration-test-pepper',
+      undefined,
+      messenger,
+    );
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/sms-subscriptions', 'POST', {
+        phone: '(480) 555-0100',
+        consentAccepted: true,
+      }),
+    );
+
+    expect((response as Exclude<typeof response, string>).statusCode).toBe(200);
+    expect(consentStatusDuringDelivery).toBe('pending_confirmation');
+    expect(messenger.sendSmsPreferenceConfirmation).toHaveBeenCalledWith({
+      phone: '+14805550100',
+    });
+    expect([...repository.smsSubscriptions.values()][0]?.consent.status).toBe(
+      'opted_in',
+    );
   });
 
   it('returns 422 for invalid recovery contact input', async () => {
@@ -464,6 +540,7 @@ function createServiceDouble(
   return {
     archiveHousehold: notUsed,
     createHousehold: notUsed,
+    createPublicSmsSubscription: notUsed,
     exportInvitationLabels: notUsed,
     exportInvitations: notUsed,
     exportRsvps: notUsed,
@@ -482,6 +559,23 @@ function createServiceDouble(
     updateRsvp: notUsed,
     updateSmsPreferences: notUsed,
     removeHouseholdMember: notUsed,
+    ...overrides,
+  };
+}
+
+function createMessengerDouble(
+  overrides: Partial<HouseholdMessenger> = {},
+): HouseholdMessenger {
+  const notUsed = vi.fn(async () => {
+    throw new Error('Not implemented in this test');
+  });
+
+  return {
+    sendHouseholdNotification: notUsed,
+    sendInvitationEmail: notUsed,
+    sendRecoveryEmail: notUsed,
+    sendRecoverySms: notUsed,
+    sendSmsPreferenceConfirmation: notUsed,
     ...overrides,
   };
 }

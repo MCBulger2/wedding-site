@@ -12,6 +12,8 @@ Before invitations are printed or production traffic is announced, verify all of
 - custom domains, Cognito auth domain, SES, Twilio, and WAF settings match the live plan
 - admin login, RSVP, export, and recovery flows still behave as expected
 
+Completing this checklist does not authorize a production deployment. Creating or publishing the production release requires separate, explicit authorization from the site owner.
+
 ## Configuration Checks
 
 Confirm deployment config is split correctly:
@@ -89,11 +91,30 @@ Confirm production SMS wiring uses:
 - API key secret stored in Secrets Manager
 - either a Messaging Service SID or a from-number
 
-Before launch:
+Twilio reviewer-visible consent checklist:
 
-- send rehearsal messages to real test numbers
+- use the exact public URL `https://matt-alison.com/sms-updates`; it must load without an invite code or authentication
+- show the `Matt & Alison Wedding` brand, sole proprietor `Matthew Bulger`, and `contact@matt-alison.com`
+- start with an empty phone field and an unchecked consent checkbox
+- require affirmative consent before `Sign up for text updates` submits
+- state the message purpose and variable frequency, that message and data rates may apply, and that consent is optional and independent from RSVP submission
+- include working Terms and Privacy Policy links, the HELP/STOP disclosure, and the promise that text-message opt-in data and consent are not shared with third parties
+
+Before an authorized production deployment:
+
 - confirm consent copy and opt-out expectations are acceptable
 - confirm partial or broken Twilio config fails SMS delivery without breaking email delivery or RSVP writes
+- confirm the public route has API Gateway throttling of 1 request per second with a burst of 3, plus service limits of 3 attempts per normalized phone and 10 attempts per source IP per hour
+
+After an authorized production deployment, pass this controlled-handset gate before sharing the consent URL with Twilio or enabling guest messaging:
+
+- the exact public URL `https://matt-alison.com/sms-updates` loads and submits without authentication
+- a signup from one controlled handset receives one real branded `Matt & Alison Wedding` confirmation containing HELP and STOP instructions
+- DynamoDB contains one standalone `SmsSubscription` record that transitions from `pending_confirmation` to `opted_in` only after Twilio accepts delivery
+- repeating enrollment for the same normalized phone updates that record and does not create a duplicate
+- Lambda and API Gateway logs contain no raw phone number or source IP
+
+Do not send the public URL to Twilio for review until every item in the controlled-handset gate passes.
 
 ## Abuse Protection and Security Checks
 
@@ -132,9 +153,9 @@ Immediately before production launch:
 - review alarms, dashboards, and log groups
 - confirm operations alert recipients have accepted SNS subscriptions
 - confirm contact, notification, and recovery destinations are correct
-- confirm the Twilio toll-free sender is in the intended Messaging Service sender pool and the public `/sms-opt-in-proof`, Terms, and Privacy pages match the submitted consent flow
+- confirm the Twilio toll-free sender is in the intended Messaging Service sender pool and the canonical `/sms-updates`, Terms, and Privacy pages match the submitted consent flow
 - confirm the toll-free verification identifies sole proprietor `Matthew Bulger`, brand `Matt & Alison Wedding`, and `contact@matt-alison.com`
 - use the non-promotional, invited-guest estimate of approximately 100 messages for the verification submission; complete an internal pre-review before submitting
-- after approval, test live HELP, STOP, and START behavior end to end from a real handset before enabling guest messaging
+- after the controlled-handset gate and Twilio approval, test live HELP, STOP, and START behavior end to end before enabling guest messaging
 - verify standalone SMS preferences transition pending to active only after a Twilio HTTP 2xx, failed confirmation remains retryable, and website opt-out blocks recovery and admin-authored SMS
 - rerun the highest-risk production smoke checks after deploy
