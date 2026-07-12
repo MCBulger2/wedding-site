@@ -44,7 +44,11 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:e2e -- --project=chromium --reporter=line,junit,html
         env:
-          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-junit.xml
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-chromium-junit.xml
+      - run: npm run test:e2e -- --project=mobile --reporter=line,junit,html
+        if: ${{ success() || failure() }}
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-mobile-junit.xml
       - name: Write test and coverage summary
         if: ${{ always() }}
         run: npm run report:ci
