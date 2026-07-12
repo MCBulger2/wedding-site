@@ -9,6 +9,8 @@ import {
   InviteLifecycleUpdateSchema,
   type InvitationDetails,
   type InvitationEmailResult,
+  PublicSmsSubscriptionRequestSchema,
+  type PublicSmsSubscriptionResponse,
   SMS_CONSENT_TEXT_VERSION,
   SmsPreferencesRequestSchema,
   type SmsConsent,
@@ -47,6 +49,9 @@ import { describeError, getErrorStatusCode, logStructured } from './logger.js';
 const RSVP_RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RSVP_RECOVERY_CONTACT_LIMIT = 3;
 const RSVP_RECOVERY_IP_LIMIT = 10;
+const PUBLIC_SMS_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const PUBLIC_SMS_PHONE_LIMIT = 3;
+const PUBLIC_SMS_IP_LIMIT = 10;
 const POINTS_PER_INCH = 72;
 const AVERY_5160_LABEL = {
   pageWidth: 8.5 * POINTS_PER_INCH,
@@ -151,7 +156,10 @@ export class WeddingService {
     return { household: updatedHousehold, rsvp };
   }
 
-  async updateSmsPreferences(inviteCode: string, input: unknown): Promise<Household> {
+  async updateSmsPreferences(
+    inviteCode: string,
+    input: unknown,
+  ): Promise<Household> {
     const household = await this.findHouseholdByInviteCode(inviteCode);
     const parsed = SmsPreferencesRequestSchema.safeParse(input);
     if (!parsed.success) {
@@ -170,7 +178,12 @@ export class WeddingService {
       }
       const optedOut: Household = {
         ...household,
-        smsConsent: createSmsConsent(phone, 'sms_preferences', now, 'opted_out'),
+        smsConsent: createSmsConsent(
+          phone,
+          'sms_preferences',
+          now,
+          'opted_out',
+        ),
         updatedAt: now,
       };
       await this.repository.saveHousehold(optedOut);
@@ -223,6 +236,120 @@ export class WeddingService {
         activatedAt,
       })) ?? pending
     );
+  }
+
+  async createPublicSmsSubscription(
+    input: unknown,
+    requestContext: { sourceIp?: string },
+  ): Promise<PublicSmsSubscriptionResponse> {
+    const parsed = PublicSmsSubscriptionRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError(
+        'SMS enrollment is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
+    }
+
+    const phone = normalizePublicSmsPhoneNumber(parsed.data.phone);
+    const subscriptionId = stableHash(
+      `sms-subscription-record:${phone}`,
+      this.inviteCodePepper,
+    );
+    const phoneRateHash = stableHash(
+      `sms-subscription-phone-rate:${phone}`,
+      this.inviteCodePepper,
+    );
+    const sourceIpRateHash = stableHash(
+      `sms-subscription-ip-rate:${requestContext.sourceIp?.trim() || 'unknown'}`,
+      this.inviteCodePepper,
+    );
+    if (
+      await this.isPublicSmsEnrollmentRateLimited(
+        phoneRateHash,
+        sourceIpRateHash,
+      )
+    ) {
+      logStructured({
+        level: 'warn',
+        event: 'sms.publicEnrollment.rateLimited',
+        message: 'Public SMS enrollment rate limited',
+        channel: 'sms',
+        outcome: 'rate_limited',
+      });
+      throw new PublicError(
+        'Too many SMS enrollment attempts. Try again later.',
+        429,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const pendingConsent = createSmsConsent(
+      phone,
+      'public_sms_opt_in',
+      now,
+      'pending_confirmation',
+    );
+    await this.repository.beginSmsSubscription({
+      subscriptionId,
+      consent: pendingConsent,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    if (!this.householdMessenger) {
+      throw new PublicError('SMS provider is temporarily unavailable', 503);
+    }
+    try {
+      await this.householdMessenger.sendSmsPreferenceConfirmation({ phone });
+    } catch {
+      logStructured({
+        level: 'error',
+        event: 'sms.publicEnrollment.deliveryFailed',
+        message: 'Public SMS confirmation delivery failed',
+        channel: 'sms',
+        outcome: 'failed',
+        provider: 'twilio',
+        statusCode: 503,
+      });
+      throw new PublicError('SMS provider is temporarily unavailable', 503);
+    }
+
+    const activatedAt = new Date().toISOString();
+    const activated = await this.repository.activateSmsSubscription({
+      subscriptionId,
+      expectedPending: pendingConsent,
+      activatedAt,
+    });
+    if (
+      activated?.consent.status !== 'opted_in' ||
+      activated.consent.phone !== phone ||
+      activated.consent.consentedAt !== activatedAt
+    ) {
+      logStructured({
+        level: 'warn',
+        event: 'sms.publicEnrollment.activationConflict',
+        message:
+          'Public SMS enrollment activation conflicted with a newer attempt',
+        channel: 'sms',
+        outcome: 'failed',
+        statusCode: 409,
+      });
+      throw new PublicError(
+        'SMS enrollment changed while confirmation was being sent. Try again.',
+        409,
+      );
+    }
+
+    logStructured({
+      level: 'info',
+      event: 'sms.publicEnrollment.completed',
+      message: 'Public SMS enrollment completed',
+      channel: 'sms',
+      outcome: 'success',
+      provider: 'twilio',
+    });
+    return { status: 'opted_in' };
   }
 
   async requestRsvpRecovery(
@@ -1036,7 +1163,9 @@ export class WeddingService {
 
   async exportInvitationLabels(baseUrl: string): Promise<Buffer> {
     const rows = await this.prepareInvitationExportRows(baseUrl);
-    const pdf = await createInvitationLabelsPdf(rows.filter((row) => row.rsvpUrl));
+    const pdf = await createInvitationLabelsPdf(
+      rows.filter((row) => row.rsvpUrl),
+    );
     logStructured({
       level: 'info',
       event: 'invitation.labels.exported',
@@ -1301,6 +1430,32 @@ export class WeddingService {
     return (
       contactAttempts > RSVP_RECOVERY_CONTACT_LIMIT ||
       ipAttempts > RSVP_RECOVERY_IP_LIMIT
+    );
+  }
+
+  private async isPublicSmsEnrollmentRateLimited(
+    phoneRateHash: string,
+    sourceIpRateHash: string,
+  ): Promise<boolean> {
+    const now = Date.now();
+    const windowStartsAt =
+      Math.floor(now / PUBLIC_SMS_RATE_LIMIT_WINDOW_MS) *
+      PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
+    const windowExpiresAt = windowStartsAt + PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
+    const phoneAttempts = await this.recordRsvpRecoveryAttempt(
+      'contact',
+      phoneRateHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    const ipAttempts = await this.recordRsvpRecoveryAttempt(
+      'ip',
+      sourceIpRateHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    return (
+      phoneAttempts > PUBLIC_SMS_PHONE_LIMIT || ipAttempts > PUBLIC_SMS_IP_LIMIT
     );
   }
 
@@ -1658,9 +1813,23 @@ function normalizeRequiredPhoneNumber(
   return normalized;
 }
 
+function normalizePublicSmsPhoneNumber(value: string): string {
+  try {
+    const normalized = normalizeOptionalPhoneNumber(value);
+    if (normalized) {
+      return normalized;
+    }
+  } catch {
+    // Replace private/admin validation details with the public field name.
+  }
+
+  const message =
+    'Phone number must be a valid E.164 value or a 10-digit US mobile number';
+  throw new PublicError(message, 422, [`phone: ${message}`]);
+}
+
 type RecoveryContact =
-  | { kind: 'email'; value: string }
-  | { kind: 'phone'; value: string };
+  { kind: 'email'; value: string } | { kind: 'phone'; value: string };
 
 function normalizeRecoveryContact(value: string): RecoveryContact {
   const email = normalizeOptionalEmail(value);
@@ -1754,7 +1923,9 @@ function summarizeRsvpCounts(rsvp: StoredRsvp): {
   declinedCount: number;
   plusOneCount: number;
 } {
-  const attendingCount = rsvp.members.filter((member) => member.attending).length;
+  const attendingCount = rsvp.members.filter(
+    (member) => member.attending,
+  ).length;
   const declinedCount = rsvp.members.length - attendingCount;
   return {
     attendingCount,

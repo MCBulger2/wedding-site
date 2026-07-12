@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Household } from '@matt-alison-wedding/shared';
+import { createHash } from 'node:crypto';
 import { hashInviteCode, hashLegacyInviteCode } from './inviteCodes.js';
 import { Base64InviteCodeProtector } from './inviteCodeProtector.js';
 import { InMemoryWeddingRepository } from './repository.js';
@@ -24,6 +25,7 @@ describe('WeddingService', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -195,12 +197,9 @@ describe('WeddingService', () => {
   it('does not partially update household metadata when RSVP persistence fails', async () => {
     const notifier = new RecordingNotifier();
     const repository = new FailingRsvpUpdateRepository();
-    const { service } = await createSeededService(
-      {},
-      notifier,
-      undefined,
-      { repository },
-    );
+    const { service } = await createSeededService({}, notifier, undefined, {
+      repository,
+    });
     const originalHousehold = await repository.getHousehold('h1');
 
     await expect(
@@ -876,7 +875,9 @@ describe('WeddingService', () => {
     expect(householdMessenger.recoverySmsCalls[0].household.phone).toBe(
       '+14805550100',
     );
-    expect(householdMessenger.recoverySmsCalls[0].household.smsConsent).toMatchObject({
+    expect(
+      householdMessenger.recoverySmsCalls[0].household.smsConsent,
+    ).toMatchObject({
       status: 'opted_in',
       phone: '+14805550100',
     });
@@ -890,13 +891,15 @@ describe('WeddingService', () => {
       householdMessenger,
     );
 
-    await expect(service.requestRsvpRecovery(
-      { contact: '(480) 555-0100', smsConsentAccepted: true },
-      {
-        sourceIp: '203.0.113.10',
-        baseUrl: 'https://wedding.example.com',
-      },
-    )).resolves.toMatchObject({ accepted: true });
+    await expect(
+      service.requestRsvpRecovery(
+        { contact: '(480) 555-0100', smsConsentAccepted: true },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      ),
+    ).resolves.toMatchObject({ accepted: true });
 
     expect(householdMessenger.recoverySmsCalls).toHaveLength(0);
     expect((await repository.getHousehold('h1'))?.smsConsent).toBeUndefined();
@@ -923,21 +926,27 @@ describe('WeddingService', () => {
       phone: '+14805550100',
       source: 'sms_preferences',
     });
-    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_in');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe(
+      'opted_in',
+    );
   });
 
   it('leaves SMS pending and retryable when Twilio confirmation fails', async () => {
-    const householdMessenger = new RecordingHouseholdMessenger(new Error('Twilio unavailable'));
+    const householdMessenger = new RecordingHouseholdMessenger(
+      new Error('Twilio unavailable'),
+    );
     const { service, repository } = await createSeededService(
       {},
       undefined,
       householdMessenger,
     );
 
-    await expect(service.updateSmsPreferences(inviteCode, {
-      enabled: true,
-      phone: '(480) 555-0100',
-    })).rejects.toMatchObject({ statusCode: 503 });
+    await expect(
+      service.updateSmsPreferences(inviteCode, {
+        enabled: true,
+        phone: '(480) 555-0100',
+      }),
+    ).rejects.toMatchObject({ statusCode: 503 });
 
     expect((await repository.getHousehold('h1'))?.smsConsent).toMatchObject({
       status: 'pending_confirmation',
@@ -962,15 +971,16 @@ describe('WeddingService', () => {
     });
 
     expect(result.smsConsent?.status).toBe('opted_out');
-    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe(
+      'opted_out',
+    );
     expect(householdMessenger.smsPreferenceConfirmationCalls).toHaveLength(0);
   });
 
   it('never reactivates when opt-out interleaves immediately before activation', async () => {
     const repository = new InterleavingSmsActivationRepository();
-    const householdMessenger = new RecordingHouseholdMessenger(
-      undefined,
-      () => repository.armOptOutBeforeActivation(),
+    const householdMessenger = new RecordingHouseholdMessenger(undefined, () =>
+      repository.armOptOutBeforeActivation(),
     );
     const { service } = await createSeededService(
       {},
@@ -985,7 +995,9 @@ describe('WeddingService', () => {
     });
 
     expect(result.smsConsent?.status).toBe('opted_out');
-    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe(
+      'opted_out',
+    );
   });
 
   it('opts out immediately without clearing the household phone', async () => {
@@ -994,11 +1006,234 @@ describe('WeddingService', () => {
       smsConsent: createSmsConsentRecord('+14805550100', 'rsvp_form'),
     });
 
-    const result = await service.updateSmsPreferences(inviteCode, { enabled: false });
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: false,
+    });
 
     expect(result.phone).toBe('+14805550100');
     expect(result.smsConsent?.status).toBe('opted_out');
     expect((await repository.getHousehold('h1'))?.phone).toBe('+14805550100');
+  });
+
+  describe('public SMS enrollment', () => {
+    it('normalizes the phone, uses domain-separated deterministic hashes, and activates the exact pending attempt', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-07-11T20:00:00.000Z'));
+      const repository = new InMemoryWeddingRepository();
+      let consentStatusDuringDelivery: string | undefined;
+      const messenger = new RecordingHouseholdMessenger(undefined, () => {
+        consentStatusDuringDelivery = repository.smsSubscriptions
+          .values()
+          .next().value?.consent.status;
+      });
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        messenger,
+      );
+
+      const result = await service.createPublicSmsSubscription(
+        { phone: '(480) 555-0100', consentAccepted: true },
+        { sourceIp: '203.0.113.10' },
+      );
+
+      const subscriptionId = testStableHash(
+        'sms-subscription-record:+14805550100',
+      );
+      expect(result).toEqual({ status: 'opted_in' });
+      expect(consentStatusDuringDelivery).toBe('pending_confirmation');
+      expect(messenger.smsPreferenceConfirmationCalls).toEqual([
+        { phone: '+14805550100' },
+      ]);
+      expect(repository.smsSubscriptions.get(subscriptionId)).toMatchObject({
+        subscriptionId,
+        consent: {
+          status: 'opted_in',
+          phone: '+14805550100',
+          source: 'public_sms_opt_in',
+        },
+      });
+      expect([...repository.recoveryRateLimits.keys()]).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            `contact:${testStableHash('sms-subscription-phone-rate:+14805550100')}:`,
+          ),
+          expect.stringContaining(
+            `ip:${testStableHash('sms-subscription-ip-rate:203.0.113.10')}:`,
+          ),
+        ]),
+      );
+    });
+
+    it('returns phone-scoped validation details for malformed phone input', async () => {
+      const service = new WeddingService(
+        new InMemoryWeddingRepository(),
+        pepper,
+        undefined,
+        new RecordingHouseholdMessenger(),
+      );
+
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: 'not-a-phone', consentAccepted: true },
+          { sourceIp: '203.0.113.10' },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 422,
+        details: [expect.stringMatching(/^phone:/)],
+      });
+    });
+
+    it('preserves pending consent and returns 503 when confirmation delivery fails', async () => {
+      const repository = new InMemoryWeddingRepository();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        new RecordingHouseholdMessenger(
+          new Error('provider phone +14805550100 failed'),
+        ),
+      );
+
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: '(480) 555-0100', consentAccepted: true },
+          { sourceIp: '203.0.113.10' },
+        ),
+      ).rejects.toMatchObject({ statusCode: 503 });
+
+      expect(
+        repository.smsSubscriptions.get(
+          testStableHash('sms-subscription-record:+14805550100'),
+        )?.consent,
+      ).toMatchObject({
+        status: 'pending_confirmation',
+        phone: '+14805550100',
+        source: 'public_sms_opt_in',
+      });
+    });
+
+    it('returns a retryable conflict when a newer pending attempt wins before activation', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-07-11T20:00:00.000Z'));
+      const repository = new InMemoryWeddingRepository();
+      const subscriptionId = testStableHash(
+        'sms-subscription-record:+14805550100',
+      );
+      const replacementConsent = {
+        status: 'pending_confirmation' as const,
+        phone: '+14805550100',
+        source: 'public_sms_opt_in' as const,
+        consentedAt: '2026-07-11T20:00:01.000Z',
+        consentTextVersion: 'twilio-tollfree-v1' as const,
+      };
+      const messenger = new RecordingHouseholdMessenger(undefined, () => {
+        void repository.beginSmsSubscription({
+          subscriptionId,
+          consent: replacementConsent,
+          createdAt: replacementConsent.consentedAt,
+          updatedAt: replacementConsent.consentedAt,
+        });
+      });
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        messenger,
+      );
+
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: '(480) 555-0100', consentAccepted: true },
+          { sourceIp: '203.0.113.10' },
+        ),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(repository.smsSubscriptions.get(subscriptionId)?.consent).toEqual(
+        replacementConsent,
+      );
+    });
+
+    it('allows three phone attempts per hour and rejects the fourth', async () => {
+      const repository = new InMemoryWeddingRepository();
+      const messenger = new RecordingHouseholdMessenger();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        messenger,
+      );
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await expect(
+          service.createPublicSmsSubscription(
+            { phone: '(480) 555-0100', consentAccepted: true },
+            { sourceIp: `203.0.113.${attempt + 1}` },
+          ),
+        ).resolves.toEqual({ status: 'opted_in' });
+      }
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: '(480) 555-0100', consentAccepted: true },
+          { sourceIp: '203.0.113.4' },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 429,
+        message: 'Too many SMS enrollment attempts. Try again later.',
+      });
+      expect(messenger.smsPreferenceConfirmationCalls).toHaveLength(3);
+    });
+
+    it('allows ten IP attempts per hour and rejects the eleventh', async () => {
+      const repository = new InMemoryWeddingRepository();
+      const messenger = new RecordingHouseholdMessenger();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        messenger,
+      );
+
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        await service.createPublicSmsSubscription(
+          { phone: `+14805550${String(100 + attempt)}`, consentAccepted: true },
+          { sourceIp: '203.0.113.10' },
+        );
+      }
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: '+14805550110', consentAccepted: true },
+          { sourceIp: '203.0.113.10' },
+        ),
+      ).rejects.toMatchObject({ statusCode: 429 });
+      expect(messenger.smsPreferenceConfirmationCalls).toHaveLength(10);
+    });
+
+    it('never writes the raw phone or phone-derived subscription hash to public logs', async () => {
+      const repository = new InMemoryWeddingRepository();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        new RecordingHouseholdMessenger(),
+      );
+      const subscriptionId = testStableHash(
+        'sms-subscription-record:+14805550100',
+      );
+
+      await service.createPublicSmsSubscription(
+        { phone: '(480) 555-0100', consentAccepted: true },
+        { sourceIp: '203.0.113.10' },
+      );
+
+      const logs = JSON.stringify([
+        ...parseConsoleJson(consoleLog),
+        ...parseConsoleJson(consoleError),
+      ]);
+      expect(logs).not.toContain('+14805550100');
+      expect(logs).not.toContain(subscriptionId);
+      expect(logs).not.toContain('householdId');
+    });
   });
 
   it('skips archived or non-recoverable households while keeping the public recovery response generic', async () => {
@@ -1172,9 +1407,10 @@ describe('WeddingService', () => {
       await repository.saveInviteCodeSecret({
         householdId: household.householdId,
         inviteCodeHash: household.inviteCodeHash!,
-        inviteCodeCiphertext: await new Base64InviteCodeProtector().encryptInviteCode(
-          uniqueInviteCode,
-        ),
+        inviteCodeCiphertext:
+          await new Base64InviteCodeProtector().encryptInviteCode(
+            uniqueInviteCode,
+          ),
         updatedAt: new Date().toISOString(),
       });
     }
@@ -1526,6 +1762,12 @@ async function createSeededService(
   };
 }
 
-function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+function parseConsoleJson(
+  spy: ReturnType<typeof vi.spyOn>,
+): Array<Record<string, unknown>> {
   return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
+}
+
+function testStableHash(value: string): string {
+  return createHash('sha256').update(`${pepper}:${value}`).digest('hex');
 }
