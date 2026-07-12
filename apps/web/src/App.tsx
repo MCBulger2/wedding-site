@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { RouteLoadingFallback } from './components/LoadingStates.js';
 import { Header, SiteFooter } from './components/SiteLayout.js';
 import {
@@ -6,7 +6,7 @@ import {
   OurStoryPage,
   PrivacyPage,
   RegistryPage,
-  SmsOptInProofPage,
+  SmsUpdatesPage,
   TermsPage,
 } from './pages/PublicPages.js';
 
@@ -45,7 +45,8 @@ type Route =
   | { name: 'rsvp'; inviteCode: string }
   | { name: 'rsvp_success'; inviteCode: string }
   | { name: 'rsvp_sms_updates'; inviteCode: string }
-  | { name: 'sms_opt_in_proof' }
+  | { name: 'sms_updates' }
+  | { name: 'sms_opt_in_redirect' }
   | { name: 'terms' }
   | { name: 'admin' };
 
@@ -79,7 +80,8 @@ export function App() {
           <RsvpSmsUpdatesPage inviteCode={route.inviteCode} />
         </Suspense>
       )}
-      {route.name === 'sms_opt_in_proof' && <SmsOptInProofPage />}
+      {route.name === 'sms_updates' && <SmsUpdatesPage />}
+      {route.name === 'sms_opt_in_redirect' && <LegacySmsOptInRedirect />}
       {route.name === 'terms' && <TermsPage />}
       {route.name === 'admin' && (
         <Suspense fallback={<RouteLoadingFallback />}>
@@ -91,7 +93,7 @@ export function App() {
   );
 }
 
-function parseRoute(pathname: string): Route {
+export function parseRoute(pathname: string): Route {
   if (pathname === '/our-story') {
     return { name: 'our_story' };
   }
@@ -129,11 +131,26 @@ function parseRoute(pathname: string): Route {
   if (pathname === '/admin') {
     return { name: 'admin' };
   }
+  if (pathname === '/sms-updates') {
+    return { name: 'sms_updates' };
+  }
   if (pathname === '/sms-opt-in-proof') {
-    return { name: 'sms_opt_in_proof' };
+    return { name: 'sms_opt_in_redirect' };
   }
   if (pathname === '/terms') {
     return { name: 'terms' };
   }
   return { name: 'home' };
+}
+
+export function LegacySmsOptInRedirect({
+  replace = (path: string) => window.location.replace(path),
+}: {
+  replace?: (path: string) => void;
+}) {
+  useEffect(() => {
+    replace('/sms-updates');
+  }, [replace]);
+
+  return null;
 }

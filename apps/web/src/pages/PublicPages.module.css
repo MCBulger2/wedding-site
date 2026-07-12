@@ -694,8 +694,8 @@
 }
 
 .policy-copy,
-.proof-form,
-.proof-grid {
+.sms-updates-form,
+.sms-updates-grid {
   display: grid;
   gap: 1rem;
 }
@@ -704,23 +704,17 @@
   margin: 0;
 }
 
-.proof-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.sms-updates-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.proof-form {
+.sms-updates-form {
   margin-top: 1rem;
 }
 
-.proof-form :global(.checkbox-row) {
+.sms-updates-form :global(.checkbox-row) {
   align-items: flex-start;
   line-height: 1.5;
-}
-
-@media (max-width: 760px) {
-  .proof-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 560px) {

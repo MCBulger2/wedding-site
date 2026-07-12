@@ -5,6 +5,8 @@ import type {
   Household,
   InvitationDetails,
   InviteLifecycleStatus,
+  PublicSmsSubscriptionRequest,
+  PublicSmsSubscriptionResponse,
   RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequest,
   RsvpUpdate,
@@ -68,6 +70,15 @@ export interface AdminAuthConfigResponse {
 }
 
 export type RsvpRecoveryResponse = RsvpRecoveryAcceptedResponse;
+
+export function createPublicSmsSubscription(
+  payload: PublicSmsSubscriptionRequest,
+): Promise<PublicSmsSubscriptionResponse> {
+  return request<PublicSmsSubscriptionResponse>('/sms-subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
 
 export class ApiError extends Error {
   constructor(

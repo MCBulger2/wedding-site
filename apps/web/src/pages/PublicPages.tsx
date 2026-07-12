@@ -13,6 +13,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ApiError, createPublicSmsSubscription } from '../api.js';
 import { cx, scoped } from '../classNames.js';
 import {
   SmsConsentCheckboxField,
@@ -459,9 +460,10 @@ export function PrivacyPage() {
         <h1>Privacy</h1>
         <div className={scoped(styles, 'policy-copy')}>
           <p>
-            Matt &amp; Alison Wedding uses the contact details you provide to
-            manage RSVPs, share wedding logistics, and help invited guests
-            recover their private RSVP links.
+            Matt &amp; Alison Wedding uses the contact details you provide through
+            an RSVP or the standalone wedding text updates form to manage
+            RSVPs, share wedding logistics, and help guests recover private
+            RSVP links.
           </p>
           <p>
             All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.
@@ -485,8 +487,9 @@ export function TermsPage() {
         <h1>Terms</h1>
         <div className={scoped(styles, 'policy-copy')}>
           <p>
-            Matt &amp; Alison Wedding SMS messages are only for invited-guest
-            wedding logistics, schedule updates, and RSVP recovery.
+            To enroll in Matt &amp; Alison Wedding SMS messages, enter your mobile
+            number and affirmatively agree to receive wedding logistics,
+            schedule update, and RSVP recovery texts.
           </p>
           <p>
             Message frequency varies, typically fewer than 10 messages per
@@ -504,26 +507,63 @@ export function TermsPage() {
   );
 }
 
-export function SmsOptInProofPage() {
-  const [smsConsentAccepted, setSmsConsentAccepted] = useState(false);
+export function SmsUpdatesPage() {
+  const [phone, setPhone] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'retryable_error'>('idle');
+  const [consentError, setConsentError] = useState<string>();
+  const [message, setMessage] = useState<string>();
+
+  async function submitSubscription(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!consentAccepted) {
+      setConsentError('Confirm SMS consent to enable text updates.');
+      return;
+    }
+
+    setConsentError(undefined);
+    setMessage(undefined);
+    setStatus('submitting');
+
+    try {
+      const result = await createPublicSmsSubscription({ phone, consentAccepted: true });
+      setConsentAccepted(false);
+      setStatus('success');
+      setMessage(
+        result.status === 'opted_in'
+          ? 'You’re enrolled for Matt & Alison Wedding text updates.'
+          : 'Your signup was accepted and is pending confirmation.',
+      );
+    } catch (error) {
+      const retryable = error instanceof ApiError && (error.statusCode === 429 || error.statusCode === 503);
+      setStatus(retryable ? 'retryable_error' : 'idle');
+      setMessage(
+        retryable
+          ? 'We couldn’t save your text update signup. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'We couldn’t save your text update signup.',
+      );
+    }
+  }
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'policy-page'))}>
       <section className="lookup-card">
-        <p className="eyebrow">SMS Proof</p>
-        <h1>SMS opt-in proof</h1>
+        <p className="eyebrow">Wedding SMS</p>
+        <h1>Wedding text updates</h1>
         <p className="page-lede">
-          This non-submitting example documents the standalone text preferences
-          offered only to guests with a private Matt &amp; Alison Wedding invitation.
-          SMS consent is independent from submitting or updating an RSVP.
+          Sign up for Matt &amp; Alison Wedding schedule updates, wedding
+          logistics, and RSVP recovery texts. SMS consent is independent from
+          submitting or updating an RSVP.
         </p>
         <p>Operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
       </section>
-      <section className={scoped(styles, 'proof-grid')} aria-label="Standalone SMS preferences example">
+      <section className={scoped(styles, 'sms-updates-grid')} aria-label="Standalone SMS preferences">
         <article className="lookup-card">
           <p className="eyebrow">Text preferences</p>
           <h2>Optional wedding text updates</h2>
-          <div className={scoped(styles, 'proof-form')}>
+          <form className={scoped(styles, 'sms-updates-form')} onSubmit={submitSubscription}>
             <label>
               Mobile phone
               <input
@@ -531,16 +571,25 @@ export function SmsOptInProofPage() {
                 inputMode="tel"
                 maxLength={32}
                 placeholder={smsPhonePlaceholder}
-                defaultValue=""
+                required
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
               />
             </label>
             <SmsConsentCheckboxField
-              checked={smsConsentAccepted}
-              inputId="proof-sms-consent"
-              onChange={setSmsConsentAccepted}
+              checked={consentAccepted}
+              error={consentError}
+              inputId="sms-updates-consent"
+              onChange={(checked) => {
+                setConsentAccepted(checked);
+                if (checked) setConsentError(undefined);
+              }}
             />
-            <p className="form-message">Example only — this page does not submit or enroll a phone number.</p>
-          </div>
+            <button type="submit" disabled={status === 'submitting'}>
+              {status === 'retryable_error' ? 'Try again' : status === 'submitting' ? 'Signing up…' : 'Sign up for text updates'}
+            </button>
+            {message && <p className="form-message" role="status">{message}</p>}
+          </form>
         </article>
       </section>
     </main>
