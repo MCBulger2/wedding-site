@@ -324,7 +324,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect(
     page
@@ -419,7 +421,9 @@ test('homepage details render on mobile', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect
     .poll(() =>
@@ -916,9 +920,16 @@ test('mobile footer links stay aligned across public, RSVP, and admin routes', a
 
   for (const route of ['/', '/rsvp', '/admin']) {
     await page.goto(route);
-    const footerLinks = page.getByRole('contentinfo').getByRole('link');
-    await expect(footerLinks.getByText('Terms')).toBeVisible();
-    await expect(footerLinks.getByText('Privacy')).toBeVisible();
+    const footer = page.getByRole('contentinfo');
+    const footerLinks = footer.getByRole('link', {
+      name: /^(Terms|Privacy|Admin)$/,
+    });
+    await expect(footer).toContainText('Matt & Alison Wedding');
+    await expect(
+      footer.getByRole('link', { name: 'contact@matt-alison.com' }),
+    ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
+    await expect(footer.getByRole('link', { name: 'Terms' })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy' })).toBeVisible();
     const boxes = await footerLinks.evaluateAll((links) =>
       links.map((link) => {
         const rect = link.getBoundingClientRect();
@@ -1014,18 +1025,12 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   );
 });
 
-test('phone recovery requires explicit SMS consent before submitting', async ({
+test('phone recovery submits without SMS enrollment fields', async ({
   page,
 }) => {
-  const recoveryRequests: Array<{
-    contact: string;
-    smsConsentAccepted?: boolean;
-  }> = [];
+  const recoveryRequests: Array<{ contact: string }> = [];
   await page.route('**/api/rsvp/recovery', async (route) => {
-    const payload = route.request().postDataJSON() as {
-      contact: string;
-      smsConsentAccepted?: boolean;
-    };
+    const payload = route.request().postDataJSON() as { contact: string };
     recoveryRequests.push(payload);
     await route.fulfill({
       status: 202,
@@ -1041,23 +1046,7 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
   await page.goto('/rsvp');
   await page.getByRole('button', { name: "Don't have a code?" }).click();
   await page.getByLabel('Email or mobile number').fill('(480) 555-0100');
-  const smsConsentCheckbox = page.getByRole('checkbox');
-  await expect(smsConsentCheckbox).not.toBeChecked();
-  const smsConsentCheckboxBounds = await smsConsentCheckbox.boundingBox();
-  expect(smsConsentCheckboxBounds).not.toBeNull();
-  expect(smsConsentCheckboxBounds!.width).toBeGreaterThanOrEqual(16);
-  expect(smsConsentCheckboxBounds!.height).toBeGreaterThanOrEqual(16);
-  expect(smsConsentCheckboxBounds!.height).toBeLessThanOrEqual(24);
-  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
-  await expect(
-    page.getByText(
-      'Please confirm SMS consent before requesting a texted RSVP link.',
-    ),
-  ).toBeVisible();
-  expect(recoveryRequests).toEqual([]);
-
-  await smsConsentCheckbox.check();
-  await expect(smsConsentCheckbox).toBeChecked();
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   await Promise.all([
     page.waitForResponse('**/api/rsvp/recovery'),
     page.locator('#rsvp-recovery-form').evaluate((form) => {
@@ -1072,12 +1061,7 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
       "If that matches our guest list, we'll send your private RSVP link.",
     ),
   ).toBeVisible();
-  expect(recoveryRequests).toEqual([
-    {
-      contact: '(480) 555-0100',
-      smsConsentAccepted: true,
-    },
-  ]);
+  expect(recoveryRequests).toEqual([{ contact: '(480) 555-0100' }]);
 });
 
 test('privacy, terms, and SMS proof pages render public compliance content', async ({
@@ -1087,7 +1071,7 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
   await expect(
     page.getByText(
-      'SMS opt-in data and consent will not be shared with third parties.',
+      'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
     ),
   ).toBeVisible();
 
@@ -1103,7 +1087,7 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
   ).toBeVisible();
   const proofRsvpCard = page.locator('article').filter({
     has: page.getByRole('heading', {
-      name: 'Save RSVP and text preferences',
+      name: 'Optional wedding text updates',
     }),
   });
   await expect(
@@ -1111,6 +1095,56 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
       /I agree to receive SMS messages from Matt & Alison Wedding/i,
     ),
   ).toBeVisible();
+  await expect(proofRsvpCard.getByRole('checkbox')).not.toBeChecked();
+  await expect(proofRsvpCard.getByRole('button')).toHaveCount(0);
+});
+
+test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {
+  const requests: unknown[] = [];
+  const smsHousehold = { ...household, smsConsent: undefined };
+  await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household: smsHousehold }) });
+  });
+  await page.route('**/api/rsvp/A2B3C4D5E6/sms-preferences', async (route) => {
+    const payload = route.request().postDataJSON();
+    requests.push(payload);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...smsHousehold,
+        smsConsent: payload.enabled
+          ? { status: 'opted_in', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' }
+          : { status: 'opted_out', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' },
+      }),
+    });
+  });
+
+  await page.goto('/rsvp/A2B3C4D5E6/sms-updates');
+  const smsPreferencesMain = page.getByRole('main');
+  await expect(smsPreferencesMain.getByRole('heading', { name: 'Text updates' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('checkbox')).not.toBeChecked();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Terms' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
+  expect(requests).toEqual([]);
+
+  await page.getByRole('checkbox').check();
+  await page.getByLabel('Mobile phone').fill('(480) 555-0100');
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+  ]);
+  await expect(page.getByText('Text updates are active.')).toBeVisible();
+  await expect(smsPreferencesMain.getByText('Active', { exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+
+  await page.getByRole('button', { name: 'Turn off text updates' }).click();
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+    { enabled: false },
+  ]);
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {

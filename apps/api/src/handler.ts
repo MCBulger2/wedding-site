@@ -81,6 +81,7 @@ export async function handleRequest(
     | 'updateHouseholdMember'
     | 'updateInviteLifecycle'
     | 'updateRsvp'
+    | 'updateSmsPreferences'
     | 'removeHouseholdMember'
   >,
   event: Parameters<APIGatewayProxyHandlerV2>[0],
@@ -102,6 +103,18 @@ export async function handleRequest(
     const method = event.requestContext.http.method;
     const path = normalizePath(event.rawPath);
     const body = parseBody(event.body);
+
+    const smsPreferencesMatch = path.match(/^\/rsvp\/([^/]+)\/sms-preferences$/);
+    if (method === 'PUT' && smsPreferencesMatch) {
+      return completeRequest(
+        json(
+          await service.updateSmsPreferences(
+            decodeURIComponent(smsPreferencesMatch[1]),
+            body,
+          ),
+        ),
+      );
+    }
 
     if (method === 'GET' && path.startsWith('/rsvp/')) {
       const inviteCode = decodeURIComponent(path.slice('/rsvp/'.length));
@@ -433,6 +446,10 @@ function buildRequestLogContext(
 }
 
 function resolveRouteName(method: string, path: string): string {
+  if (method === 'PUT' && /^\/rsvp\/[^/]+\/sms-preferences$/.test(path)) {
+    return 'PUT /rsvp/{inviteCode}/sms-preferences';
+  }
+
   if (method === 'GET' && path.startsWith('/rsvp/')) {
     return 'GET /rsvp/{inviteCode}';
   }

@@ -128,7 +128,7 @@ describe('App routes', () => {
     ).not.toBeNull();
     expect(
       screen.getByText(
-        'SMS opt-in data and consent will not be shared with third parties.',
+        'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
       ),
     ).not.toBeNull();
   });
@@ -145,9 +145,8 @@ describe('App routes', () => {
     expect(
       screen.getByRole('heading', { name: 'SMS opt-in proof' }),
     ).not.toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    ).not.toBeNull();
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Send private RSVP link' })).toBeNull();
   });
 });
 
@@ -169,7 +168,7 @@ describe('HouseholdNotificationForm', () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        /SMS delivery stays disabled until this household opts in through the RSVP or recovery form./i,
+        /SMS delivery stays disabled until this household opts in through the standalone text preferences page./i,
       ),
     ).not.toBeNull();
   });

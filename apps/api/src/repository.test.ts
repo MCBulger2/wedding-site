@@ -219,3 +219,180 @@ describe('Recovery rate limit persistence', () => {
     });
   });
 });
+
+describe('SMS preference activation', () => {
+  it('does not activate when the in-memory pending attempt was replaced by opt-out', async () => {
+    const repository = new InMemoryWeddingRepository();
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+    await repository.saveHousehold(householdItem('h1', {
+      smsConsent: { ...pending, status: 'opted_out' },
+    }) as Household);
+
+    const result = await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect(result?.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+  });
+
+  it('uses a conditional Dynamo update for the exact pending attempt', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository).mockResolvedValue({
+      Attributes: householdItem('h1'),
+    });
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+
+    await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      ConditionExpression:
+        'smsConsent.#status = :pendingStatus AND smsConsent.phone = :phone AND smsConsent.consentedAt = :pendingConsentedAt',
+      ExpressionAttributeValues: expect.objectContaining({
+        ':pendingStatus': 'pending_confirmation',
+        ':phone': '+14805550111',
+        ':pendingConsentedAt': '2026-07-11T18:00:00.000Z',
+      }),
+      ReturnValues: 'ALL_NEW',
+    });
+  });
+
+  it('returns the current Dynamo preference when activation loses the race', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const pending = {
+      status: 'pending_confirmation' as const,
+      phone: '+14805550111',
+      source: 'sms_preferences' as const,
+      consentedAt: '2026-07-11T18:00:00.000Z',
+      consentTextVersion: 'twilio-tollfree-v1' as const,
+    };
+    const conditionalFailure = new Error('condition failed');
+    conditionalFailure.name = 'ConditionalCheckFailedException';
+    mockRepositorySend(repository)
+      .mockRejectedValueOnce(conditionalFailure)
+      .mockResolvedValueOnce({
+        Item: householdItem('h1', {
+          smsConsent: { ...pending, status: 'opted_out' },
+        }),
+      });
+
+    const result = await repository.activateSmsPreference({
+      householdId: 'h1',
+      expectedPending: pending,
+      activatedAt: '2026-07-11T18:00:01.000Z',
+    });
+
+    expect(result?.smsConsent?.status).toBe('opted_out');
+  });
+});
+
+describe('SMS preference pending start', () => {
+  const pending = {
+    status: 'pending_confirmation' as const,
+    phone: '+14805550111',
+    source: 'sms_preferences' as const,
+    consentedAt: '2026-07-11T19:00:00.000Z',
+    consentTextVersion: 'twilio-tollfree-v1' as const,
+  };
+
+  it('starts pending in memory when the household snapshot still matches', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('h1') as Household);
+
+    const result = await repository.beginSmsPreference({
+      householdId: 'h1',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      expectedConsent: undefined,
+      pendingConsent: pending,
+    });
+
+    expect(result.started).toBe(true);
+    expect(result.household?.smsConsent).toEqual(pending);
+  });
+
+  it('returns opt-out without starting pending when the in-memory snapshot changed', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('h1', {
+      updatedAt: '2026-07-11T18:59:59.000Z',
+      smsConsent: { ...pending, status: 'opted_out' },
+    }) as Household);
+
+    const result = await repository.beginSmsPreference({
+      householdId: 'h1',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      expectedConsent: undefined,
+      pendingConsent: pending,
+    });
+
+    expect(result.started).toBe(false);
+    expect(result.household?.smsConsent?.status).toBe('opted_out');
+  });
+
+  it('uses the expected household version and consent fingerprint in Dynamo', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const expectedConsent = { ...pending, status: 'opted_out' as const };
+    const send = mockRepositorySend(repository).mockResolvedValue({
+      Attributes: householdItem('h1', { smsConsent: pending }),
+    });
+
+    await repository.beginSmsPreference({
+      householdId: 'h1',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      expectedConsent,
+      pendingConsent: pending,
+    });
+
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      ConditionExpression:
+        'updatedAt = :expectedUpdatedAt AND smsConsent.#status = :expectedStatus AND smsConsent.phone = :expectedPhone AND smsConsent.consentedAt = :expectedConsentedAt',
+      ExpressionAttributeValues: expect.objectContaining({
+        ':expectedUpdatedAt': '2026-07-04T12:00:00.000Z',
+        ':expectedStatus': 'opted_out',
+        ':expectedPhone': '+14805550111',
+        ':expectedConsentedAt': pending.consentedAt,
+      }),
+      ReturnValues: 'ALL_NEW',
+    });
+  });
+
+  it('returns the current Dynamo household when pending start loses the race', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const conditionalFailure = new Error('condition failed');
+    conditionalFailure.name = 'ConditionalCheckFailedException';
+    mockRepositorySend(repository)
+      .mockRejectedValueOnce(conditionalFailure)
+      .mockResolvedValueOnce({
+        Item: householdItem('h1', {
+          smsConsent: { ...pending, status: 'opted_out' },
+        }),
+      });
+
+    const result = await repository.beginSmsPreference({
+      householdId: 'h1',
+      expectedUpdatedAt: '2026-07-04T12:00:00.000Z',
+      expectedConsent: undefined,
+      pendingConsent: pending,
+    });
+
+    expect(result.started).toBe(false);
+    expect(result.household?.smsConsent?.status).toBe('opted_out');
+  });
+});

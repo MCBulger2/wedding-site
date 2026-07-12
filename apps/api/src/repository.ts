@@ -6,7 +6,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { Household, StoredRsvp } from '@matt-alison-wedding/shared';
+import type { Household, SmsConsent, StoredRsvp } from '@matt-alison-wedding/shared';
 
 export interface InviteCodeLookup {
   inviteCodeHash: string;
@@ -30,6 +30,24 @@ export interface RecoveryRateLimitRecord {
   updatedAt: string;
 }
 
+export interface SmsPreferenceActivation {
+  householdId: string;
+  expectedPending: SmsConsent;
+  activatedAt: string;
+}
+
+export interface SmsPreferencePendingStart {
+  householdId: string;
+  expectedUpdatedAt: string;
+  expectedConsent?: SmsConsent;
+  pendingConsent: SmsConsent;
+}
+
+export interface SmsPreferencePendingStartResult {
+  started: boolean;
+  household?: Household;
+}
+
 export interface WeddingRepository {
   getHousehold(householdId: string): Promise<Household | undefined>;
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
@@ -39,6 +57,8 @@ export interface WeddingRepository {
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
   recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number>;
+  beginSmsPreference(input: SmsPreferencePendingStart): Promise<SmsPreferencePendingStartResult>;
+  activateSmsPreference(input: SmsPreferenceActivation): Promise<Household | undefined>;
   saveHousehold(household: Household): Promise<void>;
   saveRsvpUpdate(household: Household, rsvp: StoredRsvp): Promise<void>;
   saveInviteCodeLookup(lookup: InviteCodeLookup): Promise<void>;
@@ -168,6 +188,98 @@ export class DynamoWeddingRepository implements WeddingRepository {
   async saveHousehold(household: Household): Promise<void> {
     const existingRsvp = await this.getRsvp(household.householdId);
     await this.putHouseholdItem(household, existingRsvp);
+  }
+
+  async activateSmsPreference(
+    input: SmsPreferenceActivation,
+  ): Promise<Household | undefined> {
+    const activatedConsent: SmsConsent = {
+      ...input.expectedPending,
+      status: 'opted_in',
+      consentedAt: input.activatedAt,
+    };
+    try {
+      const result = await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: householdKey(input.householdId),
+          UpdateExpression: 'SET smsConsent = :activatedConsent, updatedAt = :activatedAt',
+          ConditionExpression:
+            'smsConsent.#status = :pendingStatus AND smsConsent.phone = :phone AND smsConsent.consentedAt = :pendingConsentedAt',
+          ExpressionAttributeNames: {
+            '#status': 'status',
+          },
+          ExpressionAttributeValues: {
+            ':activatedConsent': activatedConsent,
+            ':activatedAt': input.activatedAt,
+            ':pendingStatus': 'pending_confirmation',
+            ':phone': input.expectedPending.phone,
+            ':pendingConsentedAt': input.expectedPending.consentedAt,
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      return result.Attributes
+        ? fromHouseholdItem(result.Attributes as StoredHouseholdItem)
+        : undefined;
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+      return this.getHousehold(input.householdId);
+    }
+  }
+
+  async beginSmsPreference(
+    input: SmsPreferencePendingStart,
+  ): Promise<SmsPreferencePendingStartResult> {
+    const hasExpectedConsent = Boolean(input.expectedConsent);
+    const consentCondition = hasExpectedConsent
+      ? 'smsConsent.#status = :expectedStatus AND smsConsent.phone = :expectedPhone AND smsConsent.consentedAt = :expectedConsentedAt'
+      : 'attribute_not_exists(smsConsent)';
+    const expectedConsentValues = input.expectedConsent
+      ? {
+          ':expectedStatus': input.expectedConsent.status,
+          ':expectedPhone': input.expectedConsent.phone,
+          ':expectedConsentedAt': input.expectedConsent.consentedAt,
+        }
+      : {};
+    try {
+      const result = await this.client.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: householdKey(input.householdId),
+          UpdateExpression:
+            'SET phone = :phone, smsConsent = :pendingConsent, updatedAt = :pendingAt',
+          ConditionExpression: `updatedAt = :expectedUpdatedAt AND ${consentCondition}`,
+          ExpressionAttributeNames: hasExpectedConsent
+            ? { '#status': 'status' }
+            : undefined,
+          ExpressionAttributeValues: {
+            ':phone': input.pendingConsent.phone,
+            ':pendingConsent': input.pendingConsent,
+            ':pendingAt': input.pendingConsent.consentedAt,
+            ':expectedUpdatedAt': input.expectedUpdatedAt,
+            ...expectedConsentValues,
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      return {
+        started: true,
+        household: result.Attributes
+          ? fromHouseholdItem(result.Attributes as StoredHouseholdItem)
+          : undefined,
+      };
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+      return {
+        started: false,
+        household: await this.getHousehold(input.householdId),
+      };
+    }
   }
 
   async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
@@ -326,6 +438,56 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     });
   }
 
+  async activateSmsPreference(
+    input: SmsPreferenceActivation,
+  ): Promise<Household | undefined> {
+    const current = this.households.get(input.householdId);
+    if (!current) {
+      return undefined;
+    }
+    if (
+      current.smsConsent?.status !== 'pending_confirmation' ||
+      current.smsConsent.phone !== input.expectedPending.phone ||
+      current.smsConsent.consentedAt !== input.expectedPending.consentedAt
+    ) {
+      return this.getHousehold(input.householdId);
+    }
+    const activated: Household = {
+      ...current,
+      smsConsent: {
+        ...input.expectedPending,
+        status: 'opted_in',
+        consentedAt: input.activatedAt,
+      },
+      updatedAt: input.activatedAt,
+    };
+    await this.saveHousehold(activated);
+    return this.getHousehold(input.householdId);
+  }
+
+  async beginSmsPreference(
+    input: SmsPreferencePendingStart,
+  ): Promise<SmsPreferencePendingStartResult> {
+    const current = this.households.get(input.householdId);
+    if (!current) {
+      return { started: false };
+    }
+    if (
+      current.updatedAt !== input.expectedUpdatedAt ||
+      !smsConsentMatches(current.smsConsent, input.expectedConsent)
+    ) {
+      return { started: false, household: current };
+    }
+    const pending: Household = {
+      ...current,
+      phone: input.pendingConsent.phone,
+      smsConsent: input.pendingConsent,
+      updatedAt: input.pendingConsent.consentedAt,
+    };
+    this.households.set(input.householdId, pending);
+    return { started: true, household: pending };
+  }
+
   async recordRecoveryRateLimitAttempt(record: RecoveryRateLimitRecord): Promise<number> {
     const mapKey = `${record.scope}:${record.keyHash}:${record.windowStartsAt}`;
     const nextAttempts = (this.recoveryRateLimits.get(mapKey)?.attempts ?? 0) + 1;
@@ -413,4 +575,22 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function isConditionalCheckFailed(error: unknown): boolean {
+  return error instanceof Error && error.name === 'ConditionalCheckFailedException';
+}
+
+function smsConsentMatches(
+  current: SmsConsent | undefined,
+  expected: SmsConsent | undefined,
+): boolean {
+  if (!current || !expected) {
+    return current === expected;
+  }
+  return (
+    current.status === expected.status &&
+    current.phone === expected.phone &&
+    current.consentedAt === expected.consentedAt
+  );
 }

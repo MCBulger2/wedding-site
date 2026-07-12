@@ -340,17 +340,31 @@ export class WeddingSiteStack extends Stack {
       apiHandler,
     );
 
-    api.addRoutes({
+    const rsvpRoutes = api.addRoutes({
       path: '/api/rsvp/{inviteCode}',
       methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
       integration: apiIntegration,
     });
 
-    api.addRoutes({
+    const smsPreferencesRoutes = api.addRoutes({
+      path: '/api/rsvp/{inviteCode}/sms-preferences',
+      methods: [apigwv2.HttpMethod.PUT],
+      integration: apiIntegration,
+    });
+
+    const recoveryRoutes = api.addRoutes({
       path: '/api/rsvp/recovery',
       methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration,
     });
+
+    for (const route of [
+      ...rsvpRoutes,
+      ...smsPreferencesRoutes,
+      ...recoveryRoutes,
+    ]) {
+      defaultApiStage.node.addDependency(route);
+    }
 
     defaultApiStage.defaultRouteSettings = {
       throttlingBurstLimit: 100,
@@ -363,6 +377,10 @@ export class WeddingSiteStack extends Stack {
         ThrottlingRateLimit: 10,
       },
       'PUT /api/rsvp/{inviteCode}': {
+        ThrottlingBurstLimit: 10,
+        ThrottlingRateLimit: 5,
+      },
+      'PUT /api/rsvp/{inviteCode}/sms-preferences': {
         ThrottlingBurstLimit: 10,
         ThrottlingRateLimit: 5,
       },
