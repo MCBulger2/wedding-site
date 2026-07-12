@@ -40,7 +40,9 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 ### Public Site
 
-The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, hotel block placeholders, registry links, story pages, legal pages, and contact information. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`.
+The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, and contact information. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
+
+The venue map uses an OpenStreetMap embed without third-party marker text and renders the venue marker in the application so its accessible label and presentation remain under the site's control.
 
 Frontend image delivery is optimized through generated responsive assets under `apps/web/public/images` and shared asset manifests under `apps/web/src/generated`.
 
@@ -53,7 +55,9 @@ Guests can:
 - submit or revise their RSVP,
 - and request recovery of their RSVP link through `/rsvp/recovery`.
 
-The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, SMS consent, and stored RSVP state.
+The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
+
+SMS enrollment is independent from RSVP submission and recovery. A guest uses `/rsvp/{inviteCode}/sms-updates`; enabling stores `pending_confirmation`, sends the required Twilio confirmation, and moves to `opted_in` only after Twilio returns HTTP 2xx. Provider failure leaves the preference pending and retryable. Disabling immediately records `opted_out` without clearing the household phone. Only an `opted_in` record whose phone matches the household's current phone authorizes recovery or admin-authored application SMS. Email recovery and SES behavior are unchanged.
 
 The intended security model is:
 
@@ -174,6 +178,7 @@ Current API routes implemented by `apps/api/src/handler.ts`:
 
 - `GET /api/rsvp/{inviteCode}`
 - `PUT /api/rsvp/{inviteCode}`
+- `PUT /api/rsvp/{inviteCode}/sms-preferences`
 - `POST /api/rsvp/recovery`
 
 ### Admin routes

@@ -12,6 +12,7 @@ import {
   SMS_CONSENT_TEXT_VERSION,
   RsvpRecoveryAcceptedResponseSchema,
   RsvpRecoveryRequestSchema,
+  SmsPreferencesRequestSchema,
   RsvpUpdateSchema,
   SendInvitationEmailResponseSchema,
   SendHouseholdNotificationInputSchema,
@@ -71,7 +72,7 @@ describe('RsvpUpdateSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts RSVP payloads with SMS consent fields', () => {
+  it('removes SMS preference fields from RSVP payloads', () => {
     const result = RsvpUpdateSchema.safeParse({
       members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
       plusOnes: [],
@@ -80,17 +81,8 @@ describe('RsvpUpdateSchema', () => {
     });
 
     expect(result.success).toBe(true);
-  });
-
-  it('requires a phone number when RSVP SMS consent is checked', () => {
-    const result = RsvpUpdateSchema.safeParse({
-      members: [{ memberId: 'm1', attending: true, mealChoice: 'buffet' }],
-      plusOnes: [],
-      smsConsentAccepted: true,
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['smsPhone']);
+    expect(result.data).not.toHaveProperty('smsPhone');
+    expect(result.data).not.toHaveProperty('smsConsentAccepted');
   });
 });
 
@@ -181,19 +173,36 @@ describe('RsvpRecovery schemas', () => {
     ).toBe(true);
   });
 
-  it('accepts phone recovery requests only when SMS consent is checked', () => {
+  it('accepts phone recovery without enrollment fields', () => {
     expect(
       RsvpRecoveryRequestSchema.safeParse({
         contact: '(480) 555-0100',
         smsConsentAccepted: true,
       }).success,
     ).toBe(true);
+    expect(
+      RsvpRecoveryRequestSchema.parse({
+        contact: '(480) 555-0100',
+        smsConsentAccepted: true,
+      }),
+    ).toEqual({ contact: '(480) 555-0100' });
+  });
+});
 
-    const rejected = RsvpRecoveryRequestSchema.safeParse({
-      contact: '(480) 555-0100',
-    });
-    expect(rejected.success).toBe(false);
-    expect(rejected.error?.issues[0]?.path).toEqual(['smsConsentAccepted']);
+describe('SmsPreferencesRequestSchema', () => {
+  it('requires a phone only when enabling SMS', () => {
+    expect(
+      SmsPreferencesRequestSchema.safeParse({
+        enabled: true,
+        phone: '(480) 555-0100',
+      }).success,
+    ).toBe(true);
+    expect(
+      SmsPreferencesRequestSchema.safeParse({ enabled: true }).success,
+    ).toBe(false);
+    expect(
+      SmsPreferencesRequestSchema.safeParse({ enabled: false }).success,
+    ).toBe(true);
   });
 });
 
@@ -227,6 +236,21 @@ describe('SMS consent schema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  it.each(['pending_confirmation', 'opted_out'] as const)(
+    'accepts %s SMS preference state',
+    (status) => {
+      const result = HouseholdSchema.shape.smsConsent.safeParse({
+        status,
+        phone: '+14805550100',
+        source: 'sms_preferences',
+        consentedAt: '2026-07-03T20:00:00.000Z',
+        consentTextVersion: SMS_CONSENT_TEXT_VERSION,
+      });
+
+      expect(result.success).toBe(true);
+    },
+  );
 });
 
 describe('invitation admin schemas', () => {
@@ -298,13 +322,31 @@ describe('structured public planning data', () => {
     }
   });
 
-  it('uses a parseable OpenStreetMap embed URL with a venue marker', () => {
+  it('uses a parseable OpenStreetMap embed URL without third-party marker copy', () => {
     const embedUrl = new URL(siteContent.venueMapEmbedUrl);
 
     expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
     expect(embedUrl.hostname).toBe('www.openstreetmap.org');
     expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
-    expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
+    expect(embedUrl.searchParams.has('marker')).toBe(false);
+  });
+
+  it('does not publish unfinished hotel, story, or registry placeholder copy', () => {
+    expect(siteContent.hotels).toEqual([]);
+    expect(siteContent.ourStory.intro).not.toMatch(/placeholder|temporary/i);
+    expect(
+      siteContent.ourStory.sections.flatMap((section) =>
+        section.image ? [section.image.alt] : [],
+      ),
+    ).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/placeholder|temporary/i)]),
+    );
+    expect(siteContent.registry.intro).not.toMatch(
+      /shared here|finalized|coming soon/i,
+    );
+    expect(siteContent.registry.note).not.toMatch(
+      /will link|selected registries/i,
+    );
   });
 
   it('validates hotel block data', () => {

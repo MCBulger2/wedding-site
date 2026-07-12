@@ -300,6 +300,27 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     'src',
     /openstreetmap\.org\/export\/embed\.html/,
   );
+  await expect(page.getByTitle('Superstition Manor map')).not.toHaveAttribute(
+    'src',
+    /[?&]marker=/,
+  );
+  await expect(
+    page.getByRole('img', { name: 'Superstition Manor location' }),
+  ).toBeVisible();
+  const markerPosition = await page
+    .getByRole('img', { name: 'Superstition Manor location' })
+    .evaluate((marker) => {
+      const frame = marker.parentElement;
+      const styles = getComputedStyle(marker);
+      return {
+        leftPercent:
+          (parseFloat(styles.left) / (frame?.clientWidth ?? 1)) * 100,
+        topPercent:
+          (parseFloat(styles.top) / (frame?.clientHeight ?? 1)) * 100,
+      };
+    });
+  expect(markerPosition.leftPercent).toBeCloseTo(56.9, 0);
+  expect(markerPosition.topPercent).toBeCloseTo(53.2, 0);
   await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
     'href',
     /google\.com\/maps/,
@@ -309,8 +330,8 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Where to stay' }),
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'TBD Hotel' })).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.getByText(/TBD Hotel|123 TBD|MATTALISON2027/)).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
@@ -324,7 +345,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect(
     page
@@ -348,14 +371,13 @@ test('dark mode public CTA links meet text contrast requirements', async ({
   for (const name of [
     'Find your RSVP',
     'Open map',
-    'Book hotel',
     'View registry',
   ]) {
     await expectMinimumContrastRatio(page.getByRole('link', { name }), 4.5);
   }
 });
 
-test('light mode travel and hotel details meet text contrast requirements', async ({
+test('light mode travel details meet text contrast requirements', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -366,12 +388,7 @@ test('light mode travel and hotel details meet text contrast requirements', asyn
 
   for (const text of [
     'Phoenix Sky Harbor International Airport is the closest major airport.',
-    '123 TBD, Mesa, AZ 85251',
-    'MATTALISON2027',
-    'November 30, 2026',
-    'Wedding block rate available while rooms last.',
-    'Ten minutes from the venue by rideshare.',
-    '480-555-0127',
+    'Rideshare is the easiest option between Mesa hotels and the venue.',
   ]) {
     await expectMinimumContrastRatio(page.getByText(text), 4.5);
   }
@@ -399,6 +416,12 @@ test('homepage details render on mobile', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByTitle('Superstition Manor map')).toBeVisible();
   await expect(
+    page.getByRole('img', { name: 'Superstition Manor location' }),
+  ).toBeVisible();
+  const mobileMapBounds = await page.locator('.venue-map-frame').boundingBox();
+  expect(mobileMapBounds).not.toBeNull();
+  expect(mobileMapBounds!.height).toBeGreaterThanOrEqual(260);
+  await expect(
     page.getByText('Phoenix Sky Harbor International Airport'),
   ).toBeVisible();
   await expect(
@@ -419,7 +442,9 @@ test('homepage details render on mobile', async ({ page }) => {
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'contact@matt-alison.com' }),
+    page
+      .getByRole('main')
+      .getByRole('link', { name: 'contact@matt-alison.com' }),
   ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
   await expect
     .poll(() =>
@@ -431,6 +456,45 @@ test('homepage details render on mobile', async ({ page }) => {
     .toEqual({ clientWidth: 390, scrollWidth: 390 });
 });
 
+test('mobile header keeps all primary links on one compact navigation row', async ({
+  page,
+}) => {
+  for (const width of [360, 375, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+
+    const layout = await page.evaluate(() => {
+      const header = document.querySelector('header');
+      const links = Array.from(
+        document.querySelectorAll('nav[aria-label="Primary navigation"] a'),
+      );
+      const themeToggle = document.querySelector(
+        'header button[aria-label^="Switch to"]',
+      );
+      return {
+        headerHeight: Math.round(header?.getBoundingClientRect().height ?? 0),
+        linkHeights: links.map((link) =>
+          Math.round(link.getBoundingClientRect().height),
+        ),
+        linkTops: links.map((link) =>
+          Math.round(link.getBoundingClientRect().top),
+        ),
+        themeHeight: Math.round(
+          themeToggle?.getBoundingClientRect().height ?? 0,
+        ),
+      };
+    });
+
+    expect(layout.linkTops).toHaveLength(4);
+    expect(
+      Math.max(...layout.linkTops) - Math.min(...layout.linkTops),
+    ).toBeLessThanOrEqual(2);
+    expect(Math.min(...layout.linkHeights)).toBeGreaterThanOrEqual(44);
+    expect(layout.themeHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.headerHeight).toBeLessThanOrEqual(124);
+  }
+});
+
 test('our story page renders editorial sections and calls to action', async ({
   page,
 }) => {
@@ -440,7 +504,7 @@ test('our story page renders editorial sections and calls to action', async ({
     page.getByRole('heading', { name: 'Our Story' }),
   ).toBeVisible();
   await expect(
-    page.getByText('A few placeholder notes about who we are'),
+    page.getByText('A little about the moments and everyday joys that brought us here.'),
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
@@ -544,6 +608,106 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
       })),
     )
     .toEqual({ clientWidth: 390, scrollWidth: 390 });
+});
+
+test('cross-page details navigation lands below the sticky header', async ({
+  page,
+}) => {
+  await page.goto('/our-story');
+  await page.getByRole('link', { name: 'Back to wedding details' }).click();
+  await expect(page).toHaveURL(/\/#details$/);
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const details = document.querySelector('#details');
+        const header = document.querySelector('header');
+        if (!details || !header) {
+          return false;
+        }
+
+        const detailsTop = Math.round(details.getBoundingClientRect().top);
+        const headerBottom = Math.round(header.getBoundingClientRect().bottom);
+        return detailsTop >= headerBottom && detailsTop - headerBottom <= 32;
+      }),
+    )
+    .toBe(true);
+});
+
+test('history navigation to details stays aligned after the correction window', async ({
+  page,
+}) => {
+  const detailsOffset = () =>
+    page.evaluate(() => {
+      const details = document.querySelector('#details');
+      const header = document.querySelector('header');
+      if (!details || !header) {
+        return undefined;
+      }
+
+      return Math.round(
+        details.getBoundingClientRect().top -
+          header.getBoundingClientRect().bottom,
+      );
+    });
+
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+  await page.locator('#details').evaluate((details) =>
+    details.scrollIntoView({ block: 'start' }),
+  );
+  await page.evaluate(() => window.scrollBy(0, 650));
+  await page
+    .getByRole('navigation', { name: 'Primary navigation' })
+    .getByRole('link', { name: 'Our Story' })
+    .click();
+  await expect(page).toHaveURL(/\/our-story$/);
+  await page.getByRole('link', { name: 'Back to wedding details' }).click();
+  await expect(page).toHaveURL(/\/#details$/);
+
+  await expect
+    .poll(async () => {
+      const offset = await detailsOffset();
+      return offset !== undefined && offset >= 0 && offset <= 32;
+    })
+    .toBe(true);
+  await page.waitForTimeout(550);
+  const settledOffset = await detailsOffset();
+  expect(settledOffset).toBeGreaterThanOrEqual(0);
+  expect(settledOffset).toBeLessThanOrEqual(32);
+});
+
+test('cross-page details navigation preserves user scrolling during correction', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/our-story');
+  await page.getByRole('link', { name: 'Back to wedding details' }).click();
+  await expect(page).toHaveURL(/\/#details$/);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const details = document.querySelector('#details');
+        const header = document.querySelector('header');
+        if (!details || !header) {
+          return false;
+        }
+        const offset =
+          details.getBoundingClientRect().top -
+          header.getBoundingClientRect().bottom;
+        return offset >= 0 && offset <= 32;
+      }),
+    )
+    .toBe(true);
+  await page.mouse.wheel(0, 700);
+  await expect
+    .poll(() => page.evaluate(() => Math.round(window.scrollY)))
+    .toBeGreaterThan(2000);
+  await page.waitForTimeout(550);
+
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(
+    2000,
+  );
 });
 
 test('homepage map link opens Apple Maps on Apple devices', async ({
@@ -823,7 +987,14 @@ test('registry page renders configured links', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
-  await expect(page.getByText('Your presence is the best gift.')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Your presence at our celebration is the greatest gift. If you would like to contribute, our honeymoon and future-home funds are available below.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Both funds are hosted securely through Joy.'),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Honeymoon Fund' }),
   ).toBeVisible();
@@ -916,9 +1087,16 @@ test('mobile footer links stay aligned across public, RSVP, and admin routes', a
 
   for (const route of ['/', '/rsvp', '/admin']) {
     await page.goto(route);
-    const footerLinks = page.getByRole('contentinfo').getByRole('link');
-    await expect(footerLinks.getByText('Terms')).toBeVisible();
-    await expect(footerLinks.getByText('Privacy')).toBeVisible();
+    const footer = page.getByRole('contentinfo');
+    const footerLinks = footer.getByRole('link', {
+      name: /^(Terms|Privacy|Admin)$/,
+    });
+    await expect(footer).toContainText('Matt & Alison Wedding');
+    await expect(
+      footer.getByRole('link', { name: 'contact@matt-alison.com' }),
+    ).toHaveAttribute('href', 'mailto:contact@matt-alison.com');
+    await expect(footer.getByRole('link', { name: 'Terms' })).toBeVisible();
+    await expect(footer.getByRole('link', { name: 'Privacy' })).toBeVisible();
     const boxes = await footerLinks.evaluateAll((links) =>
       links.map((link) => {
         const rect = link.getBoundingClientRect();
@@ -981,21 +1159,25 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
 
   const lookupOrder = await page.locator('.rsvp-lookup-card').evaluate((card) => {
     const panel = card.querySelector('.rsvp-lookup-panel');
-    const guide = card.querySelector('.rsvp-lookup-guide');
+    const heading = card.querySelector('h1');
+    const steps = card.querySelector('ol');
     const codeInput = card.querySelector('#invite-code');
     const cardBox = card.getBoundingClientRect();
     const panelBox = panel?.getBoundingClientRect();
-    const guideBox = guide?.getBoundingClientRect();
+    const headingBox = heading?.getBoundingClientRect();
+    const stepsBox = steps?.getBoundingClientRect();
     const codeBox = codeInput?.getBoundingClientRect();
 
     return {
       codeTop: Math.round((codeBox?.top ?? 0) - cardBox.top),
-      guideTop: Math.round((guideBox?.top ?? 0) - cardBox.top),
+      headingTop: Math.round((headingBox?.top ?? 0) - cardBox.top),
       panelTop: Math.round((panelBox?.top ?? 0) - cardBox.top),
+      stepsTop: Math.round((stepsBox?.top ?? 0) - cardBox.top),
     };
   });
-  expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.guideTop);
-  expect(lookupOrder.codeTop).toBeLessThan(280);
+  expect(lookupOrder.headingTop).toBeLessThan(lookupOrder.panelTop);
+  expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.stepsTop);
+  expect(lookupOrder.headingTop).toBeLessThan(180);
 
   await page.getByRole('button', { name: "Don't have a code?" }).click();
   await expect(page.getByLabel('Email or mobile number')).toBeVisible();
@@ -1014,18 +1196,12 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   );
 });
 
-test('phone recovery requires explicit SMS consent before submitting', async ({
+test('phone recovery submits without SMS enrollment fields', async ({
   page,
 }) => {
-  const recoveryRequests: Array<{
-    contact: string;
-    smsConsentAccepted?: boolean;
-  }> = [];
+  const recoveryRequests: Array<{ contact: string }> = [];
   await page.route('**/api/rsvp/recovery', async (route) => {
-    const payload = route.request().postDataJSON() as {
-      contact: string;
-      smsConsentAccepted?: boolean;
-    };
+    const payload = route.request().postDataJSON() as { contact: string };
     recoveryRequests.push(payload);
     await route.fulfill({
       status: 202,
@@ -1041,23 +1217,7 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
   await page.goto('/rsvp');
   await page.getByRole('button', { name: "Don't have a code?" }).click();
   await page.getByLabel('Email or mobile number').fill('(480) 555-0100');
-  const smsConsentCheckbox = page.getByRole('checkbox');
-  await expect(smsConsentCheckbox).not.toBeChecked();
-  const smsConsentCheckboxBounds = await smsConsentCheckbox.boundingBox();
-  expect(smsConsentCheckboxBounds).not.toBeNull();
-  expect(smsConsentCheckboxBounds!.width).toBeGreaterThanOrEqual(16);
-  expect(smsConsentCheckboxBounds!.height).toBeGreaterThanOrEqual(16);
-  expect(smsConsentCheckboxBounds!.height).toBeLessThanOrEqual(24);
-  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
-  await expect(
-    page.getByText(
-      'Please confirm SMS consent before requesting a texted RSVP link.',
-    ),
-  ).toBeVisible();
-  expect(recoveryRequests).toEqual([]);
-
-  await smsConsentCheckbox.check();
-  await expect(smsConsentCheckbox).toBeChecked();
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   await Promise.all([
     page.waitForResponse('**/api/rsvp/recovery'),
     page.locator('#rsvp-recovery-form').evaluate((form) => {
@@ -1072,12 +1232,7 @@ test('phone recovery requires explicit SMS consent before submitting', async ({
       "If that matches our guest list, we'll send your private RSVP link.",
     ),
   ).toBeVisible();
-  expect(recoveryRequests).toEqual([
-    {
-      contact: '(480) 555-0100',
-      smsConsentAccepted: true,
-    },
-  ]);
+  expect(recoveryRequests).toEqual([{ contact: '(480) 555-0100' }]);
 });
 
 test('privacy, terms, and SMS proof pages render public compliance content', async ({
@@ -1087,7 +1242,7 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
   await expect(
     page.getByText(
-      'SMS opt-in data and consent will not be shared with third parties.',
+      'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
     ),
   ).toBeVisible();
 
@@ -1103,7 +1258,7 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
   ).toBeVisible();
   const proofRsvpCard = page.locator('article').filter({
     has: page.getByRole('heading', {
-      name: 'Save RSVP and text preferences',
+      name: 'Optional wedding text updates',
     }),
   });
   await expect(
@@ -1111,6 +1266,56 @@ test('privacy, terms, and SMS proof pages render public compliance content', asy
       /I agree to receive SMS messages from Matt & Alison Wedding/i,
     ),
   ).toBeVisible();
+  await expect(proofRsvpCard.getByRole('checkbox')).not.toBeChecked();
+  await expect(proofRsvpCard.getByRole('button')).toHaveCount(0);
+});
+
+test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {
+  const requests: unknown[] = [];
+  const smsHousehold = { ...household, smsConsent: undefined };
+  await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household: smsHousehold }) });
+  });
+  await page.route('**/api/rsvp/A2B3C4D5E6/sms-preferences', async (route) => {
+    const payload = route.request().postDataJSON();
+    requests.push(payload);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...smsHousehold,
+        smsConsent: payload.enabled
+          ? { status: 'opted_in', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' }
+          : { status: 'opted_out', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' },
+      }),
+    });
+  });
+
+  await page.goto('/rsvp/A2B3C4D5E6/sms-updates');
+  const smsPreferencesMain = page.getByRole('main');
+  await expect(smsPreferencesMain.getByRole('heading', { name: 'Text updates' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('checkbox')).not.toBeChecked();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Terms' })).toBeVisible();
+  await expect(smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
+  expect(requests).toEqual([]);
+
+  await page.getByRole('checkbox').check();
+  await page.getByLabel('Mobile phone').fill('(480) 555-0100');
+  await page.getByRole('button', { name: 'Enable text updates' }).click();
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+  ]);
+  await expect(page.getByText('Text updates are active.')).toBeVisible();
+  await expect(smsPreferencesMain.getByText('Active', { exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+
+  await page.getByRole('button', { name: 'Turn off text updates' }).click();
+  await expect.poll(() => requests).toEqual([
+    { enabled: true, phone: '(480) 555-0100' },
+    { enabled: false },
+  ]);
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
@@ -1141,6 +1346,42 @@ test('admin route shows a minimal sign-in entry point', async ({ page }) => {
     page.getByText('Manage RSVPs, households, and invitations.'),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+});
+
+test('admin sign-in stacks into one non-overlapping column on mobile', async ({
+  page,
+}) => {
+  await page.route('**/api/admin/auth/config', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(adminAuthConfig),
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/admin');
+
+  await expect(
+    page.getByRole('heading', { name: 'Admin sign in' }),
+  ).toBeVisible();
+  const layout = await page.evaluate(() => {
+    const intro = document.querySelector('.admin-login-intro');
+    const card = document.querySelector('.admin-login-card');
+    const introBox = intro?.getBoundingClientRect();
+    const cardBox = card?.getBoundingClientRect();
+    return {
+      cardLeft: Math.round(cardBox?.left ?? -1),
+      cardTop: Math.round(cardBox?.top ?? -1),
+      cardWidth: Math.round(cardBox?.width ?? -1),
+      introBottom: Math.round(introBox?.bottom ?? -1),
+      introLeft: Math.round(introBox?.left ?? -1),
+      introWidth: Math.round(introBox?.width ?? -1),
+    };
+  });
+
+  expect(layout.cardTop).toBeGreaterThanOrEqual(layout.introBottom + 20);
+  expect(Math.abs(layout.cardLeft - layout.introLeft)).toBeLessThanOrEqual(1);
+  expect(Math.abs(layout.cardWidth - layout.introWidth)).toBeLessThanOrEqual(1);
 });
 
 test('guest can look up an invite code and submit an RSVP', async ({

@@ -31,6 +31,9 @@ export function HomePage() {
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
   const venueMapHref = getNativeMapUrl();
+  const publicHotels = siteContent.hotels.filter(
+    (hotel) => hotel.publiclyShareable,
+  );
 
   return (
     <main>
@@ -113,6 +116,13 @@ export function HomePage() {
               loading="lazy"
               referrerPolicy="no-referrer"
             />
+            <span
+              className={scoped(styles, 'venue-map-marker')}
+              role="img"
+              aria-label={`${siteContent.venueName} location`}
+            >
+              <MapPin aria-hidden="true" />
+            </span>
           </div>
           <div
             className={cx('hero-actions', scoped(styles, 'compact-actions'))}
@@ -143,6 +153,8 @@ export function HomePage() {
         className={cx(
           scoped(styles, 'section-grid'),
           scoped(styles, 'travel-section'),
+          publicHotels.length === 0 &&
+            scoped(styles, 'travel-section-without-hotels'),
         )}
       >
         <div>
@@ -157,13 +169,12 @@ export function HomePage() {
             ))}
           </ul>
         </div>
-        <div>
-          <p className="eyebrow">Hotel block</p>
-          <h2>Where to stay</h2>
-          <div className={scoped(styles, 'hotel-list')}>
-            {siteContent.hotels
-              .filter((hotel) => hotel.publiclyShareable)
-              .map((hotel) => (
+        {publicHotels.length > 0 && (
+          <div>
+            <p className="eyebrow">Hotel block</p>
+            <h2>Where to stay</h2>
+            <div className={scoped(styles, 'hotel-list')}>
+              {publicHotels.map((hotel) => (
                 <article
                   key={hotel.name}
                   className={scoped(styles, 'hotel-card')}
@@ -216,8 +227,9 @@ export function HomePage() {
                   </div>
                 </article>
               ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section id="registry" className={scoped(styles, 'registry-section')}>
@@ -464,12 +476,13 @@ export function PrivacyPage() {
             recover their private RSVP links.
           </p>
           <p>
-            SMS opt-in data and consent will not be shared with third parties.
+            All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.
           </p>
           <p>
             We do not sell guest information, and we keep invitation links and
             household details private to the invited household.
           </p>
+          <p>Matt &amp; Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
         </div>
       </section>
     </main>
@@ -496,6 +509,7 @@ export function TermsPage() {
             Email delivery and private RSVP links remain available whether or
             not you choose SMS updates.
           </p>
+          <p>Matt &amp; Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
         </div>
       </section>
     </main>
@@ -503,11 +517,7 @@ export function TermsPage() {
 }
 
 export function SmsOptInProofPage() {
-  const [rsvpSmsPhone, setRsvpSmsPhone] = useState('');
-  const [rsvpSmsConsentAccepted, setRsvpSmsConsentAccepted] = useState(false);
-  const [recoveryContact, setRecoveryContact] = useState(smsPhonePlaceholder);
-  const [recoverySmsConsentAccepted, setRecoverySmsConsentAccepted] =
-    useState(false);
+  const [smsConsentAccepted, setSmsConsentAccepted] = useState(false);
 
   return (
     <main className={cx('narrow-page', scoped(styles, 'policy-page'))}>
@@ -515,18 +525,17 @@ export function SmsOptInProofPage() {
         <p className="eyebrow">SMS Proof</p>
         <h1>SMS opt-in proof</h1>
         <p className="page-lede">
-          This page mirrors the live RSVP and recovery SMS consent controls used
-          on matt-alison.com.
+          This non-submitting example documents the standalone text preferences
+          offered only to guests with a private Matt &amp; Alison Wedding invitation.
+          SMS consent is independent from submitting or updating an RSVP.
         </p>
+        <p>Operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
       </section>
-      <section className={scoped(styles, 'proof-grid')}>
+      <section className={scoped(styles, 'proof-grid')} aria-label="Standalone SMS preferences example">
         <article className="lookup-card">
-          <p className="eyebrow">RSVP form</p>
-          <h2>Save RSVP and text preferences</h2>
-          <form
-            className={scoped(styles, 'proof-form')}
-            onSubmit={(event) => event.preventDefault()}
-          >
+          <p className="eyebrow">Text preferences</p>
+          <h2>Optional wedding text updates</h2>
+          <div className={scoped(styles, 'proof-form')}>
             <label>
               Mobile phone
               <input
@@ -534,48 +543,16 @@ export function SmsOptInProofPage() {
                 inputMode="tel"
                 maxLength={32}
                 placeholder={smsPhonePlaceholder}
-                value={rsvpSmsPhone}
-                onChange={(event) => setRsvpSmsPhone(event.target.value)}
+                defaultValue=""
               />
             </label>
             <SmsConsentCheckboxField
-              checked={rsvpSmsConsentAccepted}
-              inputId="proof-rsvp-sms-consent"
-              onChange={setRsvpSmsConsentAccepted}
+              checked={smsConsentAccepted}
+              inputId="proof-sms-consent"
+              onChange={setSmsConsentAccepted}
             />
-            <button type="submit">
-              {rsvpSmsConsentAccepted
-                ? 'Save RSVP and text preferences'
-                : 'Save RSVP'}
-            </button>
-          </form>
-        </article>
-        <article className="lookup-card">
-          <p className="eyebrow">Recovery form</p>
-          <h2>Send private RSVP link</h2>
-          <form
-            className={scoped(styles, 'proof-form')}
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <label>
-              Email or mobile number
-              <input
-                aria-label="Email or mobile number"
-                autoCapitalize="off"
-                autoCorrect="off"
-                inputMode="email"
-                placeholder={`name@example.com or ${smsPhonePlaceholder}`}
-                value={recoveryContact}
-                onChange={(event) => setRecoveryContact(event.target.value)}
-              />
-            </label>
-            <SmsConsentCheckboxField
-              checked={recoverySmsConsentAccepted}
-              inputId="proof-recovery-sms-consent"
-              onChange={setRecoverySmsConsentAccepted}
-            />
-            <button type="submit">Send private RSVP link</button>
-          </form>
+            <p className="form-message">Example only — this page does not submit or enroll a phone number.</p>
+          </div>
         </article>
       </section>
     </main>

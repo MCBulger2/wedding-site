@@ -38,6 +38,7 @@ const household = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('HouseholdCardActions', () => {
@@ -80,6 +81,113 @@ describe('HouseholdCardActions', () => {
 });
 
 describe('App routes', () => {
+  it('scrolls a hash target into view after the destination route mounts', () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    window.history.pushState({}, '', '/#details');
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('reapplies hash scrolling after paint and after delayed restoration', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    let postPaint: FrameRequestCallback | undefined;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback: FrameRequestCallback) => {
+        postPaint = callback;
+        return 1;
+      }),
+    });
+    window.history.pushState({}, '', '/#details');
+
+    try {
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(postPaint).toBeTypeOf('function');
+      postPaint?.(0);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(450);
+      expect(scrollIntoView).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, 'requestAnimationFrame');
+    }
+  });
+
+  it.each([
+    ['wheel input', () => window.dispatchEvent(new WheelEvent('wheel'))],
+    [
+      'navigation key input',
+      () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown' })),
+    ],
+  ])('cancels delayed hash correction after %s', (_label, signalIntent) => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    let postPaint: FrameRequestCallback | undefined;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback: FrameRequestCallback) => {
+        postPaint = callback;
+        return 1;
+      }),
+    });
+    window.history.pushState({}, '', '/#details');
+
+    try {
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+      postPaint?.(0);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+
+      signalIntent();
+      vi.advanceTimersByTime(450);
+
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, 'requestAnimationFrame');
+    }
+  });
+
+  it('ignores malformed percent-encoded hashes without throwing', () => {
+    window.history.pushState({}, '', '/#%E0%A4%A');
+
+    expect(() =>
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      ),
+    ).not.toThrow();
+  });
+
   it('marks the active top-level navigation route', () => {
     window.history.pushState({}, '', '/our-story');
 
@@ -128,7 +236,7 @@ describe('App routes', () => {
     ).not.toBeNull();
     expect(
       screen.getByText(
-        'SMS opt-in data and consent will not be shared with third parties.',
+        'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
       ),
     ).not.toBeNull();
   });
@@ -145,9 +253,8 @@ describe('App routes', () => {
     expect(
       screen.getByRole('heading', { name: 'SMS opt-in proof' }),
     ).not.toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    ).not.toBeNull();
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Send private RSVP link' })).toBeNull();
   });
 });
 
@@ -169,7 +276,7 @@ describe('HouseholdNotificationForm', () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        /SMS delivery stays disabled until this household opts in through the RSVP or recovery form./i,
+        /SMS delivery stays disabled until this household opts in through the standalone text preferences page./i,
       ),
     ).not.toBeNull();
   });

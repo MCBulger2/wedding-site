@@ -118,7 +118,7 @@ describe('WeddingService', () => {
     expect((await repository.getHousehold('h1'))?.rsvpStatus).toBe('partial');
   });
 
-  it('records normalized SMS consent metadata when RSVP text consent is checked', async () => {
+  it('does not change SMS preferences when legacy fields are included in an RSVP update', async () => {
     const { service, repository } = await createSeededService();
 
     await service.updateRsvp(inviteCode, {
@@ -133,15 +133,8 @@ describe('WeddingService', () => {
       smsConsentAccepted: true,
     });
 
-    expect((await repository.getHousehold('h1'))).toMatchObject({
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_in',
-        phone: '+14805550100',
-        source: 'rsvp_form',
-        consentTextVersion: 'twilio-tollfree-v1',
-      },
-    });
+    expect((await repository.getHousehold('h1'))?.phone).toBeUndefined();
+    expect((await repository.getHousehold('h1'))?.smsConsent).toBeUndefined();
     const logs = parseConsoleJson(consoleLog);
     expect(logs).toContainEqual(
       expect.objectContaining({
@@ -860,16 +853,19 @@ describe('WeddingService', () => {
     );
   });
 
-  it('sends recovery SMS messages for matching saved mobile numbers', async () => {
+  it('sends recovery SMS only when active consent matches the saved mobile number', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
     const { service } = await createSeededService(
-      { phone: '+14805550100' },
+      {
+        phone: '+14805550100',
+        smsConsent: createSmsConsentRecord('+14805550100', 'rsvp_form'),
+      },
       undefined,
       householdMessenger,
     );
 
     await service.requestRsvpRecovery(
-      { contact: '(480) 555-0100', smsConsentAccepted: true },
+      { contact: '(480) 555-0100' },
       {
         sourceIp: '203.0.113.10',
         baseUrl: 'https://wedding.example.com',
@@ -880,40 +876,129 @@ describe('WeddingService', () => {
     expect(householdMessenger.recoverySmsCalls[0].household.phone).toBe(
       '+14805550100',
     );
-    expect(householdMessenger.recoverySmsCalls[0].household.smsConsent).toMatchObject(
-      {
-        status: 'opted_in',
-        phone: '+14805550100',
-        source: 'recovery_form',
-      },
-    );
+    expect(householdMessenger.recoverySmsCalls[0].household.smsConsent).toMatchObject({
+      status: 'opted_in',
+      phone: '+14805550100',
+    });
   });
 
-  it('rejects phone recovery requests when SMS consent is not checked', async () => {
+  it('keeps phone recovery generic and inactive when consent is missing', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
-    const { service } = await createSeededService(
+    const { service, repository } = await createSeededService(
       { phone: '+14805550100' },
       undefined,
       householdMessenger,
     );
 
-    await expect(
-      service.requestRsvpRecovery(
-        { contact: '(480) 555-0100' },
-        {
-          sourceIp: '203.0.113.10',
-          baseUrl: 'https://wedding.example.com',
-        },
-      ),
-    ).rejects.toMatchObject({
-      message: 'Recovery contact is invalid',
-      statusCode: 422,
-      details: [
-        'smsConsentAccepted: Please confirm SMS consent before requesting a texted RSVP link.',
-      ],
-    });
+    await expect(service.requestRsvpRecovery(
+      { contact: '(480) 555-0100', smsConsentAccepted: true },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://wedding.example.com',
+      },
+    )).resolves.toMatchObject({ accepted: true });
 
     expect(householdMessenger.recoverySmsCalls).toHaveLength(0);
+    expect((await repository.getHousehold('h1'))?.smsConsent).toBeUndefined();
+  });
+
+  it('persists pending, confirms through Twilio, then activates SMS preferences', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+
+    expect(householdMessenger.smsPreferenceConfirmationCalls).toEqual([
+      expect.objectContaining({ phone: '+14805550100' }),
+    ]);
+    expect(result.smsConsent).toMatchObject({
+      status: 'opted_in',
+      phone: '+14805550100',
+      source: 'sms_preferences',
+    });
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_in');
+  });
+
+  it('leaves SMS pending and retryable when Twilio confirmation fails', async () => {
+    const householdMessenger = new RecordingHouseholdMessenger(new Error('Twilio unavailable'));
+    const { service, repository } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+    );
+
+    await expect(service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    })).rejects.toMatchObject({ statusCode: 503 });
+
+    expect((await repository.getHousehold('h1'))?.smsConsent).toMatchObject({
+      status: 'pending_confirmation',
+      phone: '+14805550100',
+    });
+  });
+
+  it('does not start pending or send confirmation when opt-out wins before pending write', async () => {
+    const repository = new InterleavingSmsPendingRepository();
+    const householdMessenger = new RecordingHouseholdMessenger();
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+      { repository },
+    );
+    repository.armOptOutBeforePendingStart();
+
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+
+    expect(result.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+    expect(householdMessenger.smsPreferenceConfirmationCalls).toHaveLength(0);
+  });
+
+  it('never reactivates when opt-out interleaves immediately before activation', async () => {
+    const repository = new InterleavingSmsActivationRepository();
+    const householdMessenger = new RecordingHouseholdMessenger(
+      undefined,
+      () => repository.armOptOutBeforeActivation(),
+    );
+    const { service } = await createSeededService(
+      {},
+      undefined,
+      householdMessenger,
+      { repository },
+    );
+
+    const result = await service.updateSmsPreferences(inviteCode, {
+      enabled: true,
+      phone: '(480) 555-0100',
+    });
+
+    expect(result.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.smsConsent?.status).toBe('opted_out');
+  });
+
+  it('opts out immediately without clearing the household phone', async () => {
+    const { service, repository } = await createSeededService({
+      phone: '+14805550100',
+      smsConsent: createSmsConsentRecord('+14805550100', 'rsvp_form'),
+    });
+
+    const result = await service.updateSmsPreferences(inviteCode, { enabled: false });
+
+    expect(result.phone).toBe('+14805550100');
+    expect(result.smsConsent?.status).toBe('opted_out');
+    expect((await repository.getHousehold('h1'))?.phone).toBe('+14805550100');
   });
 
   it('skips archived or non-recoverable households while keeping the public recovery response generic', async () => {
@@ -1201,6 +1286,75 @@ class FailingRsvpUpdateRepository extends InMemoryWeddingRepository {
   }
 }
 
+class InterleavingSmsActivationRepository extends InMemoryWeddingRepository {
+  private optOutBeforeActivation = false;
+
+  armOptOutBeforeActivation(): void {
+    this.optOutBeforeActivation = true;
+  }
+
+  async activateSmsPreference(
+    input: Parameters<InMemoryWeddingRepository['activateSmsPreference']>[0],
+  ) {
+    if (this.optOutBeforeActivation) {
+      this.optOutBeforeActivation = false;
+      const current = await this.getHousehold(input.householdId);
+      if (current?.smsConsent) {
+        await this.saveHousehold({
+          ...current,
+          smsConsent: { ...current.smsConsent, status: 'opted_out' },
+        });
+      }
+    }
+    return super.activateSmsPreference(input);
+  }
+}
+
+class InterleavingSmsPendingRepository extends InMemoryWeddingRepository {
+  private optOutBeforePendingStart = false;
+
+  armOptOutBeforePendingStart(): void {
+    this.optOutBeforePendingStart = true;
+  }
+
+  async saveHousehold(household: Household): Promise<void> {
+    if (
+      this.optOutBeforePendingStart &&
+      household.smsConsent?.status === 'pending_confirmation'
+    ) {
+      this.optOutBeforePendingStart = false;
+      const current = await this.getHousehold(household.householdId);
+      if (current) {
+        await super.saveHousehold({
+          ...current,
+          phone: household.phone,
+          smsConsent: { ...household.smsConsent, status: 'opted_out' },
+          updatedAt: household.updatedAt,
+        });
+      }
+    }
+    return super.saveHousehold(household);
+  }
+
+  async beginSmsPreference(
+    input: Parameters<InMemoryWeddingRepository['beginSmsPreference']>[0],
+  ) {
+    if (this.optOutBeforePendingStart) {
+      this.optOutBeforePendingStart = false;
+      const current = await this.getHousehold(input.householdId);
+      if (current) {
+        await super.saveHousehold({
+          ...current,
+          phone: input.pendingConsent.phone,
+          smsConsent: { ...input.pendingConsent, status: 'opted_out' },
+          updatedAt: input.pendingConsent.consentedAt,
+        });
+      }
+    }
+    return super.beginSmsPreference(input);
+  }
+}
+
 class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly calls: Parameters<
     HouseholdMessenger['sendHouseholdNotification']
@@ -1214,8 +1368,14 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly recoverySmsCalls: Parameters<
     HouseholdMessenger['sendRecoverySms']
   >[0][] = [];
+  readonly smsPreferenceConfirmationCalls: Parameters<
+    HouseholdMessenger['sendSmsPreferenceConfirmation']
+  >[0][] = [];
 
-  constructor(private readonly failure?: Error) {}
+  constructor(
+    private readonly failure?: Error,
+    private readonly onSmsPreferenceConfirmation?: () => void,
+  ) {}
 
   async sendHouseholdNotification(
     input: Parameters<HouseholdMessenger['sendHouseholdNotification']>[0],
@@ -1268,11 +1428,21 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
       throw this.failure;
     }
   }
+
+  async sendSmsPreferenceConfirmation(
+    input: Parameters<HouseholdMessenger['sendSmsPreferenceConfirmation']>[0],
+  ): Promise<void> {
+    this.smsPreferenceConfirmationCalls.push(input);
+    this.onSmsPreferenceConfirmation?.();
+    if (this.failure) {
+      throw this.failure;
+    }
+  }
 }
 
 function createSmsConsentRecord(
   phone: string,
-  source: 'rsvp_form' | 'recovery_form',
+  source: 'rsvp_form' | 'recovery_form' | 'sms_preferences',
 ) {
   return {
     status: 'opted_in' as const,
