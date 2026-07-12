@@ -304,23 +304,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     'src',
     /[?&]marker=/,
   );
-  await expect(
-    page.getByRole('img', { name: 'Superstition Manor location' }),
-  ).toBeVisible();
-  const markerPosition = await page
-    .getByRole('img', { name: 'Superstition Manor location' })
-    .evaluate((marker) => {
-      const frame = marker.parentElement;
-      const styles = getComputedStyle(marker);
-      return {
-        leftPercent:
-          (parseFloat(styles.left) / (frame?.clientWidth ?? 1)) * 100,
-        topPercent:
-          (parseFloat(styles.top) / (frame?.clientHeight ?? 1)) * 100,
-      };
-    });
-  expect(markerPosition.leftPercent).toBeCloseTo(56.9, 0);
-  expect(markerPosition.topPercent).toBeCloseTo(53.2, 0);
+  await expect(page.locator('[class*="venue-map-marker"]')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
     'href',
     /google\.com\/maps/,
@@ -415,9 +399,7 @@ test('homepage details render on mobile', async ({ page }) => {
     }),
   ).toBeVisible();
   await expect(page.getByTitle('Superstition Manor map')).toBeVisible();
-  await expect(
-    page.getByRole('img', { name: 'Superstition Manor location' }),
-  ).toBeVisible();
+  await expect(page.locator('[class*="venue-map-marker"]')).toHaveCount(0);
   const mobileMapBounds = await page.locator('.venue-map-frame').boundingBox();
   expect(mobileMapBounds).not.toBeNull();
   expect(mobileMapBounds!.height).toBeGreaterThanOrEqual(260);
@@ -2019,6 +2001,25 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
   await expect(householdsTable.getByText('The Example Household')).toBeVisible();
   await expect(page.getByText('generated').first()).toBeVisible();
+  await page.setViewportSize({ width: 900, height: 844 });
+  const intermediateTableLayout = await householdsTable.evaluate((element) => ({
+    documentClientWidth: document.documentElement.clientWidth,
+    documentScrollWidth: document.documentElement.scrollWidth,
+    shellClientWidth: element.clientWidth,
+    shellOverflowX: getComputedStyle(element).overflowX,
+    shellScrollWidth: element.scrollWidth,
+    shellScrollbarGutter: getComputedStyle(element).scrollbarGutter,
+  }));
+  expect(intermediateTableLayout.shellOverflowX).toBe('auto');
+  expect(intermediateTableLayout.shellScrollWidth).toBeGreaterThan(
+    intermediateTableLayout.shellClientWidth,
+  );
+  expect(intermediateTableLayout.documentScrollWidth).toBe(
+    intermediateTableLayout.documentClientWidth,
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  expect(intermediateTableLayout.shellScrollbarGutter).toBe('stable both-edges');
+
   const exampleRow = householdsTable
     .getByRole('row')
     .filter({ hasText: 'The Example Household' })
@@ -2117,6 +2118,17 @@ test('admin route is reachable, can create households, and shows RSVP results', 
 
   await clickHouseholdAction(exampleRow, 'Edit');
   const editPanel = householdsTable.getByLabel('Edit The Example Household');
+  const saveChangesButton = editPanel.getByRole('button', { name: 'Save changes' });
+  const saveChangesStyles = await saveChangesButton.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderColor: styles.borderColor,
+      color: styles.color,
+    };
+  });
+  expect(saveChangesStyles.backgroundColor).not.toBe('rgb(15, 81, 63)');
+
   await editPanel
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
