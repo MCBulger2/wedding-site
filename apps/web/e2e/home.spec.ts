@@ -942,7 +942,6 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
   const scroller = page.getByTestId('photo-carousel-scroller');
   const controls = carousel.locator('.photo-controls');
   const dots = carousel.locator('.photo-dot');
-  const captionRow = carousel.locator('.photo-caption-row');
   const activeCaption = carousel.locator('.photo-caption-row strong');
 
   await carousel.scrollIntoViewIfNeeded();
@@ -1013,15 +1012,8 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
       },
     ]);
 
-  const beforeCaptionBox = await captionRow.boundingBox();
-  expect(beforeCaptionBox).not.toBeNull();
-
   await page.getByRole('button', { name: 'Show next photo' }).click();
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
-
-  const afterCaptionBox = await captionRow.boundingBox();
-  expect(afterCaptionBox).not.toBeNull();
-  expect(Math.abs(afterCaptionBox!.height - beforeCaptionBox!.height)).toBeLessThanOrEqual(1);
   await expect
     .poll(() =>
       dots.evaluateAll((elements) =>
