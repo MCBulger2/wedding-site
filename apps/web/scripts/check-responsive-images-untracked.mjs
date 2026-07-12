@@ -1,9 +1,13 @@
 import { execFileSync } from 'node:child_process';
 
-const generatedImagePath = 'public/images';
+const generatedPaths = [
+  'public/images',
+  'src/generated/responsiveImageAssets.ts',
+  'src/generated/responsiveImageBackgrounds.css',
+];
 const trackedFiles = execFileSync(
   'git',
-  ['ls-files', generatedImagePath],
+  ['ls-files', ...generatedPaths],
   { encoding: 'utf8' },
 )
   .trim()
@@ -13,8 +17,8 @@ const trackedFiles = execFileSync(
 if (trackedFiles.length > 0) {
   console.error(
     [
-      `Generated responsive image variants must not be committed under ${generatedImagePath}.`,
-      'Run git rm --cached for generated variants and let the web build regenerate them.',
+      'Generated responsive image outputs must not be committed.',
+      'Run git rm --cached for generated variants and manifests, then let the web build regenerate them.',
       '',
       ...trackedFiles,
     ].join('\n'),

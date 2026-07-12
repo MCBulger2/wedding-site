@@ -367,30 +367,6 @@
   width: 100%;
 }
 
-.venue-map-marker {
-  align-items: center;
-  background: var(--accent-strong);
-  border: 3px solid var(--surface-strong);
-  border-radius: 999px 999px 999px 0;
-  box-shadow: 0 6px 14px rgba(15, 45, 35, 0.3);
-  color: var(--hero-text);
-  display: flex;
-  height: 2.5rem;
-  justify-content: center;
-  left: 56.9%;
-  pointer-events: none;
-  position: absolute;
-  top: 53.2%;
-  transform: translate(-50%, -100%) rotate(-45deg);
-  width: 2.5rem;
-  z-index: 1;
-}
-
-.venue-map-marker svg {
-  height: 1.15rem;
-  transform: rotate(45deg);
-  width: 1.15rem;
-}
 
 .hotel-list {
   display: grid;

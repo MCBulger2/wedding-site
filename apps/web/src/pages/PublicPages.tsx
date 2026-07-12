@@ -117,13 +117,6 @@ export function HomePage() {
               loading="lazy"
               referrerPolicy="no-referrer"
             />
-            <span
-              className={scoped(styles, 'venue-map-marker')}
-              role="img"
-              aria-label={`${siteContent.venueName} location`}
-            >
-              <MapPin aria-hidden="true" />
-            </span>
           </div>
           <div
             className={cx('hero-actions', scoped(styles, 'compact-actions'))}

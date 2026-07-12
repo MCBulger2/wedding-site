@@ -105,6 +105,18 @@
   padding: 1.25rem;
 }
 
+.admin-grid :global(.icon-button) {
+  --accent: var(--surface);
+  --primary-button-text: var(--accent-strong);
+  border: 1px solid var(--accent-border);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-grid :global(.icon-button:not(:disabled):hover) {
+    background: var(--hover-bg);
+  }
+}
+
 .household-action-menu-shell {
   position: relative;
 }
@@ -219,7 +231,8 @@
 }
 
 .subsection-card {
-  padding: 1.5rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 1.5rem);
 }
 
 .split-fields,
@@ -249,7 +262,7 @@
   border-radius: 8px;
   display: grid;
   gap: 0.3rem;
-  padding: 1rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
 }
 
 .stats-grid strong {
@@ -259,12 +272,17 @@
 .results-list {
   align-content: start;
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .admin-table-shell {
   display: block;
+  max-width: 100%;
+  min-width: 0;
+  overscroll-behavior-inline: contain;
   overflow-x: auto;
+  scrollbar-gutter: stable both-edges;
   width: 100%;
 }
 
@@ -352,8 +370,8 @@
 
 .household-card {
   display: grid;
-  gap: 1rem;
-  padding: 1.35rem;
+  gap: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 1.5rem);
 }
 
 .title-row,
