@@ -411,6 +411,7 @@ describe('Standalone SMS subscription persistence', () => {
   };
   const subscription: SmsSubscription = {
     subscriptionId: 'peppered-phone-id',
+    attemptId: 'first-attempt-id',
     consent: firstPending,
     createdAt: '2026-07-11T20:00:00.000Z',
     updatedAt: '2026-07-11T20:00:00.000Z',
@@ -431,10 +432,11 @@ describe('Standalone SMS subscription persistence', () => {
         sk: 'METADATA',
       },
       UpdateExpression:
-        'SET entityType = :entityType, subscriptionId = :subscriptionId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
+        'SET entityType = :entityType, subscriptionId = :subscriptionId, attemptId = :attemptId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
       ExpressionAttributeValues: {
         ':entityType': 'SmsSubscription',
         ':subscriptionId': 'peppered-phone-id',
+        ':attemptId': 'first-attempt-id',
         ':consent': firstPending,
         ':createdAt': '2026-07-11T20:00:00.000Z',
         ':updatedAt': '2026-07-11T20:00:00.000Z',
@@ -453,6 +455,7 @@ describe('Standalone SMS subscription persistence', () => {
     await repository.beginSmsSubscription(subscription);
     await repository.beginSmsSubscription({
       subscriptionId: subscription.subscriptionId,
+      attemptId: 'second-attempt-id',
       consent: secondPending,
       createdAt: '2026-07-11T21:00:00.000Z',
       updatedAt: '2026-07-11T21:00:00.000Z',
@@ -460,6 +463,7 @@ describe('Standalone SMS subscription persistence', () => {
 
     expect(repository.smsSubscriptions.get(subscription.subscriptionId)).toEqual({
       subscriptionId: subscription.subscriptionId,
+      attemptId: 'second-attempt-id',
       consent: secondPending,
       createdAt: subscription.createdAt,
       updatedAt: '2026-07-11T21:00:00.000Z',
@@ -472,6 +476,7 @@ describe('Standalone SMS subscription persistence', () => {
 
     const result = await repository.activateSmsSubscription({
       subscriptionId: subscription.subscriptionId,
+      expectedAttemptId: subscription.attemptId,
       expectedPending: firstPending,
       activatedAt: '2026-07-11T20:01:00.000Z',
     });
@@ -495,12 +500,14 @@ describe('Standalone SMS subscription persistence', () => {
     };
     await repository.beginSmsSubscription({
       ...subscription,
+      attemptId: 'replacement-attempt-id',
       consent: replacement,
       updatedAt: replacement.consentedAt,
     });
 
     const result = await repository.activateSmsSubscription({
       subscriptionId: subscription.subscriptionId,
+      expectedAttemptId: subscription.attemptId,
       expectedPending: firstPending,
       activatedAt: '2026-07-11T20:01:00.000Z',
     });
@@ -509,7 +516,7 @@ describe('Standalone SMS subscription persistence', () => {
     expect(repository.smsSubscriptions.get(subscription.subscriptionId)?.consent).toEqual(replacement);
   });
 
-  it('conditions Dynamo activation on the exact pending status, phone, and timestamp', async () => {
+  it('conditions Dynamo activation on the exact attempt, pending status, phone, and timestamp', async () => {
     const repository = new DynamoWeddingRepository('wedding-table');
     const send = mockRepositorySend(repository).mockResolvedValue({
       Attributes: {
@@ -528,6 +535,7 @@ describe('Standalone SMS subscription persistence', () => {
 
     const result = await repository.activateSmsSubscription({
       subscriptionId: subscription.subscriptionId,
+      expectedAttemptId: subscription.attemptId,
       expectedPending: firstPending,
       activatedAt: '2026-07-11T20:01:00.000Z',
     });
@@ -541,11 +549,12 @@ describe('Standalone SMS subscription persistence', () => {
       },
       UpdateExpression: 'SET consent = :activatedConsent, updatedAt = :activatedAt',
       ConditionExpression:
-        'consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
+        'attemptId = :expectedAttemptId AND consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
       ExpressionAttributeNames: {
         '#status': 'status',
       },
       ExpressionAttributeValues: expect.objectContaining({
+        ':expectedAttemptId': subscription.attemptId,
         ':pendingStatus': 'pending_confirmation',
         ':phone': firstPending.phone,
         ':pendingConsentedAt': firstPending.consentedAt,
@@ -571,6 +580,7 @@ describe('Standalone SMS subscription persistence', () => {
 
     const result = await repository.activateSmsSubscription({
       subscriptionId: subscription.subscriptionId,
+      expectedAttemptId: subscription.attemptId,
       expectedPending: firstPending,
       activatedAt: '2026-07-11T20:01:00.000Z',
     });
@@ -589,6 +599,7 @@ describe('Standalone SMS subscription persistence', () => {
 function subscriptionFromStoredItem(item: SmsSubscription): SmsSubscription {
   return {
     subscriptionId: item.subscriptionId,
+    attemptId: item.attemptId,
     consent: item.consent,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

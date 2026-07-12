@@ -105,6 +105,28 @@ describe('SmsUpdatesPage', () => {
     );
   });
 
+  it('renders the pending confirmation response as an accepted pending signup', async () => {
+    submitSubscription.mockResolvedValue({ status: 'pending_confirmation' });
+    render(<SmsUpdatesPage />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mobile phone' }), {
+      target: { value: '(480) 555-0100' },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Sign up for text updates' }),
+    );
+
+    expect(
+      await screen.findByText(
+        /your signup was accepted and is pending confirmation/i,
+      ),
+    ).not.toBeNull();
+    expect(
+      screen.queryByText(/you’re enrolled for Matt & Alison Wedding/i),
+    ).toBeNull();
+  });
+
   it.each([429, 503])(
     'keeps the form retryable after a %s response',
     async (statusCode) => {

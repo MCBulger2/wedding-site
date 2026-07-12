@@ -1114,6 +1114,43 @@ describe('WeddingService', () => {
       });
     });
 
+    it('omits submitted and derived identifiers from failed public confirmation logs', async () => {
+      const repository = new InMemoryWeddingRepository();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        new RecordingHouseholdMessenger(new Error('Twilio rejected request')),
+      );
+      const rawPhone = '(480) 555-0100';
+      const normalizedPhone = '+14805550100';
+      const sourceIp = '203.0.113.10';
+      const subscriptionId = testStableHash(
+        `sms-subscription-record:${normalizedPhone}`,
+      );
+
+      await expect(
+        service.createPublicSmsSubscription(
+          { phone: rawPhone, consentAccepted: true },
+          { sourceIp },
+        ),
+      ).rejects.toMatchObject({ statusCode: 503 });
+
+      const logs = JSON.stringify([
+        ...parseConsoleJson(consoleLog),
+        ...parseConsoleJson(consoleError),
+      ]);
+      const attemptId =
+        repository.smsSubscriptions.get(subscriptionId)?.attemptId;
+      expect(attemptId).toBeDefined();
+      if (!attemptId) throw new Error('Expected a persisted attempt ID');
+      expect(logs).not.toContain(rawPhone);
+      expect(logs).not.toContain(normalizedPhone);
+      expect(logs).not.toContain(sourceIp);
+      expect(logs).not.toContain(subscriptionId);
+      expect(logs).not.toContain(attemptId);
+    });
+
     it('returns a retryable conflict when a newer pending attempt wins before activation', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-07-11T20:00:00.000Z'));
@@ -1131,6 +1168,7 @@ describe('WeddingService', () => {
       const messenger = new RecordingHouseholdMessenger(undefined, () => {
         void repository.beginSmsSubscription({
           subscriptionId,
+          attemptId: 'replacement-attempt-id',
           consent: replacementConsent,
           createdAt: replacementConsent.consentedAt,
           updatedAt: replacementConsent.consentedAt,
@@ -1152,6 +1190,46 @@ describe('WeddingService', () => {
       expect(repository.smsSubscriptions.get(subscriptionId)?.consent).toEqual(
         replacementConsent,
       );
+    });
+
+    it('rejects the older of two same-millisecond attempts before it can activate the newer pending record', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-07-11T20:00:00.000Z'));
+      const repository = new InMemoryWeddingRepository();
+      const messenger = new DeferredSmsConfirmationMessenger();
+      const service = new WeddingService(
+        repository,
+        pepper,
+        undefined,
+        messenger,
+      );
+
+      const older = service.createPublicSmsSubscription(
+        { phone: '(480) 555-0100', consentAccepted: true },
+        { sourceIp: '203.0.113.10' },
+      );
+      await messenger.waitForPendingConfirmations(1);
+
+      const newer = service.createPublicSmsSubscription(
+        { phone: '(480) 555-0100', consentAccepted: true },
+        { sourceIp: '203.0.113.11' },
+      );
+      await messenger.waitForPendingConfirmations(2);
+
+      messenger.release(0);
+      const [olderResult] = await Promise.allSettled([older]);
+
+      messenger.release(1);
+      const [newerResult] = await Promise.allSettled([newer]);
+
+      expect(olderResult).toMatchObject({
+        status: 'rejected',
+        reason: { statusCode: 409 },
+      });
+      expect(newerResult).toEqual({
+        status: 'fulfilled',
+        value: { status: 'opted_in' },
+      });
     });
 
     it('allows three phone attempts per hour and rejects the fourth', async () => {
@@ -1230,8 +1308,13 @@ describe('WeddingService', () => {
         ...parseConsoleJson(consoleLog),
         ...parseConsoleJson(consoleError),
       ]);
+      const attemptId =
+        repository.smsSubscriptions.get(subscriptionId)?.attemptId;
+      expect(attemptId).toBeDefined();
+      if (!attemptId) throw new Error('Expected a persisted attempt ID');
       expect(logs).not.toContain('+14805550100');
       expect(logs).not.toContain(subscriptionId);
+      expect(logs).not.toContain(attemptId);
       expect(logs).not.toContain('householdId');
     });
   });
@@ -1673,6 +1756,35 @@ class RecordingHouseholdMessenger implements HouseholdMessenger {
     if (this.failure) {
       throw this.failure;
     }
+  }
+}
+
+class DeferredSmsConfirmationMessenger extends RecordingHouseholdMessenger {
+  private readonly releases: Array<() => void> = [];
+
+  get pendingConfirmations(): number {
+    return this.releases.length;
+  }
+
+  release(index: number): void {
+    this.releases[index]?.();
+  }
+
+  async waitForPendingConfirmations(expected: number): Promise<void> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (this.pendingConfirmations === expected) {
+        return;
+      }
+      await Promise.resolve();
+    }
+    expect(this.pendingConfirmations).toBe(expected);
+  }
+
+  override async sendSmsPreferenceConfirmation(
+    input: Parameters<HouseholdMessenger['sendSmsPreferenceConfirmation']>[0],
+  ): Promise<void> {
+    this.smsPreferenceConfirmationCalls.push(input);
+    await new Promise<void>((resolve) => this.releases.push(resolve));
   }
 }
 

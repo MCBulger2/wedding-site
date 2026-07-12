@@ -32,6 +32,7 @@ export interface RecoveryRateLimitRecord {
 
 export interface SmsSubscription {
   subscriptionId: string;
+  attemptId: string;
   consent: SmsConsent;
   createdAt: string;
   updatedAt: string;
@@ -67,6 +68,7 @@ export interface WeddingRepository {
   beginSmsSubscription(input: SmsSubscription): Promise<void>;
   activateSmsSubscription(input: {
     subscriptionId: string;
+    expectedAttemptId: string;
     expectedPending: SmsConsent;
     activatedAt: string;
   }): Promise<SmsSubscription | undefined>;
@@ -215,10 +217,11 @@ export class DynamoWeddingRepository implements WeddingRepository {
         TableName: this.tableName,
         Key: smsSubscriptionKey(input.subscriptionId),
         UpdateExpression:
-          'SET entityType = :entityType, subscriptionId = :subscriptionId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
+          'SET entityType = :entityType, subscriptionId = :subscriptionId, attemptId = :attemptId, consent = :consent, createdAt = if_not_exists(createdAt, :createdAt), updatedAt = :updatedAt',
         ExpressionAttributeValues: {
           ':entityType': 'SmsSubscription',
           ':subscriptionId': input.subscriptionId,
+          ':attemptId': input.attemptId,
           ':consent': input.consent,
           ':createdAt': input.createdAt,
           ':updatedAt': input.updatedAt,
@@ -229,6 +232,7 @@ export class DynamoWeddingRepository implements WeddingRepository {
 
   async activateSmsSubscription(input: {
     subscriptionId: string;
+    expectedAttemptId: string;
     expectedPending: SmsConsent;
     activatedAt: string;
   }): Promise<SmsSubscription | undefined> {
@@ -244,13 +248,14 @@ export class DynamoWeddingRepository implements WeddingRepository {
           Key: smsSubscriptionKey(input.subscriptionId),
           UpdateExpression: 'SET consent = :activatedConsent, updatedAt = :activatedAt',
           ConditionExpression:
-            'consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
+            'attemptId = :expectedAttemptId AND consent.#status = :pendingStatus AND consent.phone = :phone AND consent.consentedAt = :pendingConsentedAt',
           ExpressionAttributeNames: {
             '#status': 'status',
           },
           ExpressionAttributeValues: {
             ':activatedConsent': activatedConsent,
             ':activatedAt': input.activatedAt,
+            ':expectedAttemptId': input.expectedAttemptId,
             ':pendingStatus': 'pending_confirmation',
             ':phone': input.expectedPending.phone,
             ':pendingConsentedAt': input.expectedPending.consentedAt,
@@ -542,6 +547,7 @@ export class InMemoryWeddingRepository implements WeddingRepository {
 
   async activateSmsSubscription(input: {
     subscriptionId: string;
+    expectedAttemptId: string;
     expectedPending: SmsConsent;
     activatedAt: string;
   }): Promise<SmsSubscription | undefined> {
@@ -550,6 +556,7 @@ export class InMemoryWeddingRepository implements WeddingRepository {
       return undefined;
     }
     if (
+      current.attemptId !== input.expectedAttemptId ||
       current.consent.status !== 'pending_confirmation' ||
       current.consent.phone !== input.expectedPending.phone ||
       current.consent.consentedAt !== input.expectedPending.consentedAt
@@ -715,6 +722,7 @@ function fromHouseholdItem(item: StoredHouseholdItem): Household {
 function fromSmsSubscriptionItem(item: StoredSmsSubscriptionItem): SmsSubscription {
   return {
     subscriptionId: item.subscriptionId,
+    attemptId: item.attemptId,
     consent: item.consent,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,

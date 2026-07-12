@@ -284,6 +284,7 @@ export class WeddingService {
     }
 
     const now = new Date().toISOString();
+    const attemptId = randomUUID();
     const pendingConsent = createSmsConsent(
       phone,
       'public_sms_opt_in',
@@ -292,6 +293,7 @@ export class WeddingService {
     );
     await this.repository.beginSmsSubscription({
       subscriptionId,
+      attemptId,
       consent: pendingConsent,
       createdAt: now,
       updatedAt: now,
@@ -318,10 +320,12 @@ export class WeddingService {
     const activatedAt = new Date().toISOString();
     const activated = await this.repository.activateSmsSubscription({
       subscriptionId,
+      expectedAttemptId: attemptId,
       expectedPending: pendingConsent,
       activatedAt,
     });
     if (
+      activated?.attemptId !== attemptId ||
       activated?.consent.status !== 'opted_in' ||
       activated.consent.phone !== phone ||
       activated.consent.consentedAt !== activatedAt
