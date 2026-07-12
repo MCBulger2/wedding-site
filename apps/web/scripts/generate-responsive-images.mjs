@@ -55,6 +55,7 @@ const cachedImages = await readValidResponsiveImageCache({
   manifestPath: cacheManifestPath,
   outputRoot,
   inputHash,
+  requiredFiles: [metadataPath, backgroundCssPath],
 });
 
 if (cachedImages) {

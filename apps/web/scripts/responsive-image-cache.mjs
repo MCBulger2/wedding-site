@@ -37,8 +37,16 @@ export async function readValidResponsiveImageCache({
   manifestPath,
   outputRoot,
   inputHash,
+  requiredFiles = [],
 }) {
   try {
+    for (const requiredFile of requiredFiles) {
+      const stat = await fs.stat(requiredFile);
+      if (!stat.isFile()) {
+        return undefined;
+      }
+    }
+
     const rawManifest = await fs.readFile(manifestPath, 'utf8');
     const manifest = JSON.parse(rawManifest);
 
