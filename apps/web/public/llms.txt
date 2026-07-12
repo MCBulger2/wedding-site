@@ -1,0 +1,20 @@
+# Matt & Alison's Wedding
+
+> Official wedding website for Matt and Alison's January 18, 2027 celebration in Mesa, Arizona.
+
+## Public pages
+
+- [Wedding details](https://matt-alison.com/): Date, venue, schedule, travel guidance, and other public wedding information.
+- [Our story](https://matt-alison.com/our-story): How Matt and Alison met and their story together.
+- [Registry](https://matt-alison.com/registry): Current registry and gift information.
+- [SMS updates](https://matt-alison.com/sms-updates): Voluntary enrollment for wedding logistics and schedule text updates.
+- [Terms](https://matt-alison.com/terms): Terms for the website and SMS updates.
+- [Privacy](https://matt-alison.com/privacy): Privacy information for the website and SMS updates.
+
+## Contact
+
+For questions about the wedding website, email [contact@matt-alison.com](mailto:contact@matt-alison.com).
+
+## Access notes
+
+The RSVP flow is private and invite-code protected. The admin dashboard and API are not public content and are intentionally omitted from this file.
