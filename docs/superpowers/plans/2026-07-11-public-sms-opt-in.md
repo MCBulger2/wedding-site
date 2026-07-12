@@ -131,7 +131,7 @@ git commit -m "Add public SMS subscription contract"
 
 - [ ] **Step 1: Write failing repository lifecycle tests**
 
-Cover DynamoDB `PutCommand`/`UpdateCommand` keys shaped as `SMS_SUBSCRIPTION#<subscriptionId>` with `sk: 'METADATA'`, pending persistence, conditional activation against pending status/phone/timestamp, conflict returns, and in-memory parity. Assert the raw phone is absent from `pk` and `sk`.
+Cover DynamoDB `UpdateCommand` keys shaped as `SMS_SUBSCRIPTION#<subscriptionId>` with `sk: 'METADATA'`, pending persistence with preserved `createdAt`, conditional activation against pending status/phone/timestamp, conflict returns, and in-memory parity. Assert the raw phone is absent from `pk` and `sk`.
 
 - [ ] **Step 2: Verify repository tests fail**
 
