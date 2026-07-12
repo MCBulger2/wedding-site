@@ -38,6 +38,7 @@ const household = {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('HouseholdCardActions', () => {
@@ -80,6 +81,113 @@ describe('HouseholdCardActions', () => {
 });
 
 describe('App routes', () => {
+  it('scrolls a hash target into view after the destination route mounts', () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    window.history.pushState({}, '', '/#details');
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('reapplies hash scrolling after paint and after delayed restoration', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    let postPaint: FrameRequestCallback | undefined;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback: FrameRequestCallback) => {
+        postPaint = callback;
+        return 1;
+      }),
+    });
+    window.history.pushState({}, '', '/#details');
+
+    try {
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(postPaint).toBeTypeOf('function');
+      postPaint?.(0);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(450);
+      expect(scrollIntoView).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, 'requestAnimationFrame');
+    }
+  });
+
+  it.each([
+    ['wheel input', () => window.dispatchEvent(new WheelEvent('wheel'))],
+    [
+      'navigation key input',
+      () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown' })),
+    ],
+  ])('cancels delayed hash correction after %s', (_label, signalIntent) => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    let postPaint: FrameRequestCallback | undefined;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback: FrameRequestCallback) => {
+        postPaint = callback;
+        return 1;
+      }),
+    });
+    window.history.pushState({}, '', '/#details');
+
+    try {
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+      postPaint?.(0);
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+
+      signalIntent();
+      vi.advanceTimersByTime(450);
+
+      expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, 'requestAnimationFrame');
+    }
+  });
+
+  it('ignores malformed percent-encoded hashes without throwing', () => {
+    window.history.pushState({}, '', '/#%E0%A4%A');
+
+    expect(() =>
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      ),
+    ).not.toThrow();
+  });
+
   it('marks the active top-level navigation route', () => {
     window.history.pushState({}, '', '/our-story');
 
