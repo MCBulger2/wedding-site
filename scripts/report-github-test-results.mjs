@@ -3,7 +3,14 @@ import { pathToFileURL } from 'node:url';
 
 const defaultJunitReports = [
   { label: 'Unit tests', path: 'reports/vitest-junit.xml' },
-  { label: 'E2E tests', path: 'reports/playwright-junit.xml' },
+  {
+    label: 'E2E Chromium',
+    path: 'reports/playwright-chromium-junit.xml',
+  },
+  {
+    label: 'E2E Mobile',
+    path: 'reports/playwright-mobile-junit.xml',
+  },
 ];
 const defaultCoveragePath = 'coverage/coverage-summary.json';
 

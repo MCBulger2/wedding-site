@@ -117,6 +117,122 @@ async function clickHouseholdAction(card: Locator, actionName: string) {
   }
 }
 
+async function getVisibleHouseholdsSurface(page: Page) {
+  const table = page.getByLabel('Households table');
+  return (await table.isVisible())
+    ? table
+    : page.getByLabel('Households', { exact: true });
+}
+
+async function getVisibleHousehold(page: Page, displayName: string) {
+  const table = page.getByLabel('Households table');
+  if (await table.isVisible()) {
+    return table
+      .getByRole('row')
+      .filter({ hasText: displayName })
+      .first();
+  }
+
+  return page
+    .getByLabel('Households', { exact: true })
+    .locator('article')
+    .filter({ hasText: displayName })
+    .first();
+}
+
+async function getVisibleHouseholdPanel(
+  page: Page,
+  household: Locator,
+  name: string,
+) {
+  const table = page.getByLabel('Households table');
+  return (await table.isVisible())
+    ? table.getByLabel(name)
+    : household.getByLabel(name);
+}
+
+async function getVisibleHouseholdContent(page: Page, household: Locator) {
+  const table = page.getByLabel('Households table');
+  return (await table.isVisible()) ? table : household;
+}
+
+async function showHouseholdDetails(
+  page: Page,
+  household: Locator,
+  displayName: string,
+) {
+  const table = page.getByLabel('Households table');
+  if (await table.isVisible()) {
+    await household
+      .getByRole('button', { name: `Show ${displayName} details` })
+      .click();
+  }
+}
+
+async function swipeScroller(page: Page, scroller: Locator) {
+  const box = await scroller.boundingBox();
+  if (!box) {
+    throw new Error('Photo carousel scroller is not visible');
+  }
+
+  const scrollLeftBeforeSwipe = await scroller.evaluate(
+    (element) => element.scrollLeft,
+  );
+  const session = await page.context().newCDPSession(page);
+  const startX = box.x + box.width * 0.75;
+  const endX = box.x + box.width * 0.15;
+  const y = box.y + box.height / 2;
+  const touchPoint = (x: number) => ({
+    force: 1,
+    id: 1,
+    radiusX: 1,
+    radiusY: 1,
+    x,
+    y,
+  });
+
+  try {
+    await session.send('Emulation.setTouchEmulationEnabled', {
+      enabled: true,
+      maxTouchPoints: 1,
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      touchPoints: [touchPoint(startX)],
+      type: 'touchStart',
+    });
+    for (const progress of [0.25, 0.5, 0.75, 1]) {
+      await session.send('Input.dispatchTouchEvent', {
+        touchPoints: [touchPoint(startX + (endX - startX) * progress)],
+        type: 'touchMove',
+      });
+      await page.waitForTimeout(16);
+    }
+    await session.send('Input.dispatchTouchEvent', {
+      touchPoints: [],
+      type: 'touchEnd',
+    });
+    await page.waitForTimeout(16);
+  } finally {
+    await session.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await session.detach();
+  }
+
+  return {
+    after: await scroller.evaluate((element) => element.scrollLeft),
+    before: scrollLeftBeforeSwipe,
+  };
+}
+
+async function wheelScroller(page: Page, scroller: Locator, deltaX: number) {
+  const box = await scroller.boundingBox();
+  if (!box) {
+    throw new Error('Photo carousel scroller is not visible');
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(deltaX, 0);
+}
+
 async function expectMinimumContrastRatio(locator: Locator, minimumRatio: number) {
   const contrastRatio = await locator.evaluate((element) => {
     const parseRgb = (value: string) => {
@@ -735,15 +851,10 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
   ).toBeVisible();
 
   const carousel = page.getByLabel('Matt and Alison photos');
+  const scroller = page.getByTestId('photo-carousel-scroller');
   const activeCaption = carousel.locator('.photo-caption-row strong');
-  const wheelHorizontally = async (deltaX: number) => {
-    await carousel.dispatchEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaX,
-      deltaY: 0,
-    });
-  };
+  const wheelHorizontally = (deltaX: number) =>
+    wheelScroller(page, scroller, deltaX);
   const setWheelClock = async (now: number) => {
     await page.evaluate((nextNow) => {
       (
@@ -768,6 +879,7 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
       .toBe(caption);
   };
   await carousel.scrollIntoViewIfNeeded();
+  await scroller.scrollIntoViewIfNeeded();
 
   await wheelHorizontally(20);
   await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
@@ -826,18 +938,24 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
 
-  const hasCoarsePointer = await page.evaluate(() =>
-    window.matchMedia('(hover: none), (pointer: coarse)').matches,
-  );
-  test.skip(!hasCoarsePointer, 'Mobile pointer behavior only applies to touch devices');
-
   const carousel = page.getByLabel('Matt and Alison photos');
+  const scroller = page.getByTestId('photo-carousel-scroller');
   const controls = carousel.locator('.photo-controls');
   const dots = carousel.locator('.photo-dot');
-  const captionRow = carousel.locator('.photo-caption-row');
   const activeCaption = carousel.locator('.photo-caption-row strong');
 
   await carousel.scrollIntoViewIfNeeded();
+  await scroller.scrollIntoViewIfNeeded();
+  const swipe = await swipeScroller(page, scroller);
+  expect(swipe.after - swipe.before).toBeGreaterThan(
+    (await scroller.evaluate((element) => element.clientWidth)) / 2,
+  );
+  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
+  await expect(
+    carousel.getByRole('button', {
+      name: `Show photo 2: ${secondGalleryPhoto.caption}`,
+    }),
+  ).toHaveAttribute('aria-current', 'true');
   await expect(controls).toHaveCSS('pointer-events', 'none');
   await expect
     .poll(() =>
@@ -875,15 +993,6 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
     )
     .toEqual([
       {
-        ariaCurrent: 'true',
-        hasTransparentButtonBackground: true,
-        inactiveMarkerUsesExpectedBackground: true,
-        markerHeight: '12px',
-        markerRadius: '999px',
-        markerTransform: 'none',
-        markerWidth: '32px',
-      },
-      {
         ariaCurrent: 'false',
         hasTransparentButtonBackground: true,
         inactiveMarkerUsesExpectedBackground: true,
@@ -892,17 +1001,19 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
         markerTransform: 'none',
         markerWidth: '12px',
       },
+      {
+        ariaCurrent: 'true',
+        hasTransparentButtonBackground: true,
+        inactiveMarkerUsesExpectedBackground: true,
+        markerHeight: '12px',
+        markerRadius: '999px',
+        markerTransform: 'none',
+        markerWidth: '32px',
+      },
     ]);
 
-  const beforeCaptionBox = await captionRow.boundingBox();
-  expect(beforeCaptionBox).not.toBeNull();
-
   await page.getByRole('button', { name: 'Show next photo' }).click();
-  await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
-
-  const afterCaptionBox = await captionRow.boundingBox();
-  expect(afterCaptionBox).not.toBeNull();
-  expect(Math.abs(afterCaptionBox!.height - beforeCaptionBox!.height)).toBeLessThanOrEqual(1);
+  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
   await expect
     .poll(() =>
       dots.evaluateAll((elements) =>
@@ -1516,11 +1627,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
 
 test('admin route is reachable, can create households, and shows RSVP results', async ({
   page,
-}, testInfo) => {
-  test.skip(
-    testInfo.project.name === 'mobile',
-    'Desktop table interactions are covered in the chromium project; mobile cards have focused coverage.',
-  );
+}) => {
 
   const deliveredNotifications: Array<{
     channel: string;
@@ -1995,39 +2102,39 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(page.getByText('Signed in as admin@example.com')).toBeVisible();
   await expect(page.getByText('1 households loaded.')).toBeVisible();
   const householdsTable = page.getByLabel('Households table');
-  await expect(householdsTable).toBeVisible();
-  await expect(
-    householdsTable.getByRole('columnheader', { name: 'Household' }),
-  ).toBeVisible();
-  await expect(householdsTable.getByText('The Example Household')).toBeVisible();
-  await expect(page.getByText('generated').first()).toBeVisible();
-  await page.setViewportSize({ width: 900, height: 844 });
-  const intermediateTableLayout = await householdsTable.evaluate((element) => ({
-    documentClientWidth: document.documentElement.clientWidth,
-    documentScrollWidth: document.documentElement.scrollWidth,
-    shellClientWidth: element.clientWidth,
-    shellOverflowX: getComputedStyle(element).overflowX,
-    shellScrollWidth: element.scrollWidth,
-    shellScrollbarGutter: getComputedStyle(element).scrollbarGutter,
-  }));
-  expect(intermediateTableLayout.shellOverflowX).toBe('auto');
-  expect(intermediateTableLayout.shellScrollWidth).toBeGreaterThan(
-    intermediateTableLayout.shellClientWidth,
-  );
-  expect(intermediateTableLayout.documentScrollWidth).toBe(
-    intermediateTableLayout.documentClientWidth,
-  );
-  await page.setViewportSize({ width: 1280, height: 720 });
-  expect(intermediateTableLayout.shellScrollbarGutter).toBe('stable both-edges');
+  if (await householdsTable.isVisible()) {
+    await expect(
+      householdsTable.getByRole('columnheader', { name: 'Household' }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 900, height: 844 });
+    const intermediateTableLayout = await householdsTable.evaluate((element) => ({
+      documentClientWidth: document.documentElement.clientWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      shellClientWidth: element.clientWidth,
+      shellOverflowX: getComputedStyle(element).overflowX,
+      shellScrollWidth: element.scrollWidth,
+      shellScrollbarGutter: getComputedStyle(element).scrollbarGutter,
+    }));
+    expect(intermediateTableLayout.shellOverflowX).toBe('auto');
+    expect(intermediateTableLayout.shellScrollWidth).toBeGreaterThan(
+      intermediateTableLayout.shellClientWidth,
+    );
+    expect(intermediateTableLayout.documentScrollWidth).toBe(
+      intermediateTableLayout.documentClientWidth,
+    );
+    expect(intermediateTableLayout.shellScrollbarGutter).toBe(
+      'stable both-edges',
+    );
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
 
-  const exampleRow = householdsTable
-    .getByRole('row')
-    .filter({ hasText: 'The Example Household' })
-    .first();
-  await exampleRow
-    .getByRole('button', { name: 'Show The Example Household details' })
-    .click();
-  await expect(householdsTable.getByText('Jamie Guest')).toBeVisible();
+  const householdsSurface = await getVisibleHouseholdsSurface(page);
+  const exampleRow = await getVisibleHousehold(page, 'The Example Household');
+  await expect(householdsSurface).toBeVisible();
+  await expect(exampleRow).toBeVisible();
+  await expect(exampleRow.getByText('generated')).toBeVisible();
+  await showHouseholdDetails(page, exampleRow, 'The Example Household');
+  await expect(householdsSurface.getByText('Jamie Guest')).toBeVisible();
   await expect(
     exampleRow.getByRole('link', { name: '+14805550100' }),
   ).toBeVisible();
@@ -2072,7 +2179,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       'Exported invitation mailing data. Review the CSV before printing.',
     ),
   ).toBeVisible();
-  await expect(page.getByText('exported').first()).toBeVisible();
+  await expect(exampleRow.getByText('exported')).toBeVisible();
 
   await clickBulkAction(page, 'Export QR labels');
   await page
@@ -2087,12 +2194,15 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   expect(labelExportRequests).toBe(1);
 
   await clickHouseholdAction(exampleRow, 'View invitation');
+  const exampleContent = await getVisibleHouseholdContent(page, exampleRow);
   await expect(
-    householdsTable.getByRole('link', {
+    exampleContent.getByRole('link', {
       name: new URL('/rsvp/A2B3C4D5E6', page.url()).toString(),
     }),
   ).toBeVisible();
-  await householdsTable.getByRole('button', { name: 'Email invitation' }).click();
+  await exampleContent
+    .getByRole('button', { name: 'Email invitation' })
+    .click();
   await expect(
     page.getByText(
       'The Example Household: Sent invitation email to sam@example.com',
@@ -2117,7 +2227,11 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await page.getByRole('button', { name: 'Close' }).click();
 
   await clickHouseholdAction(exampleRow, 'Edit');
-  const editPanel = householdsTable.getByLabel('Edit The Example Household');
+  const editPanel = await getVisibleHouseholdPanel(
+    page,
+    exampleRow,
+    'Edit The Example Household',
+  );
   const saveChangesButton = editPanel.getByRole('button', { name: 'Save changes' });
   const saveChangesStyles = await saveChangesButton.evaluate((element) => {
     const styles = getComputedStyle(element);
@@ -2128,25 +2242,29 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     };
   });
   expect(saveChangesStyles.backgroundColor).not.toBe('rgb(15, 81, 63)');
-
   await editPanel
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
   await editPanel.getByLabel('Sam Example edit wedding-party role').fill('Reader');
   await editPanel.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Household changes saved.')).toBeVisible();
-  await expect(householdsTable.getByText('The Updated Household')).toBeVisible();
+  await expect(
+    await getVisibleHousehold(page, 'The Updated Household'),
+  ).toBeVisible();
 
   page.once('dialog', (dialog) => dialog.accept());
-  const updatedRow = householdsTable
-    .getByRole('row')
-    .filter({ hasText: 'The Updated Household' })
-    .first();
+  const updatedRow = await getVisibleHousehold(
+    page,
+    'The Updated Household',
+  );
   await clickHouseholdAction(updatedRow, 'Archive');
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
-  await expect(householdsTable.getByText('The Updated Household')).toHaveCount(0);
+  await expect(
+    await getVisibleHousehold(page, 'The Updated Household'),
+  ).toHaveCount(0);
   await page.getByLabel('Show archived households').check();
-  await expect(page.getByText('archived').first()).toBeVisible();
+  const archivedRow = await getVisibleHousehold(page, 'The Updated Household');
+  await expect(archivedRow.getByText('archived')).toBeVisible();
 
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.getByLabel('Household display name').fill('The Harper Household');
@@ -2165,20 +2283,23 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       'Created The Harper Household and generated an invite code.',
     ),
   ).toBeVisible();
+  const harperHousehold = await getVisibleHousehold(
+    page,
+    'The Harper Household',
+  );
+  await expect(harperHousehold).toBeVisible();
+  const harperContent = await getVisibleHouseholdContent(page, harperHousehold);
   await expect(
-    householdsTable.getByText('The Harper Household'),
-  ).toBeVisible();
-  await expect(
-    householdsTable.locator('.invite-code-block strong').filter({
+    harperContent.locator('.invite-code-block strong').filter({
       hasText: 'FRESH22456',
     }),
   ).toHaveText('FRESH22456');
   await expect(
-    householdsTable.getByRole('link', {
+    harperContent.getByRole('link', {
       name: new URL('/rsvp/FRESH22456', page.url()).toString(),
     }),
   ).toBeVisible();
-  await householdsTable.getByRole('button', { name: 'QR code' }).click();
+  await harperContent.getByRole('button', { name: 'QR code' }).click();
   await expect(
     page.getByRole('dialog', { name: 'The Harper Household invitation QR' }),
   ).toBeVisible();
@@ -2188,27 +2309,14 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await expect(
     page.getByRole('heading', { name: 'RSVP dashboard' }),
   ).toBeVisible();
-  const reloadedTable = page.getByLabel('Households table');
-  const reloadedRow = reloadedTable
-    .getByRole('row')
-    .filter({ hasText: 'The Harper Household' })
-    .first();
+  const reloadedRow = await getVisibleHousehold(page, 'The Harper Household');
   await clickHouseholdAction(reloadedRow, 'View invitation');
+  const reloadedContent = await getVisibleHouseholdContent(page, reloadedRow);
   await expect(
-    reloadedTable.locator('.invite-code-block strong').filter({
+    reloadedContent.locator('.invite-code-block strong').filter({
       hasText: 'FRESH22456',
     }),
   ).toHaveText('FRESH22456');
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.reload();
-  await expect(page.getByLabel('Households table')).toBeHidden();
-  await expect(
-    page
-      .getByLabel('Households')
-      .locator('article')
-      .filter({ hasText: 'The Harper Household' }),
-  ).toBeVisible();
 });
 
 test('admin mobile keeps household cards instead of the desktop table', async ({

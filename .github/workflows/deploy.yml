@@ -136,10 +136,12 @@ jobs:
       - name: Cache responsive images
         uses: actions/cache@v6
         with:
-          path: apps/web/public/images
-          key: ${{ runner.os }}-responsive-images-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          path: |
+            apps/web/public/images
+            apps/web/src/generated
+          key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-responsive-images-
+            ${{ runner.os }}-responsive-images-v2-
       - run: npm run build
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -217,10 +219,12 @@ jobs:
       - name: Cache responsive images
         uses: actions/cache@v6
         with:
-          path: apps/web/public/images
-          key: ${{ runner.os }}-responsive-images-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          path: |
+            apps/web/public/images
+            apps/web/src/generated
+          key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-responsive-images-
+            ${{ runner.os }}-responsive-images-v2-
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -286,10 +290,12 @@ jobs:
       - name: Cache responsive images
         uses: actions/cache@v6
         with:
-          path: apps/web/public/images
-          key: ${{ runner.os }}-responsive-images-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          path: |
+            apps/web/public/images
+            apps/web/src/generated
+          key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-responsive-images-
+            ${{ runner.os }}-responsive-images-v2-
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}

@@ -28,10 +28,12 @@ jobs:
       - name: Cache responsive images
         uses: actions/cache@v6
         with:
-          path: apps/web/public/images
-          key: ${{ runner.os }}-responsive-images-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          path: |
+            apps/web/public/images
+            apps/web/src/generated
+          key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-responsive-images-
+            ${{ runner.os }}-responsive-images-v2-
       - run: npm run build
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -44,7 +46,11 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:e2e -- --project=chromium --reporter=line,junit,html
         env:
-          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-junit.xml
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-chromium-junit.xml
+      - run: npm run test:e2e -- --project=mobile --reporter=line,junit,html
+        if: ${{ success() || failure() }}
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: reports/playwright-mobile-junit.xml
       - name: Write test and coverage summary
         if: ${{ always() }}
         run: npm run report:ci

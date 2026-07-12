@@ -76,6 +76,56 @@ describe('responsive image cache helpers', () => {
     ]);
   });
 
+  it('accepts a cache manifest when required generated files are regular files', async () => {
+    const outputRoot = path.join(tempRoot, 'public', 'images');
+    const manifestPath = path.join(outputRoot, '.responsive-image-cache.json');
+    const metadataPath = path.join(tempRoot, 'src', 'generated', 'responsiveImageAssets.ts');
+    const backgroundCssPath = path.join(tempRoot, 'src', 'generated', 'responsiveImageBackgrounds.css');
+    await fs.mkdir(outputRoot, { recursive: true });
+    await fs.mkdir(path.dirname(metadataPath), { recursive: true });
+    await fs.writeFile(path.join(outputRoot, 'hero-640.avif'), 'avif');
+    await fs.writeFile(metadataPath, 'metadata');
+    await fs.writeFile(backgroundCssPath, 'css');
+
+    await writeResponsiveImageCacheManifest({
+      manifestPath,
+      inputHash: 'matching-hash',
+      generatedFiles: ['hero-640.avif'],
+    });
+
+    const manifest = await readValidResponsiveImageCache({
+      manifestPath,
+      outputRoot,
+      inputHash: 'matching-hash',
+      requiredFiles: [metadataPath, backgroundCssPath],
+    });
+
+    expect(manifest?.generatedFiles).toEqual(['hero-640.avif']);
+  });
+
+  it('rejects a cache manifest when a required generated file is missing', async () => {
+    const outputRoot = path.join(tempRoot, 'public', 'images');
+    const manifestPath = path.join(outputRoot, '.responsive-image-cache.json');
+    const metadataPath = path.join(tempRoot, 'src', 'generated', 'responsiveImageAssets.ts');
+    await fs.mkdir(outputRoot, { recursive: true });
+    await fs.writeFile(path.join(outputRoot, 'hero-640.avif'), 'avif');
+
+    await writeResponsiveImageCacheManifest({
+      manifestPath,
+      inputHash: 'matching-hash',
+      generatedFiles: ['hero-640.avif'],
+    });
+
+    const manifest = await readValidResponsiveImageCache({
+      manifestPath,
+      outputRoot,
+      inputHash: 'matching-hash',
+      requiredFiles: [metadataPath],
+    });
+
+    expect(manifest).toBeUndefined();
+  });
+
   it('rejects a cache manifest when stale generated files are present', async () => {
     const outputRoot = path.join(tempRoot, 'public', 'images');
     const manifestPath = path.join(outputRoot, '.responsive-image-cache.json');
