@@ -701,6 +701,10 @@ describe('WeddingSiteStack infrastructure', () => {
             ThrottlingBurstLimit: 10,
             ThrottlingRateLimit: 5,
           },
+          'POST /api/sms-subscriptions': {
+            ThrottlingBurstLimit: 3,
+            ThrottlingRateLimit: 1,
+          },
         },
       },
     });
@@ -724,6 +728,7 @@ describe('WeddingSiteStack infrastructure', () => {
             'PUT /api/rsvp/{inviteCode}',
             'PUT /api/rsvp/{inviteCode}/sms-preferences',
             'POST /api/rsvp/recovery',
+            'POST /api/sms-subscriptions',
           ].includes(resource.Properties?.RouteKey as string),
       )
       .map(([logicalId]) => logicalId);
@@ -733,7 +738,7 @@ describe('WeddingSiteStack infrastructure', () => {
         resource.Properties?.RouteSettings,
     )?.[1];
 
-    expect(routeLogicalIds).toHaveLength(4);
+    expect(routeLogicalIds).toHaveLength(5);
     expect(stage).toBeDefined();
     expect(stage?.DependsOn).toEqual(expect.arrayContaining(routeLogicalIds));
   });
