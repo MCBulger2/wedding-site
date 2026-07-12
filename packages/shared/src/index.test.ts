@@ -9,6 +9,8 @@ import {
   HotelBlockSchema,
   HouseholdSchema,
   InvitationDetailsSchema,
+  PublicSmsSubscriptionRequestSchema,
+  PublicSmsSubscriptionResponseSchema,
   SMS_CONSENT_TEXT_VERSION,
   RsvpRecoveryAcceptedResponseSchema,
   RsvpRecoveryRequestSchema,
@@ -16,10 +18,53 @@ import {
   RsvpUpdateSchema,
   SendInvitationEmailResponseSchema,
   SendHouseholdNotificationInputSchema,
+  SmsConsentSourceSchema,
   UpdateHouseholdInputSchema,
   generateIcs,
   siteContent,
 } from './index.js';
+
+describe('Public SMS subscription schemas', () => {
+  it('accepts a phone number with confirmed consent', () => {
+    expect(
+      PublicSmsSubscriptionRequestSchema.safeParse({
+        phone: '(480) 555-0100',
+        consentAccepted: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    { phone: '(480) 555-0100', consentAccepted: false },
+    { phone: '(480) 555-0100' },
+  ])('rejects missing or unconfirmed consent', (request) => {
+    expect(PublicSmsSubscriptionRequestSchema.safeParse(request).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects unsupported phone characters', () => {
+    expect(
+      PublicSmsSubscriptionRequestSchema.safeParse({
+        phone: '480-555-0100 ext 2',
+        consentAccepted: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts an opted-in response', () => {
+    expect(
+      PublicSmsSubscriptionResponseSchema.safeParse({ status: 'opted_in' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('supports the public SMS opt-in consent source', () => {
+    expect(SmsConsentSourceSchema.parse('public_sms_opt_in')).toBe(
+      'public_sms_opt_in',
+    );
+  });
+});
 
 describe('RsvpUpdateSchema', () => {
   it('requires attending guests to have an active meal status', () => {

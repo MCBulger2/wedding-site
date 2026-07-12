@@ -41,6 +41,23 @@ export const HouseholdPhoneInputSchema = z
   .regex(/^[0-9+(). -]+$/, 'Phone number contains unsupported characters');
 export type HouseholdPhoneInput = z.infer<typeof HouseholdPhoneInputSchema>;
 
+export const PublicSmsSubscriptionRequestSchema = z.object({
+  phone: HouseholdPhoneInputSchema,
+  consentAccepted: z.literal(true, {
+    error: 'Confirm SMS consent to enable text updates.',
+  }),
+});
+export type PublicSmsSubscriptionRequest = z.infer<
+  typeof PublicSmsSubscriptionRequestSchema
+>;
+
+export const PublicSmsSubscriptionResponseSchema = z.object({
+  status: z.enum(['pending_confirmation', 'opted_in']),
+});
+export type PublicSmsSubscriptionResponse = z.infer<
+  typeof PublicSmsSubscriptionResponseSchema
+>;
+
 export const RecoveryContactInputSchema = z.string().trim().min(3).max(320);
 export type RecoveryContactInput = z.infer<typeof RecoveryContactInputSchema>;
 
@@ -56,6 +73,7 @@ export const SmsConsentSourceSchema = z.enum([
   'rsvp_form',
   'recovery_form',
   'sms_preferences',
+  'public_sms_opt_in',
 ]);
 export type SmsConsentSource = z.infer<typeof SmsConsentSourceSchema>;
 
