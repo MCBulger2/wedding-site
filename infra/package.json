@@ -12,12 +12,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.261.0",
-    "constructs": "^10.6.0",
+    "aws-cdk-lib": "^2.262.0",
+    "constructs": "^10.7.1",
     "source-map-support": "^0.5.21"
   },
   "devDependencies": {
-    "aws-cdk": "^2.1130.0",
+    "aws-cdk": "^2.1133.0",
     "esbuild": "^0.28.1",
     "ts-node": "^10.9.2"
   }
