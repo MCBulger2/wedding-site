@@ -22,9 +22,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test:ci
       - name: Cache responsive images
         uses: actions/cache@v6
         with:
@@ -32,8 +29,10 @@ jobs:
             apps/web/public/images
             apps/web/src/generated
           key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-responsive-images-v2-
+      - run: npm run images:generate -w apps/web
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:ci
       - run: npm run build
       - name: Cache Playwright browsers
         uses: actions/cache@v6
