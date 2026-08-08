@@ -178,11 +178,12 @@ export function parseRoute(pathname: string): Route {
     return { name: 'rsvp_entry' };
   }
   if (pathname.startsWith('/rsvp/') && pathname.endsWith('/sms-updates')) {
+    const inviteCode = decodeURIComponent(
+      pathname.slice('/rsvp/'.length, -'/sms-updates'.length),
+    );
     return {
       name: 'legacy_redirect',
-      path: `/rsvp/${decodeURIComponent(
-        pathname.slice('/rsvp/'.length, -'/sms-updates'.length),
-      )}`,
+      path: `/rsvp/${encodeURIComponent(inviteCode)}`,
     };
   }
   if (pathname.startsWith('/rsvp/') && pathname.endsWith('/success')) {

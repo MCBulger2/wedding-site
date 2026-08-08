@@ -250,6 +250,13 @@ describe('App routes', () => {
     });
   });
 
+  it('re-encodes reserved characters when redirecting legacy RSVP SMS routes', () => {
+    expect(parseRoute('/rsvp/A%2FB%3FC%23D/sms-updates')).toEqual({
+      name: 'legacy_redirect',
+      path: '/rsvp/A%2FB%3FC%23D',
+    });
+  });
+
   it('replaces legacy routes without obsolete content flashing', async () => {
     const replace = vi.fn();
     render(<LegacyRedirect path="/" replace={replace} />);
