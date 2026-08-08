@@ -1209,44 +1209,90 @@ test('mobile footer links stay aligned across public, RSVP, and admin routes', a
   }
 });
 
-test('rsvp recovery stays collapsed by default and shows generic success when expanded', async ({
+test('RSVP search submits exact surname and shows multiple household links', async ({
   page,
 }) => {
-  await page.route('**/api/rsvp/recovery', async (route) => {
+  let requestBody: unknown;
+  await page.route('**/api/rsvp/search', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    requestBody = route.request().postDataJSON();
     await route.fulfill({
-      status: 202,
+      status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        accepted: true,
-        message:
-          "If that matches our guest list, we'll send your private RSVP link.",
+        results: [
+          { displayName: 'The Example Household', rsvpUrl: 'http://127.0.0.1:54723/rsvp/A2B3C4D5E6' },
+          { displayName: 'Example & Guest', rsvpUrl: 'http://127.0.0.1:54723/rsvp/FRESH22456' },
+        ],
+        tooManyMatches: false,
       }),
     });
   });
 
   await page.goto('/rsvp');
-
-  await expect(
-    page.getByRole('button', { name: "Don't have a code?" }),
-  ).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByLabel('Email or mobile number')).toHaveCount(0);
-
-  await page.getByRole('button', { name: "Don't have a code?" }).click();
-  await expect(
-    page.getByRole('button', { name: "Don't have a code?" }),
-  ).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByLabel('Email or mobile number')).toBeFocused();
-
-  await page.getByLabel('Email or mobile number').fill('sam@example.com');
-  await page.getByRole('button', { name: 'Send private RSVP link' }).click();
-  await expect(
-    page.getByText(
-      "If that matches our guest list, we'll send your private RSVP link.",
-    ),
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Search by last name' }).click();
+  await page.getByLabel('Household last name').fill(' Example ');
+  await page.getByRole('button', { name: 'Find my household' }).click();
+  await expect.poll(() => requestBody).toEqual({ lastName: 'Example' });
+  await expect(page.getByRole('list', { name: 'Matching households' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'The Example Household' })).toHaveAttribute('href', /\/rsvp\/A2B3C4D5E6$/);
+  await expect(page.getByRole('link', { name: 'Example & Guest' })).toBeVisible();
 });
 
-test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
+test('RSVP search handles empty and tooManyMatches results', async ({ page }) => {
+  let response = { results: [], tooManyMatches: false };
+  await page.route('**/api/rsvp/search', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+  });
+  await page.goto('/rsvp');
+  await page.getByRole('button', { name: 'Search by last name' }).click();
+  const form = page.locator('#rsvp-search-form');
+  await form.getByLabel('Household last name').fill('Unknown');
+  await form.getByRole('button', { name: 'Find my household' }).click();
+  await expect(page.getByText("We couldn't find a household with that exact last name.")).toBeVisible();
+  response = { results: [], tooManyMatches: true };
+  await form.getByLabel('Household last name').fill('Smith');
+  await form.getByRole('button', { name: 'Find my household' }).click();
+  await expect(page.getByText('We found too many households with that last name')).toBeVisible();
+});
+
+test('RSVP search selected navigation opens the chosen private RSVP', async ({ page }) => {
+  await page.route('**/api/rsvp/search', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [{ displayName: 'Example & Guest', rsvpUrl: '/rsvp/FRESH22456' }], tooManyMatches: false }) });
+  });
+  await page.goto('/rsvp');
+  await page.getByRole('button', { name: 'Search by last name' }).click();
+  await page.getByLabel('Household last name').fill('Example');
+  await page.getByRole('button', { name: 'Find my household' }).click();
+  await page.getByRole('link', { name: 'Example & Guest' }).click();
+  await expect(page).toHaveURL(/\/rsvp\/FRESH22456$/);
+});
+
+test('email recovery is email-only and has no phone or SMS controls', async ({ page }) => {
+  await page.route('**/api/rsvp/recovery', async (route) => {
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ accepted: true, message: "If that matches our guest list, we'll send your private RSVP link." }) });
+  });
+  await page.goto('/rsvp');
+  await page.getByRole('button', { name: 'Email my RSVP link' }).click();
+  await expect(page.getByLabel('Email address')).toBeFocused();
+  await expect(page.getByLabel('Mobile phone')).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(/sms|text updates|twilio|mobile number/i);
+  await page.getByLabel('Email address').fill('sam@example.com');
+  await page.getByRole('button', { name: 'Email me my RSVP link' }).click();
+  await expect(page.getByText("If that matches our guest list, we'll send your private RSVP link.")).toBeVisible();
+});
+
+test('legacy SMS routes redirect to the public RSVP entry points', async ({ page }) => {
+  await page.goto('/sms-updates');
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/sms-opt-in-proof');
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/rsvp/A%2FB%3FC%23D/sms-updates');
+  await expect(page).toHaveURL(/\/rsvp\/A%2FB%3FC%23D$/);
+});
+
+test('RSVP search stays within the mobile viewport without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/rsvp');
 
@@ -1272,60 +1318,23 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.stepsTop);
   expect(lookupOrder.headingTop).toBeLessThan(180);
 
-  await page.getByRole('button', { name: "Don't have a code?" }).click();
-  await expect(page.getByLabel('Email or mobile number')).toBeVisible();
+  await page.getByRole('button', { name: 'Email my RSVP link' }).click();
+  await expect(page.getByLabel('Email address')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Send private RSVP link' }),
+    page.getByRole('button', { name: 'Email me my RSVP link' }),
   ).toBeVisible();
 
   const cardBounds = await page.locator('.lookup-card').boundingBox();
   const buttonBounds = await page
-    .getByRole('button', { name: 'Send private RSVP link' })
+    .getByRole('button', { name: 'Email me my RSVP link' })
     .boundingBox();
   expect(cardBounds).not.toBeNull();
   expect(buttonBounds).not.toBeNull();
   expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(
     cardBounds!.x + cardBounds!.width + 1,
   );
-});
-
-test('phone recovery submits without SMS enrollment fields', async ({
-  page,
-}) => {
-  const recoveryRequests: Array<{ contact: string }> = [];
-  await page.route('**/api/rsvp/recovery', async (route) => {
-    const payload = route.request().postDataJSON() as { contact: string };
-    recoveryRequests.push(payload);
-    await route.fulfill({
-      status: 202,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        accepted: true,
-        message:
-          "If that matches our guest list, we'll send your private RSVP link.",
-      }),
-    });
-  });
-
-  await page.goto('/rsvp');
-  await page.getByRole('button', { name: "Don't have a code?" }).click();
-  await page.getByLabel('Email or mobile number').fill('(480) 555-0100');
-  await expect(page.getByRole('checkbox')).toHaveCount(0);
-  await Promise.all([
-    page.waitForResponse('**/api/rsvp/recovery'),
-    page.locator('#rsvp-recovery-form').evaluate((form) => {
-      if (!(form instanceof HTMLFormElement)) {
-        throw new Error('Recovery form not found');
-      }
-      form.requestSubmit();
-    }),
-  ]);
-  await expect(
-    page.getByText(
-      "If that matches our guest list, we'll send your private RSVP link.",
-    ),
-  ).toBeVisible();
-  expect(recoveryRequests).toEqual([{ contact: '(480) 555-0100' }]);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBe(0);
 });
 
 test('privacy and terms pages render public compliance content', async ({
@@ -1346,113 +1355,6 @@ test('privacy and terms pages render public compliance content', async ({
   ).toBeVisible();
 });
 
-test('public SMS signup submits affirmative consent and legacy proof URL redirects', async ({
-  page,
-}) => {
-  let submittedPayload: unknown;
-  await page.route('**/api/sms-subscriptions', async (route) => {
-    expect(route.request().method()).toBe('POST');
-    submittedPayload = route.request().postDataJSON();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ status: 'opted_in' }),
-    });
-  });
-
-  await page.goto('/sms-updates');
-
-  await expect(
-    page.getByRole('heading', { name: 'Wedding text updates', exact: true }),
-  ).toBeVisible();
-  const smsPreferences = page.getByLabel('Standalone SMS preferences');
-  const phoneInput = smsPreferences.getByLabel('Mobile phone');
-  const consentCheckbox = smsPreferences.getByRole('checkbox');
-  await expect(phoneInput).toHaveValue('');
-  await expect(consentCheckbox).not.toBeChecked();
-  await expect(
-    smsPreferences.getByRole('link', { name: 'Terms' }),
-  ).toHaveAttribute('href', '/terms');
-  await expect(
-    smsPreferences.getByRole('link', { name: 'Privacy Policy' }),
-  ).toHaveAttribute('href', '/privacy');
-  await expect(page.locator('body')).not.toContainText(
-    /SMS opt-in proof|non-submitting example|does not submit|does not enroll/i,
-  );
-
-  await phoneInput.fill('(480) 555-0100');
-  await consentCheckbox.check();
-  await page.getByRole('button', { name: 'Sign up for text updates' }).click();
-
-  await expect(
-    page.getByRole('status').filter({
-      hasText: 'You’re enrolled for Matt & Alison Wedding text updates.',
-    }),
-  ).toBeVisible();
-  expect(submittedPayload).toEqual({
-    phone: '(480) 555-0100',
-    consentAccepted: true,
-  });
-
-  await page.goto('/sms-opt-in-proof');
-  await expect
-    .poll(() => new URL(page.url()).pathname)
-    .toBe('/sms-updates');
-  await expect(
-    page.getByRole('heading', { name: 'Wedding text updates', exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('body')).not.toContainText(
-    /SMS opt-in proof|non-submitting example|does not submit|does not enroll/i,
-  );
-});
-
-test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {
-  const requests: unknown[] = [];
-  const smsHousehold = { ...household, smsConsent: undefined };
-  await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household: smsHousehold }) });
-  });
-  await page.route('**/api/rsvp/A2B3C4D5E6/sms-preferences', async (route) => {
-    const payload = route.request().postDataJSON();
-    requests.push(payload);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ...smsHousehold,
-        smsConsent: payload.enabled
-          ? { status: 'opted_in', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' }
-          : { status: 'opted_out', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' },
-      }),
-    });
-  });
-
-  await page.goto('/rsvp/A2B3C4D5E6/sms-updates');
-  const smsPreferencesMain = page.getByRole('main');
-  await expect(smsPreferencesMain.getByRole('heading', { name: 'Text updates' })).toBeVisible();
-  await expect(smsPreferencesMain.getByRole('checkbox')).not.toBeChecked();
-  await expect(smsPreferencesMain.getByRole('link', { name: 'Terms' })).toBeVisible();
-  await expect(smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
-  await page.getByRole('button', { name: 'Enable text updates' }).click();
-  await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
-  expect(requests).toEqual([]);
-
-  await page.getByRole('checkbox').check();
-  await page.getByLabel('Mobile phone').fill('(480) 555-0100');
-  await page.getByRole('button', { name: 'Enable text updates' }).click();
-  await expect.poll(() => requests).toEqual([
-    { enabled: true, phone: '(480) 555-0100' },
-  ]);
-  await expect(page.getByText('Text updates are active.')).toBeVisible();
-  await expect(smsPreferencesMain.getByText('Active', { exact: true })).toBeVisible();
-  await expect(page.getByRole('checkbox')).not.toBeChecked();
-
-  await page.getByRole('button', { name: 'Turn off text updates' }).click();
-  await expect.poll(() => requests).toEqual([
-    { enabled: true, phone: '(480) 555-0100' },
-    { enabled: false },
-  ]);
-});
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
   await page.route('**/api/admin/auth/config', async (route) => {
@@ -1625,7 +1527,7 @@ test('guest can look up an invite code and submit an RSVP', async ({
   );
 });
 
-test('admin route is reachable, can create households, and shows RSVP results', async ({
+test('admin notification route is reachable, can create households, and shows RSVP results', async ({
   page,
 }) => {
 
