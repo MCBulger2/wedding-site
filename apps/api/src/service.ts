@@ -65,6 +65,15 @@ const AVERY_5160_LABEL = {
   horizontalPitch: 2.75 * POINTS_PER_INCH,
   verticalPitch: 1 * POINTS_PER_INCH,
 };
+const HELVETICA_BOLD_ASCII_WIDTHS = [
+  278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278,
+  278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584,
+  584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611,
+  833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333,
+  278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278,
+  556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 722, 556, 556,
+  500, 389, 280, 389, 584,
+];
 
 interface PreparedInvitationExportRow {
   household: Household;
@@ -1611,7 +1620,8 @@ function drawInvitationLabel(
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
   const householdNameLines = wrapPdfText(
     row.household.displayName,
-    Math.floor(textWidth / 5),
+    textWidth,
+    9,
     2,
   );
   const inviteCodeText = truncatePdfText(
@@ -1774,26 +1784,87 @@ function truncatePdfText(value: string, maxLength: number): string {
 
 function wrapPdfText(
   value: string,
-  maxLineLength: number,
+  maxWidth: number,
+  fontSize: number,
   maxLines: number,
 ): string[] {
-  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
+  const normalized = value
+    .replace(/[^\x20-\x7e]/g, '?')
+    .trim()
+    .replace(/ +/g, ' ');
   const lines: string[] = [];
   let remaining = normalized;
 
   while (remaining && lines.length < maxLines) {
-    if (remaining.length <= maxLineLength) {
-      lines.push(remaining);
+    const fittingText = takePdfTextThatFits(remaining, maxWidth, fontSize);
+    if (fittingText.length === remaining.length) {
+      lines.push(fittingText);
+      remaining = '';
       break;
     }
 
-    const wordBreak = remaining.lastIndexOf(' ', maxLineLength);
-    const lineEnd = wordBreak > 0 ? wordBreak : maxLineLength;
-    lines.push(remaining.slice(0, lineEnd));
-    remaining = remaining.slice(wordBreak > 0 ? wordBreak + 1 : lineEnd);
+    const wordBreak = fittingText.lastIndexOf(' ');
+    const line = wordBreak > 0 ? fittingText.slice(0, wordBreak) : fittingText;
+    lines.push(line);
+    remaining = remaining.slice(wordBreak > 0 ? wordBreak + 1 : line.length);
+  }
+
+  if (remaining && lines.length > 0) {
+    const finalLineIndex = lines.length - 1;
+    lines[finalLineIndex] = appendPdfEllipsis(
+      lines[finalLineIndex],
+      maxWidth,
+      fontSize,
+    );
   }
 
   return lines;
+}
+
+function takePdfTextThatFits(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  let width = 0;
+  let end = 0;
+
+  for (const character of value) {
+    const characterWidth = getHelveticaBoldTextWidth(character, fontSize);
+    if (width + characterWidth > maxWidth) {
+      break;
+    }
+    width += characterWidth;
+    end += character.length;
+  }
+
+  return value.slice(0, end);
+}
+
+function appendPdfEllipsis(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  const ellipsis = '...';
+  let truncated = value.trimEnd();
+
+  while (
+    truncated &&
+    getHelveticaBoldTextWidth(`${truncated}${ellipsis}`, fontSize) > maxWidth
+  ) {
+    truncated = truncated.slice(0, -1).trimEnd();
+  }
+
+  return `${truncated}${ellipsis}`;
+}
+
+function getHelveticaBoldTextWidth(value: string, fontSize: number): number {
+  return Array.from(value).reduce((width, character) => {
+    const characterCode = character.charCodeAt(0);
+    const glyphWidth = HELVETICA_BOLD_ASCII_WIDTHS[characterCode - 32] ?? 1000;
+    return width + (glyphWidth * fontSize) / 1000;
+  }, 0);
 }
 
 function escapePdfString(value: string): string {

@@ -509,10 +509,25 @@ describe('WeddingService', () => {
     const pdfText = pdf.toString('utf8');
 
     expect(pdfText).toContain('The Exceptionally Long');
-    expect(pdfText).toContain('Example Household Name');
+    expect(pdfText).toContain('Example Household...');
     expect(pdfText).toContain('/F2 9 Tf');
     expect(pdfText).toContain('/F1 8 Tf');
     expect(pdfText).toContain('/F1 4.5 Tf');
+  });
+
+  it('fits wide-glyph household names and ellipsizes text beyond two QR-label lines', async () => {
+    const { service } = await createSeededService({
+      displayName: 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+    });
+
+    const pdf = await service.exportInvitationLabels(
+      'https://wedding.example.com',
+    );
+    const pdfText = pdf.toString('utf8');
+
+    expect(pdfText).toContain('(WWWWWWWWWWWWW) Tj');
+    expect(pdfText).toContain('(WWWWWWWWWWWW...) Tj');
+    expect(pdfText).not.toContain('(WWWWWWWWWWWWW...) Tj');
   });
 
   it('reveals an existing recoverable invitation without exposing it in household lists', async () => {
