@@ -61,6 +61,7 @@ export interface WeddingRepository {
   getHouseholdByInviteHash(inviteCodeHash: string): Promise<Household | undefined>;
   listHouseholdsByEmail(email: string): Promise<Household[]>;
   listHouseholdsByPhone(phone: string): Promise<Household[]>;
+  listHouseholdsByLastName(lastName: string): Promise<Household[]>;
   getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined>;
   getRsvp(householdId: string): Promise<StoredRsvp | undefined>;
   listHouseholds(): Promise<Household[]>;
@@ -163,6 +164,15 @@ export class DynamoWeddingRepository implements WeddingRepository {
         ':phone': phone,
       },
     });
+  }
+
+  async listHouseholdsByLastName(lastName: string): Promise<Household[]> {
+    const normalizedLastName = normalizeLastName(lastName);
+    return (await this.listHouseholds()).filter((household) =>
+      household.members.some(
+        (member) => normalizeLastName(member.lastName) === normalizedLastName,
+      ),
+    );
   }
 
   async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
@@ -518,6 +528,15 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     return [...this.households.values()].filter((household) => household.phone === phone);
   }
 
+  async listHouseholdsByLastName(lastName: string): Promise<Household[]> {
+    const normalizedLastName = normalizeLastName(lastName);
+    return [...this.households.values()].filter((household) =>
+      household.members.some(
+        (member) => normalizeLastName(member.lastName) === normalizedLastName,
+      ),
+    );
+  }
+
   async getInviteCodeSecret(householdId: string): Promise<InviteCodeSecret | undefined> {
     return this.inviteCodeSecrets.get(householdId);
   }
@@ -746,4 +765,8 @@ function smsConsentMatches(
     current.phone === expected.phone &&
     current.consentedAt === expected.consentedAt
   );
+}
+
+function normalizeLastName(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US');
 }

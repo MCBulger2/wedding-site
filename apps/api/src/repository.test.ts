@@ -38,6 +38,30 @@ function householdItem(householdId: string, overrides: Partial<Household> = {}) 
   };
 }
 
+const plusOneOnlyRsvp = {
+  members: [
+    {
+      memberId: 'h4-member',
+      attending: true,
+      mealChoice: 'buffet',
+      dietaryNotes: '',
+    },
+  ],
+  plusOnes: [
+    {
+      sponsorMemberId: 'h4-member',
+      firstName: 'Plus',
+      lastName: 'Example',
+      mealChoice: 'fish',
+      dietaryNotes: '',
+    },
+  ],
+  notes: '',
+  accessibilityNotes: '',
+  submittedAt: '2026-07-04T12:00:00.000Z',
+  updatedAt: '2026-07-04T12:00:00.000Z',
+} satisfies Parameters<InMemoryWeddingRepository['saveRsvpUpdate']>[1];
+
 function mockRepositorySend(repository: DynamoWeddingRepository) {
   return vi.spyOn(
     (repository as unknown as { client: { send: (...args: unknown[]) => Promise<unknown> } }).client,
@@ -140,6 +164,79 @@ describe('Dynamo household scan pagination', () => {
       ExclusiveStartKey: cursor,
     });
   });
+
+  it('returns only invited households with an exact last-name match across paginated scans', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository)
+      .mockResolvedValueOnce({
+        Items: [
+          householdItem('h1', {
+            members: [
+              {
+                id: 'h1-member',
+                firstName: 'Guest',
+                lastName: 'Example',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+          householdItem('h3', {
+            members: [
+              {
+                id: 'h3-member',
+                firstName: 'Guest',
+                lastName: 'Examples',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+        ],
+        LastEvaluatedKey: cursor,
+      })
+      .mockResolvedValueOnce({
+        Items: [
+          householdItem('h4', {
+            members: [
+              {
+                id: 'h4-member',
+                firstName: 'Guest',
+                lastName: 'Different',
+                canBringPlusOne: false,
+              },
+            ],
+            rsvp: plusOneOnlyRsvp,
+          }),
+          householdItem('h2', {
+            members: [
+              {
+                id: 'h2-member',
+                firstName: 'Guest',
+                lastName: 'example',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+        ],
+      });
+
+    const households = await repository.listHouseholdsByLastName('  EXAMPLE  ');
+
+    expect(households.map((household) => household.householdId)).toEqual(['h1', 'h2']);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      FilterExpression: 'entityType = :entityType',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+      },
+    });
+    expect((send.mock.calls[1][0] as CommandWithInput).input).toMatchObject({
+      FilterExpression: 'entityType = :entityType',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+      },
+      ExclusiveStartKey: cursor,
+    });
+  });
 });
 
 describe('Recovery rate limit persistence', () => {
@@ -225,6 +322,47 @@ describe('Recovery rate limit persistence', () => {
       },
       ReturnValues: 'ALL_NEW',
     });
+  });
+});
+
+describe('exact last-name household lookup', () => {
+  it('matches only invited members and ignores plus-ones in memory', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('h1', {
+      members: [
+        {
+          id: 'h1-member',
+          firstName: 'Guest',
+          lastName: 'Example',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household);
+    await repository.saveHousehold(householdItem('h2', {
+      members: [
+        {
+          id: 'h2-member',
+          firstName: 'Guest',
+          lastName: 'example',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household);
+    await repository.saveHousehold(householdItem('h3', {
+      members: [
+        {
+          id: 'h3-member',
+          firstName: 'Guest',
+          lastName: 'Examples',
+          canBringPlusOne: false,
+        },
+      ],
+      rsvp: plusOneOnlyRsvp,
+    }) as Household);
+
+    const matches = await repository.listHouseholdsByLastName('  EXAMPLE  ');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['h1', 'h2']);
   });
 });
 
