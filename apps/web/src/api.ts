@@ -9,6 +9,8 @@ import type {
   PublicSmsSubscriptionResponse,
   RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequest,
+  RsvpSearchRequest,
+  RsvpSearchResponse,
   RsvpUpdate,
   SmsPreferencesRequest,
   SendInvitationEmailResponse,
@@ -70,6 +72,7 @@ export interface AdminAuthConfigResponse {
 }
 
 export type RsvpRecoveryResponse = RsvpRecoveryAcceptedResponse;
+export type RsvpLookupSearchResponse = RsvpSearchResponse;
 
 export function createPublicSmsSubscription(
   payload: PublicSmsSubscriptionRequest,
@@ -117,6 +120,15 @@ export async function recoverRsvpLink(
   payload: RsvpRecoveryRequest,
 ): Promise<RsvpRecoveryResponse> {
   return request<RsvpRecoveryResponse>('/rsvp/recovery', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function searchRsvps(
+  payload: RsvpSearchRequest,
+): Promise<RsvpLookupSearchResponse> {
+  return request<RsvpLookupSearchResponse>('/rsvp/search', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

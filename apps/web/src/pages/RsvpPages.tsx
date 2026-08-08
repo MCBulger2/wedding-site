@@ -1,6 +1,5 @@
 import {
   GenericRecoverySuccessMessage,
-  RecoveryContactInputSchema,
   RsvpUpdateSchema,
   generateIcs,
   type Household,
@@ -28,6 +27,8 @@ import {
   recoverRsvpLink,
   saveRsvp,
   saveSmsPreferences,
+  searchRsvps,
+  type RsvpLookupSearchResponse,
   type RsvpPayload,
 } from '../api.js';
 import { cx, scoped } from '../classNames.js';
@@ -40,26 +41,40 @@ import { siteContent } from '../siteContent.js';
 import styles from './RsvpPages.module.css';
 
 type RsvpFieldErrorMap = Record<string, string>;
+type AssistancePanel = 'search' | 'recovery' | null;
 
 export function RsvpLookupPage() {
   const [inviteCode, setInviteCode] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
-  const [recoveryExpanded, setRecoveryExpanded] = useState(false);
-  const [recoveryContact, setRecoveryContact] = useState('');
+  const [activePanel, setActivePanel] = useState<AssistancePanel>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'submitting'>(
+    'idle',
+  );
+  const [searchError, setSearchError] = useState('');
+  const [searchMessage, setSearchMessage] = useState('');
+  const [searchResults, setSearchResults] = useState<
+    RsvpLookupSearchResponse['results']
+  >([]);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryStatus, setRecoveryStatus] = useState<
     'idle' | 'submitting' | 'success'
   >('idle');
   const [recoveryError, setRecoveryError] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const recoveryInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!recoveryExpanded) {
+    if (activePanel === 'search') {
+      searchInputRef.current?.focus();
       return;
     }
 
-    recoveryInputRef.current?.focus();
-  }, [recoveryExpanded]);
+    if (activePanel === 'recovery') {
+      recoveryInputRef.current?.focus();
+    }
+  }, [activePanel]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -71,10 +86,68 @@ export function RsvpLookupPage() {
     window.location.assign(`/rsvp/${encodeURIComponent(normalized)}`);
   };
 
+  const openPanel = (panel: Exclude<AssistancePanel, null>) => {
+    setActivePanel((current) => (current === panel ? null : panel));
+    if (panel === 'search') {
+      setRecoveryError('');
+      setRecoveryMessage('');
+      setRecoveryStatus('idle');
+    } else {
+      setSearchError('');
+      setSearchMessage('');
+      setSearchResults([]);
+      setSearchStatus('idle');
+    }
+  };
+
+  const submitSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    const normalized = searchTerm.trim();
+    const validation = validateSearchLastName(normalized);
+    if (validation) {
+      setSearchError(validation);
+      setSearchMessage('');
+      setSearchResults([]);
+      setSearchStatus('idle');
+      return;
+    }
+
+    setSearchStatus('submitting');
+    setSearchError('');
+    setSearchMessage('');
+    setSearchResults([]);
+
+    try {
+      const response = await searchRsvps({ lastName: normalized });
+      setSearchStatus('idle');
+
+      if (response.tooManyMatches) {
+        setSearchMessage(
+          'We found too many households with that last name to safely list here. Use email recovery instead, or contact Matt or Alison for help.',
+        );
+        return;
+      }
+
+      if (response.results.length === 0) {
+        setSearchMessage(
+          "We couldn't find a household with that exact last name. Try the name printed on your invitation, or use email recovery instead.",
+        );
+        return;
+      }
+
+      setSearchResults(response.results);
+    } catch {
+      setSearchStatus('idle');
+      setSearchMessage(
+        'We could not search right now. Please try again, use email recovery, or contact Matt or Alison.',
+      );
+    }
+  };
+
   const submitRecovery = async (event: FormEvent) => {
     event.preventDefault();
-    const normalized = recoveryContact.trim();
-    const validation = validateRecoveryContact(normalized);
+    const normalized = recoveryEmail.trim();
+    const validation = validateRecoveryEmail(normalized);
     if (validation) {
       setRecoveryError(validation);
       setRecoveryMessage('');
@@ -176,42 +249,139 @@ export function RsvpLookupPage() {
           <div className={scoped(styles, 'lookup-divider')}>
             <span>or</span>
           </div>
-          <button
-            type="button"
-            className={scoped(styles, 'recovery-toggle')}
-            aria-expanded={recoveryExpanded}
-            aria-controls="rsvp-recovery-form"
-            onClick={() => {
-              setRecoveryExpanded((current) => !current);
-              setRecoveryError('');
-              setRecoveryMessage('');
-              setRecoveryStatus('idle');
-            }}
-          >
-            <LifeBuoy aria-hidden="true" />
-            Don&apos;t have a code?
-          </button>
-          {recoveryExpanded && (
+          <div className={scoped(styles, 'assistance-actions')}>
+            <button
+              type="button"
+              className={scoped(styles, 'recovery-toggle')}
+              aria-expanded={activePanel === 'search'}
+              aria-controls="rsvp-search-form"
+              onClick={() => openPanel('search')}
+            >
+              <Search aria-hidden="true" />
+              Search by last name
+            </button>
+            <button
+              type="button"
+              className={scoped(styles, 'recovery-toggle')}
+              aria-expanded={activePanel === 'recovery'}
+              aria-controls="rsvp-recovery-form"
+              onClick={() => openPanel('recovery')}
+            >
+              <LifeBuoy aria-hidden="true" />
+              Email my RSVP link
+            </button>
+          </div>
+          {activePanel === 'search' && (
+            <form
+              id="rsvp-search-form"
+              className={scoped(styles, 'recovery-form')}
+              onSubmit={submitSearch}
+            >
+              <label className={searchError ? 'field-error' : undefined}>
+                Household last name
+                <input
+                  ref={searchInputRef}
+                  aria-describedby={
+                    searchError ? 'rsvp-search-last-name-error' : 'rsvp-search-helper'
+                  }
+                  aria-invalid={searchError ? 'true' : 'false'}
+                  autoCapitalize="words"
+                  autoCorrect="off"
+                  inputMode="text"
+                  placeholder="Example"
+                  value={searchTerm}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                    setSearchError('');
+                    setSearchMessage('');
+                    setSearchResults([]);
+                    if (searchStatus !== 'submitting') {
+                      setSearchStatus('idle');
+                    }
+                  }}
+                />
+                {searchError && (
+                  <span
+                    id="rsvp-search-last-name-error"
+                    className="field-error-message"
+                    role="alert"
+                  >
+                    {searchError}
+                  </span>
+                )}
+              </label>
+              <p
+                id="rsvp-search-helper"
+                className={cx(
+                  'form-message',
+                  scoped(styles, 'recovery-helper'),
+                )}
+              >
+                Search using the exact household last name printed on your invitation.
+              </p>
+              <button
+                type="submit"
+                className={scoped(styles, 'recovery-submit-button')}
+                disabled={searchStatus === 'submitting'}
+              >
+                <Search aria-hidden="true" />
+                {searchStatus === 'submitting'
+                  ? 'Searching...'
+                  : 'Find my household'}
+              </button>
+              {searchStatus === 'submitting' && (
+                <div className="inline-loading-shell">
+                  <LoadingPulse compact />
+                </div>
+              )}
+              <div aria-live="polite" className={scoped(styles, 'assistance-status')}>
+                {searchMessage && <p className="form-message">{searchMessage}</p>}
+                {searchResults.length > 0 && (
+                  <div className={scoped(styles, 'search-results')}>
+                    <p className="form-message">
+                      Choose your household below to open the correct private RSVP.
+                    </p>
+                    <ul
+                      aria-label="Matching households"
+                      className={scoped(styles, 'search-results-list')}
+                    >
+                      {searchResults.map((result) => (
+                        <li key={result.rsvpUrl}>
+                          <a
+                            className={scoped(styles, 'search-result-link')}
+                            href={result.rsvpUrl}
+                          >
+                            {result.displayName}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </form>
+          )}
+          {activePanel === 'recovery' && (
             <form
               id="rsvp-recovery-form"
               className={scoped(styles, 'recovery-form')}
               onSubmit={submitRecovery}
             >
               <label className={recoveryError ? 'field-error' : undefined}>
-                Email or mobile number
+                Email address
                 <input
                   ref={recoveryInputRef}
                   aria-describedby={
-                    recoveryError ? 'rsvp-recovery-contact-error' : undefined
+                    recoveryError ? 'rsvp-recovery-contact-error' : 'rsvp-recovery-helper'
                   }
                   aria-invalid={recoveryError ? 'true' : 'false'}
                   autoCapitalize="off"
                   autoCorrect="off"
                   inputMode="email"
-                  placeholder="name@example.com or (555) 123-4567"
-                  value={recoveryContact}
+                  placeholder="name@example.com"
+                  value={recoveryEmail}
                   onChange={(event) => {
-                    setRecoveryContact(event.target.value);
+                    setRecoveryEmail(event.target.value);
                     setRecoveryError('');
                     if (recoveryStatus !== 'submitting') {
                       setRecoveryMessage('');
@@ -230,13 +400,13 @@ export function RsvpLookupPage() {
                 )}
               </label>
               <p
+                id="rsvp-recovery-helper"
                 className={cx(
                   'form-message',
                   scoped(styles, 'recovery-helper'),
                 )}
               >
-                Enter the email address or mobile number already saved with your
-                household.
+                Enter the email address already associated with your household and we&apos;ll send your RSVP link if we find a match.
               </p>
               <button
                 type="submit"
@@ -246,18 +416,16 @@ export function RsvpLookupPage() {
                 <Send aria-hidden="true" />
                 {recoveryStatus === 'submitting'
                   ? 'Sending link...'
-                  : 'Send private RSVP link'}
+                  : 'Email me my RSVP link'}
               </button>
               {recoveryStatus === 'submitting' && (
                 <div className="inline-loading-shell">
                   <LoadingPulse compact />
                 </div>
               )}
-              {recoveryMessage && (
-                <p className="form-message" aria-live="polite">
-                  {recoveryMessage}
-                </p>
-              )}
+              <div aria-live="polite" className={scoped(styles, 'assistance-status')}>
+                {recoveryMessage && <p className="form-message">{recoveryMessage}</p>}
+              </div>
             </form>
           )}
         </div>
@@ -1665,22 +1833,18 @@ function normalizeValidationMessage(message: string): string {
   return message;
 }
 
-function validateRecoveryContact(value: string): string | undefined {
-  const parsed = RecoveryContactInputSchema.safeParse(value);
-  if (!parsed.success) {
-    return 'Enter a valid email address or mobile number.';
+function validateSearchLastName(value: string): string | undefined {
+  if (!value.trim()) {
+    return 'Enter your household last name.';
   }
 
-  const trimmed = value.trim();
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const digits = trimmed.replace(/\D/g, '');
-  const validPhone =
-    (trimmed.startsWith('+') && /^\+[1-9]\d{7,14}$/.test(`+${digits}`)) ||
-    digits.length === 10 ||
-    (digits.length === 11 && digits.startsWith('1'));
+  return undefined;
+}
 
-  if (!emailPattern.test(trimmed) && !validPhone) {
-    return 'Enter a valid email address or mobile number.';
+function validateRecoveryEmail(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return 'Enter a valid email address.';
   }
 
   return undefined;
