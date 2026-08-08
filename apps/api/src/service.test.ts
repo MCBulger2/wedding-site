@@ -1566,6 +1566,94 @@ describe('WeddingService', () => {
       });
     });
 
+    it('shares the term rate limit across en-US case variants of the same last name', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
+
+      const { service } = await createSeededService();
+      const variants = [
+        'Example',
+        'example',
+        'EXAMPLE',
+        'ExAmPlE',
+        ' examPLE ',
+      ];
+
+      for (const [index, variant] of variants.entries()) {
+        await expect(
+          service.searchRsvps(
+            { lastName: variant },
+            {
+              sourceIp: `203.0.113.${index + 1}`,
+              baseUrl: 'https://wedding.example.com',
+            },
+          ),
+        ).resolves.toMatchObject({ tooManyMatches: false });
+      }
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'eXaMpLe' },
+          {
+            sourceIp: '203.0.113.6',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 429,
+      });
+    });
+
+    it('excludes corrupt matching invitations and still returns valid matches without logging raw search data', async () => {
+      const { service, repository } = await createSeededService();
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h2',
+          displayName: 'Broken Example Household',
+          email: 'broken@example.com',
+          members: [
+            {
+              id: 'h2-1',
+              firstName: 'Broken',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'BROKEN2345',
+        { secretInviteCode: 'DIFFERENT999' },
+      );
+
+      const response = await service.searchRsvps(
+        { lastName: 'Example' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+
+      expect(response).toEqual({
+        results: [
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: 'https://wedding.example.com/rsvp/test-invite-code-123',
+          },
+        ],
+        tooManyMatches: false,
+      });
+
+      const serializedLogs = JSON.stringify([
+        ...parseConsoleJson(consoleLog),
+        ...parseConsoleJson(consoleError),
+      ]);
+      expect(serializedLogs).not.toContain('Example');
+      expect(serializedLogs).not.toContain('BROKEN2345');
+      expect(serializedLogs).not.toContain('DIFFERENT999');
+      expect(serializedLogs).not.toContain('/rsvp/test-invite-code-123');
+      expect(serializedLogs).not.toContain('/rsvp/BROKEN2345');
+    });
+
     it('fails closed when the canonical frontend URL is missing', async () => {
       const { service } = await createSeededService();
 
@@ -2150,7 +2238,10 @@ async function saveSearchableHousehold(
   repository: InMemoryWeddingRepository,
   overrides: Partial<Household> & Pick<Household, 'householdId' | 'displayName'>,
   inviteCode: string,
-  options: { saveRecoverableInviteCode?: boolean } = {},
+  options: {
+    saveRecoverableInviteCode?: boolean;
+    secretInviteCode?: string;
+  } = {},
 ): Promise<void> {
   const household: Household = {
     householdId: overrides.householdId,
@@ -2202,7 +2293,9 @@ async function saveSearchableHousehold(
     householdId: household.householdId,
     inviteCodeHash: household.inviteCodeHash,
     inviteCodeCiphertext:
-      await new Base64InviteCodeProtector().encryptInviteCode(inviteCode),
+      await new Base64InviteCodeProtector().encryptInviteCode(
+        options.secretInviteCode ?? inviteCode,
+      ),
     updatedAt: household.updatedAt,
   });
 }

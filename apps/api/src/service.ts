@@ -515,7 +515,7 @@ export class WeddingService {
     }
 
     const baseUrl = requireCanonicalBaseUrl(requestContext.baseUrl);
-    const normalizedLastName = parsed.data.lastName.trim();
+    const normalizedLastName = normalizeSearchLastName(parsed.data.lastName);
     const termHash = stableHash(
       `rsvp-search-term:${normalizedLastName}`,
       this.inviteCodePepper,
@@ -547,7 +547,12 @@ export class WeddingService {
       .sort(compareHouseholdsByDisplayName);
 
     for (const household of households) {
-      const inviteCode = await this.getRecoverableInviteCode(household);
+      let inviteCode: string | undefined;
+      try {
+        inviteCode = await this.getRecoverableInviteCode(household);
+      } catch {
+        continue;
+      }
       if (!inviteCode) {
         continue;
       }
@@ -1983,6 +1988,10 @@ function requireCanonicalBaseUrl(baseUrl: string): string {
   }
 
   return trimmed;
+}
+
+function normalizeSearchLastName(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US');
 }
 
 function compareHouseholdsByDisplayName(a: Household, b: Household): number {
