@@ -6,7 +6,6 @@ import { ApiError } from '../api.js';
 import {
   RsvpLookupPage,
   RsvpPage,
-  RsvpSmsUpdatesPage,
   RsvpSuccessPage,
 } from './RsvpPages.js';
 
@@ -90,158 +89,6 @@ const savedRsvp = {
   submittedAt: '2026-06-15T22:05:00.000Z',
   updatedAt: '2026-06-15T22:07:00.000Z',
 };
-
-describe('RsvpSmsUpdatesPage', () => {
-  beforeEach(() => {
-    fetchRsvp.mockReset();
-    saveSmsPreferences.mockReset();
-  });
-
-  it('shows a recoverable error when the initial preferences lookup fails', async () => {
-    fetchRsvp
-      .mockRejectedValueOnce(new Error('Network unavailable'))
-      .mockResolvedValueOnce({ household });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-
-    expect(await screen.findByRole('heading', { name: 'Unable to load text preferences' })).not.toBeNull();
-    expect(screen.getByText('Network unavailable')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
-  });
-
-  it('blocks enable while unchecked, then activates after explicit consent', async () => {
-    fetchRsvp.mockResolvedValue({ household });
-    saveSmsPreferences.mockResolvedValue({
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_in',
-        phone: '+14805550100',
-        source: 'sms_preferences',
-        consentedAt: '2026-07-11T18:00:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1',
-      },
-    });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByRole('heading', { name: 'Text updates' });
-    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(480) 555-0100' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    expect(saveSmsPreferences).not.toHaveBeenCalled();
-    expect(screen.getByText('Check the consent box to enable or update text messages.')).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
-      'invite-code-123',
-      { enabled: true, phone: '(480) 555-0100' },
-    ));
-    expect(await screen.findByText('Text updates are active.')).not.toBeNull();
-    expect(screen.getByText('Active')).not.toBeNull();
-  });
-
-  it('shows truthful off messaging when a resolved enable loses to opt-out', async () => {
-    fetchRsvp.mockResolvedValue({ household });
-    saveSmsPreferences.mockResolvedValue({
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_out',
-        phone: '+14805550100',
-        source: 'sms_preferences',
-        consentedAt: '2026-07-11T18:00:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1',
-      },
-    });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByRole('heading', { name: 'Text updates' });
-    fireEvent.change(screen.getByLabelText('Mobile phone'), {
-      target: { value: '(480) 555-0100' },
-    });
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    expect(await screen.findByText('Off')).not.toBeNull();
-    expect(
-      screen.getByText('Text updates remain off because preferences changed in another request.'),
-    ).not.toBeNull();
-    expect(screen.queryByText('Text updates are active.')).toBeNull();
-  });
-
-  it('refetches a pending preference after provider failure during an active phone change', async () => {
-    const activeHousehold = {
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_in' as const,
-        phone: '+14805550100',
-        source: 'rsvp_form' as const,
-        consentedAt: '2026-06-15T22:05:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1' as const,
-      },
-    };
-    const pendingHousehold = {
-      ...activeHousehold,
-      phone: '+16025550199',
-      smsConsent: {
-        ...activeHousehold.smsConsent,
-        status: 'pending_confirmation' as const,
-        phone: '+16025550199',
-        source: 'sms_preferences' as const,
-      },
-    };
-    fetchRsvp
-      .mockResolvedValueOnce({ household: activeHousehold })
-      .mockResolvedValueOnce({ household: pendingHousehold });
-    saveSmsPreferences.mockRejectedValue(new ApiError('SMS provider is temporarily unavailable', 503));
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByText('Active');
-    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(602) 555-0199' } });
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Update text updates' }));
-
-    expect(await screen.findByText('Pending confirmation')).not.toBeNull();
-    expect(screen.getByText(/SMS provider is temporarily unavailable/i)).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Enable text updates' })).not.toBeNull();
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-  });
-
-  it('requires a fresh unchecked consent and supports website opt-out', async () => {
-    fetchRsvp.mockResolvedValue({
-      household: {
-        ...household,
-        phone: '+14805550100',
-        smsConsent: {
-          status: 'opted_in',
-          phone: '+14805550100',
-          source: 'rsvp_form',
-          consentedAt: '2026-06-15T22:05:00.000Z',
-          consentTextVersion: 'twilio-tollfree-v1',
-        },
-      },
-    });
-    saveSmsPreferences.mockResolvedValue({ ...household, smsConsent: { status: 'opted_out' } });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-
-    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
-    expect(screen.getByText('Active')).not.toBeNull();
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByRole('link', { name: 'Terms' })).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Privacy Policy' })).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off text updates' }));
-    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
-      'invite-code-123',
-      { enabled: false },
-    ));
-  });
-});
 
 describe('RsvpLookupPage', () => {
   beforeEach(() => {
@@ -555,7 +402,7 @@ describe('RsvpPage', () => {
       screen.getByRole('heading', { name: 'Anything else we should know?' }),
     ).not.toBeNull();
     expect(screen.getByLabelText('Household notes')).not.toBeNull();
-    expect(screen.getByText(/Text updates are managed separately/i)).not.toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(screen.queryByLabelText('Plus-one 1 first name')).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(
@@ -665,21 +512,21 @@ describe('RsvpPage', () => {
     expect(status.textContent).not.toMatch(/Saving your RSVP|Updating your response/i);
   });
 
-  it('links to standalone text preferences without SMS controls in RSVP', async () => {
+  it('keeps SMS controls and text-update links out of the RSVP flow', async () => {
     fetchRsvp.mockResolvedValue({ household });
 
     render(<RsvpPage inviteCode="invite-code-123" />);
 
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
-    expect(screen.getByRole('link', { name: 'Manage text updates' }).getAttribute('href'))
-      .toBe('/rsvp/invite-code-123/sms-updates');
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByLabelText('Mobile phone')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(screen.getByRole('button', { name: 'Save RSVP' })).not.toBeNull();
   });
 
-  it('keeps existing SMS consent out of the RSVP form', async () => {
+  it('keeps existing SMS consent out of the RSVP form and visible copy', async () => {
     fetchRsvp.mockResolvedValue({
       household: {
         ...household,
@@ -699,8 +546,9 @@ describe('RsvpPage', () => {
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
 
-    expect(screen.getByRole('link', { name: 'Manage text updates' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
     expect(screen.queryByText('+14805550100')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
   });
 });
 
@@ -739,6 +587,8 @@ describe('RsvpSuccessPage', () => {
       screen.getByRole('link', { name: 'Review or update RSVP' }),
     ).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Back home' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(
       screen.queryByRole('button', { name: /Submit RSVP/i }),
     ).toBeNull();

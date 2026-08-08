@@ -14,28 +14,22 @@ import {
   Home,
   LifeBuoy,
   MapPin,
-  MessageSquare,
   Plus,
   Search,
   Send,
   Trash2,
 } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiError,
   fetchRsvp,
   recoverRsvpLink,
   saveRsvp,
-  saveSmsPreferences,
   searchRsvps,
   type RsvpLookupSearchResponse,
   type RsvpPayload,
 } from '../api.js';
 import { cx, scoped } from '../classNames.js';
-import {
-  SmsConsentCheckboxField,
-  smsPhonePlaceholder,
-} from '../components/SmsConsentFields.js';
 import { LoadingPulse, LoadingScreen } from '../components/LoadingStates.js';
 import { siteContent } from '../siteContent.js';
 import styles from './RsvpPages.module.css';
@@ -1099,13 +1093,6 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
           </label>
               </div>
             </section>
-            <p className="form-message">
-              Text updates are managed separately from your RSVP.{' '}
-              <a href={`${buildGuestRsvpPath(inviteCode)}/sms-updates`}>
-                Manage text updates
-              </a>
-              .
-            </p>
             <div className={scoped(styles, 'rsvp-save-bar')}>
               <button
                 type="button"
@@ -1136,147 +1123,6 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
       </form>
     </main>
   );
-}
-
-export function RsvpSmsUpdatesPage({ inviteCode }: { inviteCode: string }) {
-  const [household, setHousehold] = useState<Household>();
-  const [phone, setPhone] = useState('');
-  const [consentAccepted, setConsentAccepted] = useState(false);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading');
-  const [message, setMessage] = useState('');
-
-  const loadPreferences = useCallback(async () => {
-    setStatus('loading');
-    setMessage('');
-    try {
-      const { household: loaded } = await fetchRsvp(inviteCode);
-      setHousehold(loaded);
-      setPhone(loaded.smsConsent?.phone ?? loaded.phone ?? '');
-      setStatus('ready');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to load text preferences.');
-      setStatus('error');
-    }
-  }, [inviteCode]);
-
-  useEffect(() => {
-    void loadPreferences();
-  }, [loadPreferences]);
-
-  if (status === 'error') {
-    return (
-      <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
-        <section className="lookup-card">
-          <h1>Unable to load text preferences</h1>
-          <p className="form-message" role="alert">{message}</p>
-          <button type="button" onClick={() => void loadPreferences()}>Try again</button>
-        </section>
-      </main>
-    );
-  }
-
-  if (!household || status === 'loading') {
-    return <LoadingScreen />;
-  }
-
-  const preferenceStatus = household.smsConsent?.status;
-  const statusLabel = preferenceStatus === 'opted_in'
-    ? 'Active'
-    : preferenceStatus === 'pending_confirmation'
-      ? 'Pending confirmation'
-      : 'Off';
-
-  const enable = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!consentAccepted) {
-      setMessage('Check the consent box to enable or update text messages.');
-      return;
-    }
-    setStatus('saving');
-    setMessage('');
-    try {
-      const updated = await saveSmsPreferences(inviteCode, { enabled: true, phone });
-      setHousehold(updated);
-      setConsentAccepted(false);
-      setStatus('ready');
-      setMessage(smsPreferenceUpdateMessage(updated.smsConsent?.status));
-    } catch (error) {
-      const providerMessage = error instanceof Error
-        ? error.message
-        : 'Unable to update text preferences.';
-      try {
-        const { household: reconciled } = await fetchRsvp(inviteCode);
-        setHousehold(reconciled);
-        setPhone(reconciled.smsConsent?.phone ?? reconciled.phone ?? phone);
-        setConsentAccepted(false);
-      } catch {
-        // Preserve the provider failure and the current form as a retry path.
-      }
-      setStatus('ready');
-      setMessage(providerMessage);
-    }
-  };
-
-  const disable = async () => {
-    setStatus('saving');
-    setMessage('');
-    try {
-      const updated = await saveSmsPreferences(inviteCode, { enabled: false });
-      setHousehold(updated);
-      setConsentAccepted(false);
-      setStatus('ready');
-      setMessage('Text updates are off.');
-    } catch (error) {
-      setStatus('ready');
-      setMessage(error instanceof Error ? error.message : 'Unable to update text preferences.');
-    }
-  };
-
-  return (
-    <main className={cx('narrow-page', scoped(styles, 'rsvp-flow-page'))}>
-      <p className="eyebrow">Private invitation</p>
-      <h1>Text updates</h1>
-      <p className="page-lede">
-        Manage optional RSVP recovery, schedule, and wedding logistics texts for {household.displayName}.
-        Your RSVP is saved separately and does not depend on SMS consent.
-      </p>
-      <section className={cx('lookup-card', scoped(styles, 'sms-panel'))}>
-        <div className={scoped(styles, 'sms-panel-header')}>
-          <MessageSquare aria-hidden="true" />
-          <div><h2>Current status</h2><p className="form-message">{statusLabel}</p></div>
-        </div>
-        <form className={scoped(styles, 'rsvp-form')} onSubmit={enable}>
-          <label>
-            Mobile phone
-            <input aria-label="Mobile phone" inputMode="tel" maxLength={32} placeholder={smsPhonePlaceholder} value={phone} onChange={(event) => setPhone(event.target.value)} />
-          </label>
-          <SmsConsentCheckboxField checked={consentAccepted} inputId="rsvp-sms-preferences-consent" onChange={setConsentAccepted} />
-          <button type="submit" disabled={status === 'saving'}>
-            {preferenceStatus === 'opted_in' ? 'Update text updates' : 'Enable text updates'}
-          </button>
-        </form>
-        {preferenceStatus && preferenceStatus !== 'opted_out' && (
-          <button type="button" className="secondary-button" disabled={status === 'saving'} onClick={() => void disable()}>
-            Turn off text updates
-          </button>
-        )}
-        {message && <p className="form-message" role="status">{message}</p>}
-      </section>
-      <a className="secondary-button button-inline" href={buildGuestRsvpPath(inviteCode)}>Back to RSVP</a>
-    </main>
-  );
-}
-
-function smsPreferenceUpdateMessage(
-  status: 'pending_confirmation' | 'opted_in' | 'opted_out' | undefined,
-): string {
-  if (status === 'opted_in') {
-    return 'Text updates are active.';
-  }
-  if (status === 'pending_confirmation') {
-    return 'Text updates are pending confirmation. Re-check consent to retry.';
-  }
-  return 'Text updates remain off because preferences changed in another request.';
 }
 
 export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
@@ -1430,10 +1276,6 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
           <a className="icon-button" href={buildGuestRsvpPath(inviteCode)}>
             <Heart aria-hidden="true" />
             Review or update RSVP
-          </a>
-          <a className="secondary-button" href={`${buildGuestRsvpPath(inviteCode)}/sms-updates`}>
-            <MessageSquare aria-hidden="true" />
-            Manage text updates
           </a>
           <a className="secondary-button" href="/">
             <Home aria-hidden="true" />

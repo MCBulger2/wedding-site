@@ -12,8 +12,6 @@ type HeaderRoute =
   | 'rsvp_entry'
   | 'rsvp'
   | 'rsvp_success'
-  | 'sms_updates'
-  | 'sms_opt_in_redirect'
   | 'terms'
   | 'admin';
 
