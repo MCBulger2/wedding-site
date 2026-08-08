@@ -431,9 +431,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     'src',
     /openstreetmap\.org\/export\/embed\.html/,
   );
-  await expect(page.getByTitle('Superstition Manor map')).not.toHaveAttribute(
+  await expect(page.getByTitle('Superstition Manor map')).toHaveAttribute(
     'src',
-    /[?&]marker=/,
+    /[?&]marker=33\.4374400%2C-111\.5989000/,
   );
   await expect(page.locator('[class*="venue-map-marker"]')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Open map' })).toHaveAttribute(
