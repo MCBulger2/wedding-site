@@ -2139,6 +2139,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     exampleRow.getByRole('link', { name: '+14805550100' }),
   ).toBeVisible();
   await clickHouseholdAction(exampleRow, 'Notify');
+  await expect(page.getByLabel('Delivery channel')).toHaveCount(0);
   await page.getByLabel('Notification subject').fill('Travel update');
   await page
     .getByLabel('Notification message')
@@ -2151,22 +2152,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     channel: 'email',
     deliveredTo: 'sam@example.com',
     subject: 'Travel update',
-  });
-
-  await clickHouseholdAction(exampleRow, 'Notify');
-  await page.getByLabel('Delivery channel').selectOption('sms');
-  await expect(page.getByLabel('Notification subject')).toHaveCount(0);
-  await page
-    .getByLabel('Notification message')
-    .fill('Ceremony starts at 3:00 PM.');
-  await page.getByRole('button', { name: 'Send update' }).click();
-  await expect(
-    page.getByText('Sent SMS to The Example Household at +14805550100.'),
-  ).toBeVisible();
-  expect(deliveredNotifications[1]).toMatchObject({
-    channel: 'sms',
-    deliveredTo: '+14805550100',
-    message: 'Ceremony starts at 3:00 PM.',
+    message: 'The shuttle now departs at 4:15 PM.',
   });
 
   await clickBulkAction(page, 'Export invitations');

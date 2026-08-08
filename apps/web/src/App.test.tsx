@@ -266,11 +266,21 @@ describe('App routes', () => {
 });
 
 describe('HouseholdNotificationForm', () => {
-  it('hides the SMS option when consent is missing', () => {
+  it('shows an email-only admin notification form even when SMS consent exists', () => {
     render(
       <HouseholdNotificationForm
-        household={{ ...household, phone: '+14805550100' }}
-        form={{ channel: 'email', subject: 'Update', message: '' }}
+        household={{
+          ...household,
+          phone: '+14805550100',
+          smsConsent: {
+            status: 'opted_in',
+            phone: '+14805550100',
+            source: 'rsvp_form',
+            consentedAt: '2026-01-01T00:00:00.000Z',
+            consentTextVersion: 'twilio-tollfree-v1',
+          },
+        }}
+        form={{ channel: 'email', subject: 'Update', message: 'See you soon.' }}
         setForm={vi.fn()}
         sending={false}
         onSubmit={async () => {}}
@@ -278,14 +288,16 @@ describe('HouseholdNotificationForm', () => {
       />,
     );
 
+    expect(screen.queryByLabelText('Delivery channel')).toBeNull();
+    expect(screen.getByText('example@example.com')).not.toBeNull();
     expect(
-      screen.queryByRole('option', { name: 'SMS' }),
-    ).toBeNull();
+      (screen.getByLabelText('Notification subject') as HTMLInputElement).value,
+    ).toBe('Update');
     expect(
-      screen.getByText(
-        /SMS delivery stays disabled until this household opts in through the standalone text preferences page./i,
-      ),
-    ).not.toBeNull();
+      (screen.getByLabelText('Notification message') as HTMLTextAreaElement)
+        .value,
+    ).toBe('See you soon.');
+    expect(document.body.textContent).not.toMatch(/sms|twilio|help|stop/i);
   });
 });
 
