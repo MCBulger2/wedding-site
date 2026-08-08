@@ -1609,25 +1609,62 @@ function drawInvitationLabel(
   const qrY = y + 9;
   const textX = qrX + qrSize + 8;
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
-  const householdText = truncatePdfText(
+  const householdNameLines = wrapPdfText(
     row.household.displayName,
-    Math.floor(textWidth / 4.3),
+    Math.floor(textWidth / 5),
+    2,
   );
   const inviteCodeText = truncatePdfText(
     row.inviteCode ? `Code: ${row.inviteCode}` : 'Code unavailable',
-    Math.floor(textWidth / 3.4),
+    Math.floor(textWidth / 4),
   );
   const websiteText = truncatePdfText(
     row.websiteUrl,
-    Math.floor(textWidth / 2.8),
+    Math.floor(textWidth / 2.5),
   );
+  const householdNameY = y + 17;
+  const finalHouseholdNameY =
+    householdNameY + (householdNameLines.length - 1) * 11;
+  const inviteCodeY = finalHouseholdNameY + 11;
+  const websiteLabelY = inviteCodeY + 11;
+  const websiteUrlY = websiteLabelY + 10;
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
-    textCommand(householdText, textX, y + 17, 7.5, 'F2', '0.141 0.196 0.220'),
-    textCommand(inviteCodeText, textX, y + 33, 6.5, 'F1', '0.141 0.196 0.220'),
-    textCommand('Website:', textX, y + 47, 5.5, 'F2', '0.322 0.384 0.373'),
-    textCommand(websiteText, textX, y + 58, 5, 'F1', '0.322 0.384 0.373'),
+    ...householdNameLines.map((line, index) =>
+      textCommand(
+        line,
+        textX,
+        householdNameY + index * 11,
+        9,
+        'F2',
+        '0.141 0.196 0.220',
+      ),
+    ),
+    textCommand(
+      inviteCodeText,
+      textX,
+      inviteCodeY,
+      8,
+      'F1',
+      '0.141 0.196 0.220',
+    ),
+    textCommand(
+      'Website:',
+      textX,
+      websiteLabelY,
+      4.5,
+      'F1',
+      '0.322 0.384 0.373',
+    ),
+    textCommand(
+      websiteText,
+      textX,
+      websiteUrlY,
+      4.5,
+      'F1',
+      '0.322 0.384 0.373',
+    ),
   ].join('\n');
 }
 
@@ -1733,6 +1770,30 @@ function truncatePdfText(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function wrapPdfText(
+  value: string,
+  maxLineLength: number,
+  maxLines: number,
+): string[] {
+  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
+  const lines: string[] = [];
+  let remaining = normalized;
+
+  while (remaining && lines.length < maxLines) {
+    if (remaining.length <= maxLineLength) {
+      lines.push(remaining);
+      break;
+    }
+
+    const wordBreak = remaining.lastIndexOf(' ', maxLineLength);
+    const lineEnd = wordBreak > 0 ? wordBreak : maxLineLength;
+    lines.push(remaining.slice(0, lineEnd));
+    remaining = remaining.slice(wordBreak > 0 ? wordBreak + 1 : lineEnd);
+  }
+
+  return lines;
 }
 
 function escapePdfString(value: string): string {

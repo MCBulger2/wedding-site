@@ -498,6 +498,23 @@ describe('WeddingService', () => {
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
+  it('wraps long household names and prioritizes invitation text in QR labels', async () => {
+    const { service } = await createSeededService({
+      displayName: 'The Exceptionally Long Example Household Name',
+    });
+
+    const pdf = await service.exportInvitationLabels(
+      'https://wedding.example.com',
+    );
+    const pdfText = pdf.toString('utf8');
+
+    expect(pdfText).toContain('The Exceptionally Long');
+    expect(pdfText).toContain('Example Household Name');
+    expect(pdfText).toContain('/F2 9 Tf');
+    expect(pdfText).toContain('/F1 8 Tf');
+    expect(pdfText).toContain('/F1 4.5 Tf');
+  });
+
   it('reveals an existing recoverable invitation without exposing it in household lists', async () => {
     const { service } = await createSeededService();
 
