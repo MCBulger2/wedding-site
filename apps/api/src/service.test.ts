@@ -488,14 +488,31 @@ describe('WeddingService', () => {
     const pdfText = pdf.toString('utf8');
 
     expect(pdf.subarray(0, 4).toString('utf8')).toBe('%PDF');
-    expect(pdfText).toContain('The Example Household');
+    expect(pdfText).toContain('The Example');
+    expect(pdfText).toContain('Household');
     expect(pdfText).toContain(`Code: ${inviteCode}`);
-    expect(pdfText).toContain('Website:');
+    expect(pdfText).not.toContain('Website:');
     expect(pdfText).toContain('https://wedding.example.com');
     expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
       'exported',
     );
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
+  });
+
+  it('prioritizes household and invitation-code text without a website caption in QR labels', async () => {
+    const { service } = await createSeededService();
+
+    const pdf = await service.exportInvitationLabels(
+      'https://wedding.example.com',
+    );
+    const pdfText = pdf.toString('utf8');
+
+    expect(pdfText).not.toContain('Website:');
+    expect(
+      pdfText.match(/\(https:\/\/wedding\.example\.com\) Tj/g),
+    ).toHaveLength(1);
+    expect(pdfText).toContain('/F2 10 Tf');
+    expect(pdfText).toContain('/F1 9 Tf');
   });
 
   it('wraps long household names and prioritizes invitation text in QR labels', async () => {
@@ -508,10 +525,10 @@ describe('WeddingService', () => {
     );
     const pdfText = pdf.toString('utf8');
 
-    expect(pdfText).toContain('The Exceptionally Long');
-    expect(pdfText).toContain('Example Household...');
-    expect(pdfText).toContain('/F2 9 Tf');
-    expect(pdfText).toContain('/F1 8 Tf');
+    expect(pdfText).toContain('The Exceptionally');
+    expect(pdfText).toContain('Long Example...');
+    expect(pdfText).toContain('/F2 10 Tf');
+    expect(pdfText).toContain('/F1 9 Tf');
     expect(pdfText).toContain('/F1 4.5 Tf');
   });
 
@@ -525,9 +542,9 @@ describe('WeddingService', () => {
     );
     const pdfText = pdf.toString('utf8');
 
-    expect(pdfText).toContain('(WWWWWWWWWWWWW) Tj');
-    expect(pdfText).toContain('(WWWWWWWWWWWW...) Tj');
-    expect(pdfText).not.toContain('(WWWWWWWWWWWWW...) Tj');
+    expect(pdfText).toContain('(WWWWWWWWWWW) Tj');
+    expect(pdfText).toContain('(WWWWWWWWWW...) Tj');
+    expect(pdfText).not.toContain('(WWWWWWWWWWW...) Tj');
   });
 
   it('reveals an existing recoverable invitation without exposing it in household lists', async () => {

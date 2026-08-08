@@ -1621,23 +1621,19 @@ function drawInvitationLabel(
   const householdNameLines = wrapPdfText(
     row.household.displayName,
     textWidth,
-    9,
+    10,
     2,
   );
   const inviteCodeText = truncatePdfText(
     row.inviteCode ? `Code: ${row.inviteCode}` : 'Code unavailable',
     Math.floor(textWidth / 4),
   );
-  const websiteText = truncatePdfText(
-    row.websiteUrl,
-    Math.floor(textWidth / 2.5),
-  );
+  const websiteText = truncatePdfTextToWidth(row.websiteUrl, textWidth, 4.5);
   const householdNameY = y + 17;
   const finalHouseholdNameY =
     householdNameY + (householdNameLines.length - 1) * 11;
-  const inviteCodeY = finalHouseholdNameY + 11;
-  const websiteLabelY = inviteCodeY + 11;
-  const websiteUrlY = websiteLabelY + 10;
+  const inviteCodeY = finalHouseholdNameY + 12;
+  const websiteUrlY = inviteCodeY + 13;
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
@@ -1646,7 +1642,7 @@ function drawInvitationLabel(
         line,
         textX,
         householdNameY + index * 11,
-        9,
+        10,
         'F2',
         '0.141 0.196 0.220',
       ),
@@ -1655,17 +1651,9 @@ function drawInvitationLabel(
       inviteCodeText,
       textX,
       inviteCodeY,
-      8,
+      9,
       'F1',
       '0.141 0.196 0.220',
-    ),
-    textCommand(
-      'Website:',
-      textX,
-      websiteLabelY,
-      4.5,
-      'F1',
-      '0.322 0.384 0.373',
     ),
     textCommand(
       websiteText,
@@ -1780,6 +1768,23 @@ function truncatePdfText(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function truncatePdfTextToWidth(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
+  if (getHelveticaBoldTextWidth(normalized, fontSize) <= maxWidth) {
+    return normalized;
+  }
+
+  return appendPdfEllipsis(
+    takePdfTextThatFits(normalized, maxWidth, fontSize),
+    maxWidth,
+    fontSize,
+  );
 }
 
 function wrapPdfText(
