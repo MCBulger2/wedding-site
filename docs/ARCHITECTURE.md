@@ -154,7 +154,7 @@ The preserved SMS/Twilio backend and its configuration are described in [Dormant
 The architecture uses layered abuse protection:
 
 - CloudFront-attached WAF support for public RSVP traffic,
-- API Gateway throttling on RSVP read, write, and recovery routes,
+- API Gateway throttling on RSVP read, write, search, and recovery routes,
 - least-privilege IAM grants,
 - private S3 buckets,
 - HTTPS-only delivery,

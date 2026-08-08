@@ -108,7 +108,7 @@ SMS remains dormant and must not be enabled as part of the current launch. If it
 Verify the live production environment has:
 
 - CloudFront WAF association for public RSVP traffic
-- API Gateway throttling on RSVP read, write, and recovery routes
+- API Gateway throttling on RSVP read, write, search, and recovery routes
 - private S3 buckets
 - HTTPS-only delivery
 - Cognito MFA and intended passkey behavior
