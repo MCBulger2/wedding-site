@@ -550,7 +550,10 @@ export class WeddingService {
       let inviteCode: string | undefined;
       try {
         inviteCode = await this.getRecoverableInviteCode(household);
-      } catch {
+      } catch (error) {
+        if (!isSkippableRecoverableInviteCodeError(error)) {
+          throw error;
+        }
         continue;
       }
       if (!inviteCode) {
@@ -1998,6 +2001,15 @@ function compareHouseholdsByDisplayName(a: Household, b: Household): number {
   return a.displayName.localeCompare(b.displayName, undefined, {
     sensitivity: 'base',
   });
+}
+
+function isSkippableRecoverableInviteCodeError(error: unknown): boolean {
+  return (
+    error instanceof PublicError &&
+    error.statusCode === 409 &&
+    error.message ===
+      'Stored invite code does not match the current household invite hash'
+  );
 }
 
 function stableHash(value: string, pepper: string): string {

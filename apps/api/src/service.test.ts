@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Household } from '@matt-alison-wedding/shared';
 import { createHash } from 'node:crypto';
 import { hashInviteCode, hashLegacyInviteCode } from './inviteCodes.js';
-import { Base64InviteCodeProtector } from './inviteCodeProtector.js';
+import {
+  Base64InviteCodeProtector,
+  type InviteCodeProtector,
+} from './inviteCodeProtector.js';
 import { InMemoryWeddingRepository } from './repository.js';
 import { PublicError, WeddingService } from './service.js';
 import {
@@ -1604,7 +1607,7 @@ describe('WeddingService', () => {
       });
     });
 
-    it('excludes corrupt matching invitations and still returns valid matches without logging raw search data', async () => {
+    it('skips known stored invite hash mismatches while returning valid matching results without logging raw search data', async () => {
       const { service, repository } = await createSeededService();
       await saveSearchableHousehold(
         repository,
@@ -1652,6 +1655,27 @@ describe('WeddingService', () => {
       expect(serializedLogs).not.toContain('DIFFERENT999');
       expect(serializedLogs).not.toContain('/rsvp/test-invite-code-123');
       expect(serializedLogs).not.toContain('/rsvp/BROKEN2345');
+    });
+
+    it('rejects RSVP search when an unexpected secret-read or protector failure occurs', async () => {
+      const { service } = await createSeededService(
+        {},
+        undefined,
+        undefined,
+        {
+          repository: new SecretReadFailingRepository(),
+        },
+      );
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: '203.0.113.10',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toThrow('Secrets Manager unavailable');
     });
 
     it('fails closed when the canonical frontend URL is missing', async () => {
@@ -2028,6 +2052,12 @@ class InterleavingSmsPendingRepository extends InMemoryWeddingRepository {
   }
 }
 
+class SecretReadFailingRepository extends InMemoryWeddingRepository {
+  override async getInviteCodeSecret(): Promise<never> {
+    throw new Error('Secrets Manager unavailable');
+  }
+}
+
 class RecordingHouseholdMessenger implements HouseholdMessenger {
   readonly calls: Parameters<
     HouseholdMessenger['sendHouseholdNotification']
@@ -2163,10 +2193,12 @@ async function createSeededService(
     saveRecoverableInviteCode?: boolean;
     legacyInviteCodeHash?: boolean;
     repository?: InMemoryWeddingRepository;
+    inviteCodeProtector?: InviteCodeProtector;
   } = {},
 ) {
   const repository = options.repository ?? new InMemoryWeddingRepository();
-  const inviteCodeProtector = new Base64InviteCodeProtector();
+  const inviteCodeProtector =
+    options.inviteCodeProtector ?? new Base64InviteCodeProtector();
   const inviteCodeHash = options.legacyInviteCodeHash
     ? hashLegacyInviteCode(inviteCode, pepper)
     : hashInviteCode(inviteCode, pepper);
