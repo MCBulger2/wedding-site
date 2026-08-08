@@ -201,7 +201,11 @@
 .photo-dots {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .photo-dot {
@@ -366,7 +370,6 @@
   height: 100%;
   width: 100%;
 }
-
 
 .hotel-list {
   display: grid;

@@ -60,6 +60,13 @@ const secondGalleryPhoto = {
   caption: 'Alison & Matt after the proposal',
 };
 
+const thirdGalleryPhoto = {
+  alt: 'Alison and Matt sitting together outdoors among trees and rocks',
+  caption: 'Together outdoors',
+};
+
+const expectedDotWidths = () => Array.from({ length: 13 }, () => 32);
+
 async function expectResponsiveImageDelivery(
   image: Locator,
   expectedFallbackPath: string,
@@ -127,10 +134,7 @@ async function getVisibleHouseholdsSurface(page: Page) {
 async function getVisibleHousehold(page: Page, displayName: string) {
   const table = page.getByLabel('Households table');
   if (await table.isVisible()) {
-    return table
-      .getByRole('row')
-      .filter({ hasText: displayName })
-      .first();
+    return table.getByRole('row').filter({ hasText: displayName }).first();
   }
 
   return page
@@ -213,7 +217,9 @@ async function swipeScroller(page: Page, scroller: Locator) {
     });
     await page.waitForTimeout(16);
   } finally {
-    await session.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await session.send('Emulation.setTouchEmulationEnabled', {
+      enabled: false,
+    });
     await session.detach();
   }
 
@@ -233,7 +239,10 @@ async function wheelScroller(page: Page, scroller: Locator, deltaX: number) {
   await page.mouse.wheel(deltaX, 0);
 }
 
-async function expectMinimumContrastRatio(locator: Locator, minimumRatio: number) {
+async function expectMinimumContrastRatio(
+  locator: Locator,
+  minimumRatio: number,
+) {
   const contrastRatio = await locator.evaluate((element) => {
     const parseRgb = (value: string) => {
       const match = value.match(
@@ -256,7 +265,8 @@ async function expectMinimumContrastRatio(locator: Locator, minimumRatio: number
       foreground: ReturnType<typeof parseRgb>,
       background: ReturnType<typeof parseRgb>,
     ) => {
-      const alpha = foreground.alpha + background.alpha * (1 - foreground.alpha);
+      const alpha =
+        foreground.alpha + background.alpha * (1 - foreground.alpha);
 
       if (alpha === 0) {
         return { alpha: 0, blue: 0, green: 0, red: 0 };
@@ -327,25 +337,27 @@ async function clickBulkAction(page: Page, actionName: string) {
 }
 
 async function expectCarouselControlsMatchPointer(page: Page) {
-  const controlsVisibleByDefault = await page.evaluate(() =>
-    window.matchMedia('(hover: none), (pointer: coarse)').matches,
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const controls = carousel.locator('.photo-controls');
+  const controlsVisibleByDefault = await page.evaluate(
+    () => window.matchMedia('(hover: none), (pointer: coarse)').matches,
   );
 
-  await expect(page.locator('.photo-controls')).toHaveCSS(
+  await expect(controls).toHaveCSS(
     'opacity',
     controlsVisibleByDefault ? '1' : '0',
   );
 
   if (!controlsVisibleByDefault) {
-    await page.getByLabel('Matt and Alison photos').hover();
-    await expect(page.locator('.photo-controls')).toHaveCSS('opacity', '1');
+    await carousel.locator('.photo-frame-shell').hover({ force: true });
+    await expect(controls).toHaveCSS('opacity', '1');
   }
 
   await expect(
-    page.getByRole('button', { name: 'Show previous photo' }),
+    carousel.getByRole('button', { name: 'Show previous photo' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Show next photo' }),
+    carousel.getByRole('button', { name: 'Show next photo' }),
   ).toBeVisible();
 }
 
@@ -394,7 +406,10 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('link', { name: 'Read our story' }),
   ).toHaveAttribute('href', '/our-story');
   await expectCarouselControlsMatchPointer(page);
-  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await page
+    .getByLabel('Matt and Alison photos')
+    .getByRole('button', { name: 'Show next photo' })
+    .click({ force: true });
   await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
     page.getByRole('img', {
@@ -431,7 +446,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Where to stay' }),
   ).toHaveCount(0);
-  await expect(page.getByText(/TBD Hotel|123 TBD|MATTALISON2027/)).toHaveCount(0);
+  await expect(page.getByText(/TBD Hotel|123 TBD|MATTALISON2027/)).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
@@ -468,11 +485,7 @@ test('dark mode public CTA links meet text contrast requirements', async ({
 
   await page.goto('/');
 
-  for (const name of [
-    'Find your RSVP',
-    'Open map',
-    'View registry',
-  ]) {
+  for (const name of ['Find your RSVP', 'Open map', 'View registry']) {
     await expectMinimumContrastRatio(page.getByRole('link', { name }), 4.5);
   }
 });
@@ -534,7 +547,10 @@ test('homepage details render on mobile', async ({ page }) => {
     page.getByRole('link', { name: 'Read our story' }),
   ).toBeVisible();
   await expectCarouselControlsMatchPointer(page);
-  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await page
+    .getByLabel('Matt and Alison photos')
+    .getByRole('button', { name: 'Show next photo' })
+    .click({ force: true });
   await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
@@ -598,11 +614,11 @@ test('our story page renders editorial sections and calls to action', async ({
 }) => {
   await page.goto('/our-story');
 
+  await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Our Story' }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('A little about the moments and everyday joys that brought us here.'),
+    page.getByText(
+      'A little about the moments and everyday joys that brought us here.',
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
@@ -615,9 +631,7 @@ test('our story page renders editorial sections and calls to action', async ({
     }),
     '/images/hero-wedding-1920.jpg',
   );
-  await expect(
-    page.getByRole('heading', { name: 'How we met' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'How we met' })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'The proposal' }),
   ).toBeVisible();
@@ -644,9 +658,7 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
       .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Our Story' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Our Story' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
   const mobileMeetLayout = await page
     .locator('.story-section-meet')
     .evaluate((section) => {
@@ -751,9 +763,9 @@ test('history navigation to details stays aligned after the correction window', 
 
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto('/');
-  await page.locator('#details').evaluate((details) =>
-    details.scrollIntoView({ block: 'start' }),
-  );
+  await page
+    .locator('#details')
+    .evaluate((details) => details.scrollIntoView({ block: 'start' }));
   await page.evaluate(() => window.scrollBy(0, 650));
   await page
     .getByRole('navigation', { name: 'Primary navigation' })
@@ -831,7 +843,9 @@ test('homepage map link opens Apple Maps on Apple devices', async ({
   ).toHaveAttribute('href', /maps\.apple\/p/);
 });
 
-test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) => {
+test('photo carousel rate-limits horizontal wheel navigation', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     const testWindow = window as Window & {
       __photoCarouselTestNow?: number;
@@ -899,7 +913,7 @@ test('photo carousel rate-limits horizontal wheel navigation', async ({ page }) 
 
   await setWheelClock(1_500);
   await wheelHorizontally(300);
-  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
+  await expect(activeCaption).toHaveText(thirdGalleryPhoto.caption);
 });
 
 test('photo carousel responds to native horizontal scroll snapping', async ({
@@ -960,10 +974,12 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
   await expect
     .poll(() =>
       dots.evaluateAll((elements) =>
-        elements.map((element) => Math.round(element.getBoundingClientRect().width)),
+        elements.map((element) =>
+          Math.round(element.getBoundingClientRect().width),
+        ),
       ),
     )
-    .toEqual([32, 32]);
+    .toEqual(expectedDotWidths());
   await expect
     .poll(() =>
       dots.evaluateAll((elements) =>
@@ -991,36 +1007,33 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
         }),
       ),
     )
-    .toEqual([
-      {
-        ariaCurrent: 'false',
-        hasTransparentButtonBackground: true,
-        inactiveMarkerUsesExpectedBackground: true,
-        markerHeight: '12px',
-        markerRadius: '999px',
-        markerTransform: 'none',
-        markerWidth: '12px',
-      },
-      {
-        ariaCurrent: 'true',
-        hasTransparentButtonBackground: true,
-        inactiveMarkerUsesExpectedBackground: true,
-        markerHeight: '12px',
-        markerRadius: '999px',
-        markerTransform: 'none',
-        markerWidth: '32px',
-      },
-    ]);
+    .toEqual(
+      Array.from({ length: 13 }, (_, index) => (index === 1 ? 32 : 12)).map(
+        (width, index) => ({
+          ariaCurrent: index === 1 ? 'true' : 'false',
+          hasTransparentButtonBackground: true,
+          inactiveMarkerUsesExpectedBackground: true,
+          markerHeight: '12px',
+          markerRadius: '999px',
+          markerTransform: 'none',
+          markerWidth: `${width}px`,
+        }),
+      ),
+    );
 
-  await page.getByRole('button', { name: 'Show next photo' }).click();
-  await expect(activeCaption).toHaveText(firstGalleryPhoto.caption);
+  await carousel
+    .getByRole('button', { name: 'Show next photo' })
+    .click({ force: true });
+  await expect(activeCaption).toHaveText(thirdGalleryPhoto.caption);
   await expect
     .poll(() =>
       dots.evaluateAll((elements) =>
-        elements.map((element) => Math.round(element.getBoundingClientRect().width)),
+        elements.map((element) =>
+          Math.round(element.getBoundingClientRect().width),
+        ),
       ),
     )
-    .toEqual([32, 32]);
+    .toEqual(expectedDotWidths());
 });
 
 test('photo carousel updates caption once during button navigation', async ({
@@ -1056,7 +1069,9 @@ test('photo carousel updates caption once during button navigation', async ({
     window.setTimeout(() => observer.disconnect(), 900);
   });
 
-  await page.getByRole('button', { name: 'Show next photo' }).click();
+  await carousel
+    .getByRole('button', { name: 'Show next photo' })
+    .click({ force: true });
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
   await page.waitForTimeout(900);
 
@@ -1250,24 +1265,26 @@ test('rsvp recovery expands cleanly on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/rsvp');
 
-  const lookupOrder = await page.locator('.rsvp-lookup-card').evaluate((card) => {
-    const panel = card.querySelector('.rsvp-lookup-panel');
-    const heading = card.querySelector('h1');
-    const steps = card.querySelector('ol');
-    const codeInput = card.querySelector('#invite-code');
-    const cardBox = card.getBoundingClientRect();
-    const panelBox = panel?.getBoundingClientRect();
-    const headingBox = heading?.getBoundingClientRect();
-    const stepsBox = steps?.getBoundingClientRect();
-    const codeBox = codeInput?.getBoundingClientRect();
+  const lookupOrder = await page
+    .locator('.rsvp-lookup-card')
+    .evaluate((card) => {
+      const panel = card.querySelector('.rsvp-lookup-panel');
+      const heading = card.querySelector('h1');
+      const steps = card.querySelector('ol');
+      const codeInput = card.querySelector('#invite-code');
+      const cardBox = card.getBoundingClientRect();
+      const panelBox = panel?.getBoundingClientRect();
+      const headingBox = heading?.getBoundingClientRect();
+      const stepsBox = steps?.getBoundingClientRect();
+      const codeBox = codeInput?.getBoundingClientRect();
 
-    return {
-      codeTop: Math.round((codeBox?.top ?? 0) - cardBox.top),
-      headingTop: Math.round((headingBox?.top ?? 0) - cardBox.top),
-      panelTop: Math.round((panelBox?.top ?? 0) - cardBox.top),
-      stepsTop: Math.round((stepsBox?.top ?? 0) - cardBox.top),
-    };
-  });
+      return {
+        codeTop: Math.round((codeBox?.top ?? 0) - cardBox.top),
+        headingTop: Math.round((headingBox?.top ?? 0) - cardBox.top),
+        panelTop: Math.round((panelBox?.top ?? 0) - cardBox.top),
+        stepsTop: Math.round((stepsBox?.top ?? 0) - cardBox.top),
+      };
+    });
   expect(lookupOrder.headingTop).toBeLessThan(lookupOrder.panelTop);
   expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.stepsTop);
   expect(lookupOrder.headingTop).toBeLessThan(180);
@@ -1395,9 +1412,7 @@ test('public SMS signup submits affirmative consent and legacy proof URL redirec
   });
 
   await page.goto('/sms-opt-in-proof');
-  await expect
-    .poll(() => new URL(page.url()).pathname)
-    .toBe('/sms-updates');
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/sms-updates');
   await expect(
     page.getByRole('heading', { name: 'Wedding text updates', exact: true }),
   ).toBeVisible();
@@ -1406,11 +1421,17 @@ test('public SMS signup submits affirmative consent and legacy proof URL redirec
   );
 });
 
-test('standalone SMS preferences require fresh consent and support website opt-out', async ({ page }) => {
+test('standalone SMS preferences require fresh consent and support website opt-out', async ({
+  page,
+}) => {
   const requests: unknown[] = [];
   const smsHousehold = { ...household, smsConsent: undefined };
   await page.route('**/api/rsvp/A2B3C4D5E6', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household: smsHousehold }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ household: smsHousehold }),
+    });
   });
   await page.route('**/api/rsvp/A2B3C4D5E6/sms-preferences', async (route) => {
     const payload = route.request().postDataJSON();
@@ -1421,37 +1442,58 @@ test('standalone SMS preferences require fresh consent and support website opt-o
       body: JSON.stringify({
         ...smsHousehold,
         smsConsent: payload.enabled
-          ? { status: 'opted_in', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' }
-          : { status: 'opted_out', phone: '+14805550100', source: 'sms_preferences', consentedAt: new Date().toISOString(), consentTextVersion: 'twilio-tollfree-v1' },
+          ? {
+              status: 'opted_in',
+              phone: '+14805550100',
+              source: 'sms_preferences',
+              consentedAt: new Date().toISOString(),
+              consentTextVersion: 'twilio-tollfree-v1',
+            }
+          : {
+              status: 'opted_out',
+              phone: '+14805550100',
+              source: 'sms_preferences',
+              consentedAt: new Date().toISOString(),
+              consentTextVersion: 'twilio-tollfree-v1',
+            },
       }),
     });
   });
 
   await page.goto('/rsvp/A2B3C4D5E6/sms-updates');
   const smsPreferencesMain = page.getByRole('main');
-  await expect(smsPreferencesMain.getByRole('heading', { name: 'Text updates' })).toBeVisible();
+  await expect(
+    smsPreferencesMain.getByRole('heading', { name: 'Text updates' }),
+  ).toBeVisible();
   await expect(smsPreferencesMain.getByRole('checkbox')).not.toBeChecked();
-  await expect(smsPreferencesMain.getByRole('link', { name: 'Terms' })).toBeVisible();
-  await expect(smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
+  await expect(
+    smsPreferencesMain.getByRole('link', { name: 'Terms' }),
+  ).toBeVisible();
+  await expect(
+    smsPreferencesMain.getByRole('link', { name: 'Privacy Policy' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Enable text updates' }).click();
-  await expect(page.getByText('Check the consent box to enable or update text messages.')).toBeVisible();
+  await expect(
+    page.getByText('Check the consent box to enable or update text messages.'),
+  ).toBeVisible();
   expect(requests).toEqual([]);
 
   await page.getByRole('checkbox').check();
   await page.getByLabel('Mobile phone').fill('(480) 555-0100');
   await page.getByRole('button', { name: 'Enable text updates' }).click();
-  await expect.poll(() => requests).toEqual([
-    { enabled: true, phone: '(480) 555-0100' },
-  ]);
+  await expect
+    .poll(() => requests)
+    .toEqual([{ enabled: true, phone: '(480) 555-0100' }]);
   await expect(page.getByText('Text updates are active.')).toBeVisible();
-  await expect(smsPreferencesMain.getByText('Active', { exact: true })).toBeVisible();
+  await expect(
+    smsPreferencesMain.getByText('Active', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('checkbox')).not.toBeChecked();
 
   await page.getByRole('button', { name: 'Turn off text updates' }).click();
-  await expect.poll(() => requests).toEqual([
-    { enabled: true, phone: '(480) 555-0100' },
-    { enabled: false },
-  ]);
+  await expect
+    .poll(() => requests)
+    .toEqual([{ enabled: true, phone: '(480) 555-0100' }, { enabled: false }]);
 });
 
 test('admin route shows a minimal sign-in entry point', async ({ page }) => {
@@ -1569,7 +1611,9 @@ test('guest can look up an invite code and submit an RSVP', async ({
   ).toBeVisible();
   await expect(page.getByLabel('Sam Example meal choice')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Taylor Example not attending' }).click();
+  await page
+    .getByRole('button', { name: 'Taylor Example not attending' })
+    .click();
   await page.getByRole('button', { name: 'Add plus-one' }).click();
   await page.getByRole('button', { name: 'Continue to details' }).click();
   await page.getByRole('button', { name: 'Save RSVP' }).click();
@@ -1628,7 +1672,6 @@ test('guest can look up an invite code and submit an RSVP', async ({
 test('admin route is reachable, can create households, and shows RSVP results', async ({
   page,
 }) => {
-
   const deliveredNotifications: Array<{
     channel: string;
     deliveredTo: string;
@@ -2107,14 +2150,16 @@ test('admin route is reachable, can create households, and shows RSVP results', 
       householdsTable.getByRole('columnheader', { name: 'Household' }),
     ).toBeVisible();
     await page.setViewportSize({ width: 900, height: 844 });
-    const intermediateTableLayout = await householdsTable.evaluate((element) => ({
-      documentClientWidth: document.documentElement.clientWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-      shellClientWidth: element.clientWidth,
-      shellOverflowX: getComputedStyle(element).overflowX,
-      shellScrollWidth: element.scrollWidth,
-      shellScrollbarGutter: getComputedStyle(element).scrollbarGutter,
-    }));
+    const intermediateTableLayout = await householdsTable.evaluate(
+      (element) => ({
+        documentClientWidth: document.documentElement.clientWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        shellClientWidth: element.clientWidth,
+        shellOverflowX: getComputedStyle(element).overflowX,
+        shellScrollWidth: element.scrollWidth,
+        shellScrollbarGutter: getComputedStyle(element).scrollbarGutter,
+      }),
+    );
     expect(intermediateTableLayout.shellOverflowX).toBe('auto');
     expect(intermediateTableLayout.shellScrollWidth).toBeGreaterThan(
       intermediateTableLayout.shellClientWidth,
@@ -2232,7 +2277,9 @@ test('admin route is reachable, can create households, and shows RSVP results', 
     exampleRow,
     'Edit The Example Household',
   );
-  const saveChangesButton = editPanel.getByRole('button', { name: 'Save changes' });
+  const saveChangesButton = editPanel.getByRole('button', {
+    name: 'Save changes',
+  });
   const saveChangesStyles = await saveChangesButton.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -2245,7 +2292,9 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   await editPanel
     .getByLabel('The Example Household edit display name')
     .fill('The Updated Household');
-  await editPanel.getByLabel('Sam Example edit wedding-party role').fill('Reader');
+  await editPanel
+    .getByLabel('Sam Example edit wedding-party role')
+    .fill('Reader');
   await editPanel.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Household changes saved.')).toBeVisible();
   await expect(
@@ -2253,10 +2302,7 @@ test('admin route is reachable, can create households, and shows RSVP results', 
   ).toBeVisible();
 
   page.once('dialog', (dialog) => dialog.accept());
-  const updatedRow = await getVisibleHousehold(
-    page,
-    'The Updated Household',
-  );
+  const updatedRow = await getVisibleHousehold(page, 'The Updated Household');
   await clickHouseholdAction(updatedRow, 'Archive');
   await expect(page.getByText('Archived The Updated Household.')).toBeVisible();
   await expect(
@@ -2381,7 +2427,9 @@ test('admin mobile keeps household cards instead of the desktop table', async ({
     .locator('article')
     .filter({ hasText: 'The Example Household' });
   await expect(mobileCard).toBeVisible();
-  await expect(mobileCard.getByRole('button', { name: 'Actions' })).toBeVisible();
+  await expect(
+    mobileCard.getByRole('button', { name: 'Actions' }),
+  ).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => ({
