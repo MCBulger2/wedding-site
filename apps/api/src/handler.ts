@@ -73,6 +73,7 @@ export async function handleRequest(
     | 'importHouseholds'
     | 'listHouseholds'
     | 'requestRsvpRecovery'
+    | 'searchRsvps'
     | 'revealInvitation'
     | 'rotateInviteCode'
     | 'sendHouseholdNotification'
@@ -110,6 +111,17 @@ export async function handleRequest(
         json(
           await service.createPublicSmsSubscription(body, {
             sourceIp: event.requestContext.http.sourceIp,
+          }),
+        ),
+      );
+    }
+
+    if (method === 'POST' && path === '/rsvp/search') {
+      return completeRequest(
+        json(
+          await service.searchRsvps(body, {
+            sourceIp: event.requestContext.http.sourceIp,
+            baseUrl: frontendBaseUrl(),
           }),
         ),
       );
@@ -471,6 +483,10 @@ function resolveRouteName(method: string, path: string): string {
 
   if (method === 'PUT' && path.startsWith('/rsvp/')) {
     return 'PUT /rsvp/{inviteCode}';
+  }
+
+  if (method === 'POST' && path === '/rsvp/search') {
+    return 'POST /rsvp/search';
   }
 
   if (method === 'POST' && path === '/rsvp/recovery') {

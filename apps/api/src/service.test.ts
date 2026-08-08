@@ -1319,6 +1319,272 @@ describe('WeddingService', () => {
     });
   });
 
+  describe('rsvp search', () => {
+    it('validates search input before lookup', async () => {
+      const { service } = await createSeededService();
+
+      await expect(
+        service.searchRsvps(
+          { lastName: '' },
+          {
+            sourceIp: '203.0.113.10',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 422,
+        message: 'RSVP search is invalid',
+      });
+    });
+
+    it('finds households by last name, sorts display names stably, and omits raw terms from logs', async () => {
+      const { service, repository } = await createSeededService();
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h2',
+          displayName: 'Another Example Household',
+          email: 'alex@example.com',
+          members: [
+            {
+              id: 'h2-1',
+              firstName: 'Alex',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'Z9Y8X7W6V5',
+      );
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h3',
+          displayName: 'another example household',
+          email: 'jamie@example.com',
+          members: [
+            {
+              id: 'h3-1',
+              firstName: 'Jamie',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'M4N5P6Q7R8',
+      );
+
+      const response = await service.searchRsvps(
+        { lastName: '  eXaMpLe  ' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com/',
+        },
+      );
+
+      expect(response).toEqual({
+        results: [
+          {
+            displayName: 'Another Example Household',
+            rsvpUrl: 'https://wedding.example.com/rsvp/Z9Y8X7W6V5',
+          },
+          {
+            displayName: 'another example household',
+            rsvpUrl: 'https://wedding.example.com/rsvp/M4N5P6Q7R8',
+          },
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: 'https://wedding.example.com/rsvp/test-invite-code-123',
+          },
+        ],
+        tooManyMatches: false,
+      });
+
+      const logs = parseConsoleJson(consoleLog);
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          event: 'rsvp.search.completed',
+          outcome: 'success',
+          resultCount: 3,
+          tooManyMatches: false,
+        }),
+      );
+      const serializedLogs = JSON.stringify(logs);
+      expect(serializedLogs).not.toContain('eXaMpLe');
+      expect(serializedLogs).not.toContain('Example');
+      expect(serializedLogs).not.toContain('/rsvp/test-invite-code-123');
+      expect(serializedLogs).not.toContain('/rsvp/Z9Y8X7W6V5');
+    });
+
+    it('skips archived and unrecoverable matches', async () => {
+      const { service, repository } = await createSeededService();
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h2',
+          displayName: 'Archived Example Household',
+          email: 'archived@example.com',
+          archivedAt: '2026-07-10T00:00:00.000Z',
+          inviteLifecycleStatus: 'archived',
+          members: [
+            {
+              id: 'h2-1',
+              firstName: 'Alex',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'Z9Y8X7W6V5',
+      );
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h3',
+          displayName: 'Unrecoverable Example Household',
+          email: 'missing-secret@example.com',
+          members: [
+            {
+              id: 'h3-1',
+              firstName: 'Jamie',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'M4N5P6Q7R8',
+        { saveRecoverableInviteCode: false },
+      );
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: '203.0.113.10',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).resolves.toEqual({
+        results: [
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: 'https://wedding.example.com/rsvp/test-invite-code-123',
+          },
+        ],
+        tooManyMatches: false,
+      });
+    });
+
+    it('returns tooManyMatches without leaking RSVP URLs when more than ten recoverable households match', async () => {
+      const { service, repository } = await createSeededService();
+      for (let index = 2; index <= 11; index += 1) {
+        await saveSearchableHousehold(
+          repository,
+          {
+            householdId: `h${index}`,
+            displayName: `Example Household ${index}`,
+            email: `guest${index}@example.com`,
+            members: [
+              {
+                id: `h${index}-1`,
+                firstName: `Guest${index}`,
+                lastName: 'Example',
+                canBringPlusOne: false,
+              },
+            ],
+          },
+          `CODE${index}XYZ${index}`,
+        );
+      }
+
+      const response = await service.searchRsvps(
+        { lastName: 'Example' },
+        {
+          sourceIp: '203.0.113.10',
+          baseUrl: 'https://wedding.example.com',
+        },
+      );
+
+      expect(response).toEqual({
+        results: [],
+        tooManyMatches: true,
+      });
+    });
+
+    it('rate limits repeated search terms and source ips for one hour', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
+
+      const { service } = await createSeededService();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await expect(
+          service.searchRsvps(
+            { lastName: 'Example' },
+            {
+              sourceIp: `203.0.113.${attempt + 1}`,
+              baseUrl: 'https://wedding.example.com',
+            },
+          ),
+        ).resolves.toMatchObject({ tooManyMatches: false });
+      }
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: '203.0.113.6',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 429,
+      });
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await expect(
+          service.searchRsvps(
+            { lastName: `Example ${attempt}` },
+            {
+              sourceIp: '198.51.100.40',
+              baseUrl: 'https://wedding.example.com',
+            },
+          ),
+        ).resolves.toBeDefined();
+      }
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Overflow' },
+          {
+            sourceIp: '198.51.100.40',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 429,
+      });
+    });
+
+    it('fails closed when the canonical frontend URL is missing', async () => {
+      const { service } = await createSeededService();
+
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: '203.0.113.10',
+            baseUrl: '',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 503,
+        message:
+          'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+      });
+    });
+  });
+
   it('skips archived or non-recoverable households while keeping the public recovery response generic', async () => {
     const householdMessenger = new RecordingHouseholdMessenger();
     const { service } = await createSeededService(
@@ -1878,6 +2144,67 @@ function parseConsoleJson(
   spy: ReturnType<typeof vi.spyOn>,
 ): Array<Record<string, unknown>> {
   return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
+}
+
+async function saveSearchableHousehold(
+  repository: InMemoryWeddingRepository,
+  overrides: Partial<Household> & Pick<Household, 'householdId' | 'displayName'>,
+  inviteCode: string,
+  options: { saveRecoverableInviteCode?: boolean } = {},
+): Promise<void> {
+  const household: Household = {
+    householdId: overrides.householdId,
+    displayName: overrides.displayName,
+    email: overrides.email,
+    phone: overrides.phone,
+    mailingAddress: overrides.mailingAddress,
+    members:
+      overrides.members ??
+      [
+        {
+          id: `${overrides.householdId}-1`,
+          firstName: 'Guest',
+          lastName: 'Example',
+          canBringPlusOne: false,
+        },
+      ],
+    maxPlusOnes: overrides.maxPlusOnes ?? 0,
+    rsvpStatus: overrides.rsvpStatus ?? 'not_started',
+    inviteLifecycleStatus: overrides.inviteLifecycleStatus ?? 'generated',
+    inviteCodeHash:
+      overrides.inviteCodeHash ?? hashInviteCode(inviteCode, pepper),
+    inviteCodeGeneratedAt:
+      overrides.inviteCodeGeneratedAt ?? '2026-07-03T20:00:00.000Z',
+    inviteCodeLastRotatedAt: overrides.inviteCodeLastRotatedAt,
+    inviteExportedAt: overrides.inviteExportedAt,
+    inviteSentAt: overrides.inviteSentAt,
+    archivedAt: overrides.archivedAt,
+    createdAt: overrides.createdAt ?? '2026-07-03T20:00:00.000Z',
+    updatedAt: overrides.updatedAt ?? '2026-07-03T20:00:00.000Z',
+  };
+
+  await repository.saveHousehold(household);
+  if (!household.inviteCodeHash) {
+    return;
+  }
+
+  await repository.saveInviteCodeLookup({
+    householdId: household.householdId,
+    inviteCodeHash: household.inviteCodeHash,
+    createdAt: household.createdAt,
+  });
+
+  if (options.saveRecoverableInviteCode === false) {
+    return;
+  }
+
+  await repository.saveInviteCodeSecret({
+    householdId: household.householdId,
+    inviteCodeHash: household.inviteCodeHash,
+    inviteCodeCiphertext:
+      await new Base64InviteCodeProtector().encryptInviteCode(inviteCode),
+    updatedAt: household.updatedAt,
+  });
 }
 
 function testStableHash(value: string): string {

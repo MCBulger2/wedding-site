@@ -16,6 +16,8 @@ import {
   type SmsConsent,
   type RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequestSchema,
+  RsvpSearchRequestSchema,
+  type RsvpSearchResponse,
   RsvpUpdateSchema,
   type SendInvitationEmailResponse,
   SendHouseholdNotificationInputSchema,
@@ -52,6 +54,9 @@ const RSVP_RECOVERY_IP_LIMIT = 10;
 const PUBLIC_SMS_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const PUBLIC_SMS_PHONE_LIMIT = 3;
 const PUBLIC_SMS_IP_LIMIT = 10;
+const RSVP_SEARCH_RESULT_LIMIT = 10;
+const RSVP_SEARCH_TERM_LIMIT = 5;
+const RSVP_SEARCH_IP_LIMIT = 20;
 const POINTS_PER_INCH = 72;
 const AVERY_5160_LABEL = {
   pageWidth: 8.5 * POINTS_PER_INCH,
@@ -494,6 +499,93 @@ export class WeddingService {
       outcome: 'accepted',
     });
     return acceptedRecoveryResponse();
+  }
+
+  async searchRsvps(
+    input: unknown,
+    requestContext: { sourceIp?: string; baseUrl: string },
+  ): Promise<RsvpSearchResponse> {
+    const parsed = RsvpSearchRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError(
+        'RSVP search is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
+    }
+
+    const baseUrl = requireCanonicalBaseUrl(requestContext.baseUrl);
+    const normalizedLastName = parsed.data.lastName.trim();
+    const termHash = stableHash(
+      `rsvp-search-term:${normalizedLastName}`,
+      this.inviteCodePepper,
+    );
+    const sourceIpHash = stableHash(
+      `rsvp-search-ip:${requestContext.sourceIp?.trim() || 'unknown'}`,
+      this.inviteCodePepper,
+    );
+
+    if (await this.isRsvpSearchRateLimited(termHash, sourceIpHash)) {
+      logStructured({
+        level: 'warn',
+        event: 'rsvp.search.rateLimited',
+        message: 'RSVP search rate limited',
+        outcome: 'rate_limited',
+        resultCount: 0,
+        tooManyMatches: false,
+      });
+      throw new PublicError('Too many RSVP search attempts. Try again later.', 429);
+    }
+
+    const recoverableMatches: RsvpSearchResponse['results'] = [];
+    const households = (await this.repository.listHouseholdsByLastName(normalizedLastName))
+      .filter(
+        (household) =>
+          !household.archivedAt &&
+          household.inviteLifecycleStatus !== 'archived',
+      )
+      .sort(compareHouseholdsByDisplayName);
+
+    for (const household of households) {
+      const inviteCode = await this.getRecoverableInviteCode(household);
+      if (!inviteCode) {
+        continue;
+      }
+
+      recoverableMatches.push({
+        displayName: household.displayName,
+        rsvpUrl: this.buildInvitationDetails(household, inviteCode, baseUrl)
+          .rsvpUrl,
+      });
+
+      if (recoverableMatches.length > RSVP_SEARCH_RESULT_LIMIT) {
+        logStructured({
+          level: 'info',
+          event: 'rsvp.search.completed',
+          message: 'RSVP search completed',
+          outcome: 'success',
+          resultCount: 0,
+          tooManyMatches: true,
+        });
+        return {
+          results: [],
+          tooManyMatches: true,
+        };
+      }
+    }
+
+    logStructured({
+      level: 'info',
+      event: 'rsvp.search.completed',
+      message: 'RSVP search completed',
+      outcome: 'success',
+      resultCount: recoverableMatches.length,
+      tooManyMatches: false,
+    });
+    return {
+      results: recoverableMatches,
+      tooManyMatches: false,
+    };
   }
 
   async listHouseholds(): Promise<AdminHouseholdRecord[]> {
@@ -1463,6 +1555,32 @@ export class WeddingService {
     );
   }
 
+  private async isRsvpSearchRateLimited(
+    termHash: string,
+    sourceIpHash: string,
+  ): Promise<boolean> {
+    const now = Date.now();
+    const windowStartsAt =
+      Math.floor(now / PUBLIC_SMS_RATE_LIMIT_WINDOW_MS) *
+      PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
+    const windowExpiresAt = windowStartsAt + PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
+    const termAttempts = await this.recordRsvpRecoveryAttempt(
+      'contact',
+      termHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    const ipAttempts = await this.recordRsvpRecoveryAttempt(
+      'ip',
+      sourceIpHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    return (
+      termAttempts > RSVP_SEARCH_TERM_LIMIT || ipAttempts > RSVP_SEARCH_IP_LIMIT
+    );
+  }
+
   private async recordRsvpRecoveryAttempt(
     scope: 'contact' | 'ip',
     keyHash: string,
@@ -1853,6 +1971,24 @@ function normalizeRecoveryContact(value: string): RecoveryContact {
   throw new PublicError('Recovery contact is invalid', 422, [
     'contact: Enter a valid email address or mobile number.',
   ]);
+}
+
+function requireCanonicalBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) {
+    throw new PublicError(
+      'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+      503,
+    );
+  }
+
+  return trimmed;
+}
+
+function compareHouseholdsByDisplayName(a: Household, b: Household): number {
+  return a.displayName.localeCompare(b.displayName, undefined, {
+    sensitivity: 'base',
+  });
 }
 
 function stableHash(value: string, pepper: string): string {
