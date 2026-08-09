@@ -244,6 +244,7 @@ Repository scripts cover:
 CI and deploy verification currently run:
 
 - `npm ci`
+- responsive-image cache restoration followed by one explicit responsive-image preparation step
 - lint
 - typecheck
 - `npm run test:ci`

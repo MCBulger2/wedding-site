@@ -421,13 +421,13 @@ describe('structured public planning data', () => {
     }
   });
 
-  it('uses a parseable OpenStreetMap embed URL without third-party marker copy', () => {
+  it('uses a parseable OpenStreetMap embed URL with the native venue marker', () => {
     const embedUrl = new URL(siteContent.venueMapEmbedUrl);
 
     expect(siteContent.venueMapEmbedUrl).not.toContain('&amp;');
     expect(embedUrl.hostname).toBe('www.openstreetmap.org');
     expect(embedUrl.searchParams.get('layer')).toBe('mapnik');
-    expect(embedUrl.searchParams.has('marker')).toBe(false);
+    expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
   });
 
   it('does not publish unfinished hotel, story, or registry placeholder copy', () => {
@@ -446,6 +446,25 @@ describe('structured public planning data', () => {
     expect(siteContent.registry.note).not.toMatch(
       /will link|selected registries/i,
     );
+  });
+
+  it('publishes all engagement photos in the homepage carousel', () => {
+    const engagementPhotos = siteContent.photos.filter((photo) =>
+      photo.src.startsWith('/engagement-'),
+    );
+
+    expect(engagementPhotos).toHaveLength(11);
+    expect(engagementPhotos.map((photo) => photo.src)).toEqual(
+      Array.from(
+        { length: 11 },
+        (_, index) => `/engagement-${String(index + 1).padStart(2, '0')}.jpg`,
+      ),
+    );
+    expect(
+      engagementPhotos.every(
+        (photo) => photo.alt.trim().length > 0 && photo.caption.trim().length > 0,
+      ),
+    ).toBe(true);
   });
 
   it('validates hotel block data', () => {
