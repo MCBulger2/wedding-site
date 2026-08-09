@@ -2,12 +2,13 @@
 
 ## Goal
 
-Add visual variety to the Our Story page by giving each LEGO, Eat, and Explore recommendation card its matching local image.
+Add visual variety to the Our Story page by giving each LEGO, Eat, and Explore recommendation card its matching local image, and add Buck and Rider and Bei Sushi as new Eat recommendations.
 
 ## Design
 
 - Add an optional decorative image source to the shared Phoenix recommendation content.
-- Assign the supplied assets to the seven recommendations:
+- Add Buck and Rider and Bei Sushi to the Eat group using the existing recommendation and map-destination patterns.
+- Assign the supplied assets to the nine recommendations:
   - `lego.jpg`
   - `oreganos.jpg`
   - `botanical-gardens.jpeg`
@@ -15,6 +16,8 @@ Add visual variety to the Our Story page by giving each LEGO, Eat, and Explore r
   - `mcdowell-sonoran-preserve.jpg`
   - `piestwa-peak.png`
   - `odysea.jpg`
+  - `buck-and-rider.jpg`
+  - `sushi.jpg`
 - Render each image with the existing `ResponsiveImage` component as an absolutely positioned background layer inside the recommendation card.
 - Add a translucent overlay above the image and below the card content to preserve text and link contrast.
 - Keep the existing recommendation content, map links, card structure, responsive layout, and accessibility semantics unchanged. The images are decorative, so they use empty alt text.
@@ -23,7 +26,7 @@ Add visual variety to the Our Story page by giving each LEGO, Eat, and Explore r
 ## Non-goals
 
 - No new image service or component abstraction.
-- No changes to recommendation copy, destinations, or navigation behavior.
+- No changes to existing recommendation copy, destinations, or navigation behavior. New Eat cards use their supplied names, descriptions, and map destinations.
 - No redesign of the Phoenix guide layout beyond the image layer and contrast treatment.
 
 ## Validation
