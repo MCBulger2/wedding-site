@@ -1293,6 +1293,19 @@ test('legacy SMS routes redirect to the public RSVP entry points', async ({ page
 });
 
 test('RSVP search stays within the mobile viewport without horizontal overflow', async ({ page }) => {
+  const results = Array.from({ length: 10 }, (_, index) => ({
+    displayName: `The Very Long Example Household Name ${index + 1} With Guests`,
+    rsvpUrl: `/rsvp/LONGCODE${index + 1}`,
+  }));
+  await page.route('**/api/rsvp/search', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ lastName: 'Example' });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results, tooManyMatches: false }),
+    });
+  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/rsvp');
 
@@ -1318,21 +1331,35 @@ test('RSVP search stays within the mobile viewport without horizontal overflow',
   expect(lookupOrder.panelTop).toBeLessThan(lookupOrder.stepsTop);
   expect(lookupOrder.headingTop).toBeLessThan(180);
 
-  await page.getByRole('button', { name: 'Email my RSVP link' }).click();
-  await expect(page.getByLabel('Email address')).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Email me my RSVP link' }),
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Search by last name' }).click();
+  await page.getByLabel('Household last name').fill('Example');
+  await page.getByRole('button', { name: 'Find my household' }).click();
+  const resultLinks = page.getByRole('list', { name: 'Matching households' }).getByRole('link');
+  await expect(resultLinks).toHaveCount(10);
+  await expect(resultLinks.first()).toContainText(results[0].displayName);
 
   const cardBounds = await page.locator('.lookup-card').boundingBox();
-  const buttonBounds = await page
-    .getByRole('button', { name: 'Email me my RSVP link' })
-    .boundingBox();
   expect(cardBounds).not.toBeNull();
-  expect(buttonBounds).not.toBeNull();
-  expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(
-    cardBounds!.x + cardBounds!.width + 1,
+  const linkLayout = await resultLinks.evaluateAll((links) =>
+    links.map((link) => {
+      const rect = link.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        display: getComputedStyle(link).display,
+        whiteSpace: getComputedStyle(link).whiteSpace,
+      };
+    }),
   );
+  expect(linkLayout).toHaveLength(10);
+  for (const link of linkLayout) {
+    expect(['block', 'flex']).toContain(link.display);
+    expect(link.whiteSpace).not.toBe('nowrap');
+    expect(link.left).toBeGreaterThanOrEqual(cardBounds!.x);
+    expect(link.right).toBeLessThanOrEqual(cardBounds!.x + cardBounds!.width + 1);
+    expect(link.width).toBeLessThanOrEqual(cardBounds!.width);
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
 });
