@@ -71,6 +71,15 @@ const AVERY_5160_LABEL = {
   horizontalPitch: 2.75 * POINTS_PER_INCH,
   verticalPitch: 1 * POINTS_PER_INCH,
 };
+const HELVETICA_BOLD_ASCII_WIDTHS = [
+  278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278,
+  278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584,
+  584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611,
+  833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333,
+  278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278,
+  556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 722, 556, 556,
+  500, 389, 280, 389, 584,
+];
 
 interface PreparedInvitationExportRow {
   household: Household;
@@ -1754,25 +1763,51 @@ function drawInvitationLabel(
   const qrY = y + 9;
   const textX = qrX + qrSize + 8;
   const textWidth = AVERY_5160_LABEL.labelWidth - (textX - x) - 8;
-  const householdText = truncatePdfText(
+  const householdNameLines = wrapPdfText(
     row.household.displayName,
-    Math.floor(textWidth / 4.3),
+    textWidth,
+    10,
+    2,
   );
   const inviteCodeText = truncatePdfText(
     row.inviteCode ? `Code: ${row.inviteCode}` : 'Code unavailable',
-    Math.floor(textWidth / 3.4),
+    Math.floor(textWidth / 4),
   );
-  const websiteText = truncatePdfText(
-    row.websiteUrl,
-    Math.floor(textWidth / 2.8),
-  );
+  const websiteText = truncatePdfTextToWidth(row.websiteUrl, textWidth, 4.5);
+  const householdNameY = y + 17;
+  const finalHouseholdNameY =
+    householdNameY + (householdNameLines.length - 1) * 11;
+  const inviteCodeY = finalHouseholdNameY + 12;
+  const websiteUrlY = inviteCodeY + 13;
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
-    textCommand(householdText, textX, y + 17, 7.5, 'F2', '0.141 0.196 0.220'),
-    textCommand(inviteCodeText, textX, y + 33, 6.5, 'F1', '0.141 0.196 0.220'),
-    textCommand('Website:', textX, y + 47, 5.5, 'F2', '0.322 0.384 0.373'),
-    textCommand(websiteText, textX, y + 58, 5, 'F1', '0.322 0.384 0.373'),
+    ...householdNameLines.map((line, index) =>
+      textCommand(
+        line,
+        textX,
+        householdNameY + index * 11,
+        10,
+        'F2',
+        '0.141 0.196 0.220',
+      ),
+    ),
+    textCommand(
+      inviteCodeText,
+      textX,
+      inviteCodeY,
+      9,
+      'F1',
+      '0.141 0.196 0.220',
+    ),
+    textCommand(
+      websiteText,
+      textX,
+      websiteUrlY,
+      4.5,
+      'F1',
+      '0.322 0.384 0.373',
+    ),
   ].join('\n');
 }
 
@@ -1878,6 +1913,108 @@ function truncatePdfText(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function truncatePdfTextToWidth(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
+  if (getHelveticaBoldTextWidth(normalized, fontSize) <= maxWidth) {
+    return normalized;
+  }
+
+  return appendPdfEllipsis(
+    takePdfTextThatFits(normalized, maxWidth, fontSize),
+    maxWidth,
+    fontSize,
+  );
+}
+
+function wrapPdfText(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+  maxLines: number,
+): string[] {
+  const normalized = value
+    .replace(/[^\x20-\x7e]/g, '?')
+    .trim()
+    .replace(/ +/g, ' ');
+  const lines: string[] = [];
+  let remaining = normalized;
+
+  while (remaining && lines.length < maxLines) {
+    const fittingText = takePdfTextThatFits(remaining, maxWidth, fontSize);
+    if (fittingText.length === remaining.length) {
+      lines.push(fittingText);
+      remaining = '';
+      break;
+    }
+
+    const wordBreak = fittingText.lastIndexOf(' ');
+    const line = wordBreak > 0 ? fittingText.slice(0, wordBreak) : fittingText;
+    lines.push(line);
+    remaining = remaining.slice(wordBreak > 0 ? wordBreak + 1 : line.length);
+  }
+
+  if (remaining && lines.length > 0) {
+    const finalLineIndex = lines.length - 1;
+    lines[finalLineIndex] = appendPdfEllipsis(
+      lines[finalLineIndex],
+      maxWidth,
+      fontSize,
+    );
+  }
+
+  return lines;
+}
+
+function takePdfTextThatFits(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  let width = 0;
+  let end = 0;
+
+  for (const character of value) {
+    const characterWidth = getHelveticaBoldTextWidth(character, fontSize);
+    if (width + characterWidth > maxWidth) {
+      break;
+    }
+    width += characterWidth;
+    end += character.length;
+  }
+
+  return value.slice(0, end);
+}
+
+function appendPdfEllipsis(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+): string {
+  const ellipsis = '...';
+  let truncated = value.trimEnd();
+
+  while (
+    truncated &&
+    getHelveticaBoldTextWidth(`${truncated}${ellipsis}`, fontSize) > maxWidth
+  ) {
+    truncated = truncated.slice(0, -1).trimEnd();
+  }
+
+  return `${truncated}${ellipsis}`;
+}
+
+function getHelveticaBoldTextWidth(value: string, fontSize: number): number {
+  return Array.from(value).reduce((width, character) => {
+    const characterCode = character.charCodeAt(0);
+    const glyphWidth = HELVETICA_BOLD_ASCII_WIDTHS[characterCode - 32] ?? 1000;
+    return width + (glyphWidth * fontSize) / 1000;
+  }, 0);
 }
 
 function escapePdfString(value: string): string {
