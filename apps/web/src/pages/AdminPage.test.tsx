@@ -123,7 +123,13 @@ describe('AdminPage admin notifications', () => {
 
     render(<AdminPage />);
 
-    await screen.findByText('1 households loaded.');
+    expect(
+      (
+        await screen.findByRole('status', {
+          name: 'Admin dashboard status',
+        })
+      ).textContent,
+    ).toBe('1 households loaded.');
     expect(document.body.textContent).not.toMatch(/SMS active for|Twilio/i);
 
     fireEvent.click(screen.getByRole('button', { name: 'Create household' }));

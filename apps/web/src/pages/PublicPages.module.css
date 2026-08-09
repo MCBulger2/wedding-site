@@ -6,7 +6,7 @@
       rgba(13, 31, 25, 0.56) 42%,
       rgba(13, 31, 25, 0.16) 100%
     ),
-    var(--image-hero-wedding) center / cover;
+    var(--image-engagement-10) center / cover;
   align-items: center;
   color: var(--hero-text);
   display: flex;
@@ -168,14 +168,21 @@
 }
 
 .photo-nav-button {
-  background: var(--photo-nav-bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--photo-nav-shadow);
+  background: none !important;
+  border: none;
+  box-shadow: none;
   color: var(--accent-strong);
   min-height: 44px;
   padding: 0;
   pointer-events: auto;
   width: 44px;
+  box-shadow: none !important;
+}
+
+.photo-nav-button svg {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
+  height: 2rem;
+  width: 2rem;
 }
 
 .photo-caption-row {
@@ -206,6 +213,7 @@
 .photo-position {
   color: var(--copy-muted);
   font-variant-numeric: tabular-nums;
+  font-style: italic;
 }
 
 .photo-progress {
@@ -243,14 +251,6 @@
   background: var(--travel-bg);
   max-width: none;
   padding-inline: max(clamp(1.25rem, 5vw, 4rem), calc((100vw - 1180px) / 2));
-}
-
-.travel-section-without-hotels {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.travel-section-without-hotels > div {
-  max-width: 560px;
 }
 
 .registry-section {
@@ -545,7 +545,7 @@
 }
 
 .our-story-hero-image {
-  align-self: center;
+  align-self: start;
   aspect-ratio: 3 / 2;
   border-bottom-left-radius: 8px;
   max-height: 620px;
@@ -580,6 +580,10 @@
 .story-chapter-media {
   display: grid;
   min-width: 0;
+}
+
+.story-chapter-carousel .photo-frame-shell {
+  aspect-ratio: 4 / 3;
 }
 
 .story-chapter-image {
@@ -697,26 +701,86 @@
 
 .phoenix-recommendation {
   background: var(--hero-chip-bg);
-  border: 1px solid var(--hero-chip-border);
+  border: 1px solid rgb(255 255 251 / 24%);
   border-radius: 8px;
+  box-shadow: var(--card-shadow);
   display: grid;
   gap: 0.75rem;
+  isolation: isolate;
+  overflow: hidden;
   padding: 1.25rem;
+  position: relative;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
 .phoenix-guide-group-build .phoenix-recommendation {
-  border-color: var(--hero-eyebrow);
+  border-color: rgb(255 216 186 / 62%);
   padding: clamp(1.4rem, 3vw, 2rem);
 }
 
 .phoenix-recommendation h4 {
-  color: var(--hero-text);
+  color: var(--hero-eyebrow);
   font-size: clamp(1.15rem, 2vw, 1.35rem);
   margin: 0;
 }
 
+.phoenix-recommendation-image,
+.phoenix-recommendation-image::after {
+  inset: 0;
+  position: absolute;
+}
+
+.phoenix-recommendation-image {
+  z-index: 0;
+}
+
+.phoenix-recommendation-image::after {
+  background: linear-gradient(
+    135deg,
+    rgb(5 27 21 / 94%),
+    rgb(5 27 21 / 76%) 55%,
+    rgb(5 27 21 / 88%)
+  );
+  content: '';
+  z-index: 1;
+}
+
+.phoenix-recommendation-image picture {
+  display: block;
+  height: 100%;
+}
+
+.phoenix-recommendation-image img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 220ms ease;
+  width: 100%;
+}
+
+@media (hover: hover) {
+  .phoenix-recommendation:hover {
+    box-shadow: var(--hover-card-shadow);
+    transform: translateY(-2px);
+  }
+
+  .phoenix-recommendation:hover .phoenix-recommendation-image img {
+    transform: scale(1.03);
+  }
+}
+
+.phoenix-recommendation-content {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-rows: auto 1fr auto;
+  position: relative;
+  z-index: 2;
+}
+
 .phoenix-recommendation p {
-  color: var(--hero-muted);
+  color: rgb(255 255 251 / 78%);
   line-height: 1.55;
   margin: 0;
 }
@@ -726,6 +790,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.65rem;
+  justify-content: flex-end;
   min-width: 0;
 }
 

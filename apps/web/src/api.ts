@@ -38,6 +38,14 @@ import {
   mockUpdateHouseholdMember,
   mockUpdateInviteLifecycleStatus,
 } from './localAdminMock.js';
+import {
+  localRsvpMockEnabled,
+  mockFetchRsvp,
+  mockRecoverRsvpLink,
+  mockSaveRsvp,
+  mockSaveSmsPreferences,
+  mockSearchRsvps,
+} from './localRsvpMock.js';
 
 export type RsvpPayload = RsvpUpdate;
 
@@ -96,10 +104,18 @@ export class ApiError extends Error {
 const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) ?? '/api';
 
 export async function fetchRsvp(inviteCode: string): Promise<RsvpResponse> {
+  if (localRsvpMockEnabled) {
+    return mockFetchRsvp(inviteCode);
+  }
+
   return request<RsvpResponse>(`/rsvp/${encodeURIComponent(inviteCode)}`);
 }
 
 export async function saveRsvp(inviteCode: string, payload: RsvpPayload): Promise<RsvpResponse> {
+  if (localRsvpMockEnabled) {
+    return mockSaveRsvp(inviteCode, payload);
+  }
+
   return request<RsvpResponse>(`/rsvp/${encodeURIComponent(inviteCode)}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
@@ -110,6 +126,10 @@ export async function saveSmsPreferences(
   inviteCode: string,
   payload: SmsPreferencesRequest,
 ): Promise<Household> {
+  if (localRsvpMockEnabled) {
+    return mockSaveSmsPreferences(inviteCode, payload);
+  }
+
   return request<Household>(
     `/rsvp/${encodeURIComponent(inviteCode)}/sms-preferences`,
     { method: 'PUT', body: JSON.stringify(payload) },
@@ -119,6 +139,10 @@ export async function saveSmsPreferences(
 export async function recoverRsvpLink(
   payload: RsvpRecoveryRequest,
 ): Promise<RsvpRecoveryResponse> {
+  if (localRsvpMockEnabled) {
+    return mockRecoverRsvpLink(payload);
+  }
+
   return request<RsvpRecoveryResponse>('/rsvp/recovery', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -128,6 +152,10 @@ export async function recoverRsvpLink(
 export function searchRsvps(
   payload: RsvpSearchRequest,
 ): Promise<RsvpLookupSearchResponse> {
+  if (localRsvpMockEnabled) {
+    return mockSearchRsvps(payload);
+  }
+
   return request<RsvpLookupSearchResponse>('/rsvp/search', {
     method: 'POST',
     body: JSON.stringify(payload),

@@ -238,9 +238,7 @@ describe('RsvpRecovery schemas', () => {
 
 describe('RsvpSearch schemas', () => {
   it('trims search names and accepts valid HTTPS RSVP URLs in results', () => {
-    expect(
-      RsvpSearchRequestSchema.parse({ lastName: '  Example  ' }),
-    ).toEqual({
+    expect(RsvpSearchRequestSchema.parse({ lastName: '  Example  ' })).toEqual({
       lastName: 'Example',
     });
 
@@ -265,12 +263,12 @@ describe('RsvpSearch schemas', () => {
     });
   });
 
-  it.each([
-    { lastName: ' ' },
-    { lastName: 'a'.repeat(81) },
-  ])('rejects blank or overlong last names', (request) => {
-    expect(RsvpSearchRequestSchema.safeParse(request).success).toBe(false);
-  });
+  it.each([{ lastName: ' ' }, { lastName: 'a'.repeat(81) }])(
+    'rejects blank or overlong last names',
+    (request) => {
+      expect(RsvpSearchRequestSchema.safeParse(request).success).toBe(false);
+    },
+  );
 
   it('rejects extra fields in search results', () => {
     expect(
@@ -434,7 +432,7 @@ describe('structured public planning data', () => {
     expect(siteContent.ourStory.intro).toBe(
       "From meeting in a programming class at ASU to making a home together in Phoenix, we've shared plenty of adventures along the way. Here's a little about the story that brought us here.",
     );
-    expect(siteContent.ourStory.heroImage.src).toBe('/engagement-10.jpg');
+    expect(siteContent.ourStory.heroImage.src).toBe('/close-up.jpg');
     expect(siteContent.ourStory.chapters.map((chapter) => chapter.id)).toEqual([
       'asu',
       'life-together',
@@ -450,7 +448,7 @@ describe('structured public planning data', () => {
       {
         id: 'asu',
         paragraphs: [
-          'We met during freshman year at Arizona State University in Introduction to Object-Oriented Programming. Matt was a computer science major, while Alison had to take the class despite being a math major rather than a computer science major like Matt (luckily for both of us!).',
+          'We met in 2019 during freshman year at Arizona State University—luckily for both of us, we ended up in the same programming class.',
           "We got to know each other through several more classes and stayed in touch even after the COVID-19 pandemic sent Matt away from the dorms. Once he returned, it wasn't long before we were dating, and the rest is history.",
           "We both graduated from ASU in 2023: Alison with an MS in Actuarial Science and Matt with a BS in Computer Science. Since then, we've made our home together in the Phoenix and Scottsdale area.",
         ],
@@ -478,11 +476,30 @@ describe('structured public planning data', () => {
     ]);
     expect(siteContent.ourStory.chapters[0]).toMatchObject({
       title: 'It started at ASU',
-      images: [{ src: '/asu-graduation.jpg' }],
+      images: [
+        { src: '/asu-graduation.jpg', caption: 'ASU graduation day' },
+        { src: '/asu-spin.JPEG', caption: 'A spin around ASU' },
+        { src: '/asu.JPEG', caption: 'Back at ASU' },
+        { src: '/asu-hockey.JPEG', caption: 'ASU hockey night' },
+      ],
     });
     expect(siteContent.ourStory.chapters[1]).toMatchObject({
       title: 'Life together',
-      images: [{ src: '/canadian-grand-prix.jpg' }],
+      images: [
+        {
+          src: '/canadian-grand-prix.jpg',
+          caption: 'At the Canadian Grand Prix',
+        },
+        { src: '/drs.JPEG', caption: 'DRS' },
+        {
+          src: '/canada-ferris-wheel.JPEG',
+          caption: 'Montreal by the water',
+        },
+        { src: '/canada-alison-flowers.JPEG', caption: 'A little color' },
+        { src: '/san-diego.JPEG', caption: 'By the Pacific' },
+        { src: '/vegas-bellagio.JPEG', caption: 'A weekend in Las Vegas' },
+        { src: '/niagara-falls.JPEG', caption: 'Niagara Falls' },
+      ],
     });
     expect(siteContent.ourStory.chapters[2]).toMatchObject({
       title: 'The proposal',
@@ -496,11 +513,17 @@ describe('structured public planning data', () => {
 
   it('publishes grouped Phoenix favorites with paired map URLs', () => {
     const groups = siteContent.ourStory.phoenixGuide.groups;
-    expect(groups.map((group) => group.id)).toEqual(['build', 'eat', 'explore']);
+    expect(groups.map((group) => group.id)).toEqual([
+      'build',
+      'eat',
+      'explore',
+    ]);
 
     const recommendations = groups.flatMap((group) => group.recommendations);
     const legoTour = recommendations.find((item) => item.id === 'lego-tour');
-    expect(legoTour?.destinations.map((destination) => destination.label)).toEqual([
+    expect(
+      legoTour?.destinations.map((destination) => destination.label),
+    ).toEqual([
       'LEGO Store Scottsdale Quarter',
       'LEGO Store Chandler Fashion Center',
       'LEGO Store Arrowhead Towne Center',
@@ -508,6 +531,8 @@ describe('structured public planning data', () => {
     expect(recommendations.map((item) => item.id)).toEqual([
       'lego-tour',
       'oreganos',
+      'buck-and-rider',
+      'bei-sushi',
       'desert-botanical-garden',
       'papago-park',
       'mcdowell-sonoran-preserve',
@@ -560,6 +585,20 @@ describe('structured public planning data', () => {
         address: undefined,
         googleQuery: "Oregano's Phoenix Arizona",
         appleQuery: "Oregano's Phoenix Arizona",
+      },
+      {
+        recommendationId: 'buck-and-rider',
+        label: 'Buck & Rider',
+        address: undefined,
+        googleQuery: 'Buck & Rider Phoenix Arizona',
+        appleQuery: 'Buck & Rider Phoenix Arizona',
+      },
+      {
+        recommendationId: 'bei-sushi',
+        label: 'Bei Sushi',
+        address: undefined,
+        googleQuery: 'Bei Sushi Phoenix Arizona',
+        appleQuery: 'Bei Sushi Phoenix Arizona',
       },
       {
         recommendationId: 'desert-botanical-garden',
@@ -631,7 +670,8 @@ describe('structured public planning data', () => {
     );
     expect(
       engagementPhotos.every(
-        (photo) => photo.alt.trim().length > 0 && photo.caption.trim().length > 0,
+        (photo) =>
+          photo.alt.trim().length > 0 && photo.caption.trim().length > 0,
       ),
     ).toBe(true);
   });

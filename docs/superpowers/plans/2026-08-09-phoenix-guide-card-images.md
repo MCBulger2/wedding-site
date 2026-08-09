@@ -91,7 +91,7 @@ Use these exact mappings:
 'desert-botanical-garden': '/botanical-gardens.jpeg',
 'papago-park': '/papago-park.jpg',
 'mcdowell-sonoran-preserve': '/mcdowell-sonoran-preserve.jpg',
-'piestewa-peak': '/piestewa-peak.png',
+'piestewa-peak': '/piestwa-peak.png',
 'odysea-aquarium': '/odysea.jpg',
 ```
 

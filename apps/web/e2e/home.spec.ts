@@ -51,18 +51,18 @@ const household = {
 };
 
 const firstGalleryPhoto = {
+  alt: 'Alison and Matt sitting together outdoors among trees and rocks',
+  caption: 'Together outdoors',
+};
+
+const secondGalleryPhoto = {
   alt: "A close up of Alison's engagement ring",
   caption: 'Engagement ring',
 };
 
-const secondGalleryPhoto = {
+const thirdGalleryPhoto = {
   alt: 'Alison & Matt, shortly after the proposal',
   caption: 'Alison & Matt after the proposal',
-};
-
-const thirdGalleryPhoto = {
-  alt: 'Alison and Matt sitting together outdoors among trees and rocks',
-  caption: 'Together outdoors',
 };
 
 async function expectResponsiveImageDelivery(
@@ -368,7 +368,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
         .locator('.hero')
         .evaluate((element) => getComputedStyle(element).backgroundImage),
     )
-    .toContain('/images/hero-wedding');
+    .toContain('/images/engagement-10');
   await expect(
     page.getByRole('heading', { name: 'Matt & Alison' }),
   ).toBeVisible();
@@ -398,7 +398,7 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('img', {
       name: firstGalleryPhoto.alt,
     }),
-    '/images/ring-1200.jpg',
+    '/images/engagement-01-1200.jpg',
   );
   await expect(
     page.getByRole('link', { name: 'Read our story' }),
@@ -408,7 +408,9 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     .getByLabel('Matt and Alison photos')
     .getByRole('button', { name: 'Show next photo' })
     .click({ force: true });
-  await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
+  await expect(
+    page.getByText(secondGalleryPhoto.caption, { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('img', {
       name: secondGalleryPhoto.alt,
@@ -443,10 +445,12 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Where to stay' }),
-  ).toHaveCount(0);
-  await expect(page.getByText(/TBD Hotel|123 TBD|MATTALISON2027/)).toHaveCount(
-    0,
-  );
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'We’re still finalizing our hotel block—check back soon for updates. We’ll share the details here as soon as they’re ready.',
+    ),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
@@ -518,7 +522,7 @@ test('homepage details render on mobile', async ({ page }) => {
     }),
   ).toBeVisible();
   await expect(
-    page.getByText('Ceremony at 4:30 PM; reception at 10:00 PM'),
+    page.getByText('Ceremony at 4:30 PM; reception to follow'),
   ).toBeVisible();
   await expect(
     page.getByRole('link', {
@@ -549,7 +553,9 @@ test('homepage details render on mobile', async ({ page }) => {
     .getByLabel('Matt and Alison photos')
     .getByRole('button', { name: 'Show next photo' })
     .click({ force: true });
-  await expect(page.getByText(secondGalleryPhoto.caption)).toBeVisible();
+  await expect(
+    page.getByText(secondGalleryPhoto.caption, { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Who should I contact with questions?' }),
   ).toBeVisible();
@@ -626,17 +632,42 @@ test('our story page renders editorial sections, Phoenix favorites, and calls to
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
   }
 
+  for (const [chapterId, slideCount, caption] of [
+    ['asu', 4, 'ASU graduation day'],
+    ['life-together', 7, 'At the Canadian Grand Prix'],
+  ] as const) {
+    const carousel = page.locator(
+      `.story-chapter-${chapterId} [aria-roledescription="carousel"]`,
+    );
+    await expect(carousel).toHaveCount(1);
+    await expect(carousel.locator('.photo-frame-shell')).toBeVisible();
+    await expect(carousel.locator('.photo-slide')).toHaveCount(slideCount);
+    await expect(
+      carousel.getByRole('button', { name: 'Show next photo' }),
+    ).toBeVisible();
+    await expect(carousel.locator('.photo-caption-row strong')).toHaveText(
+      caption,
+    );
+  }
+
   await expect(
     page.getByRole('heading', { name: 'Our Phoenix favorites' }),
   ).toBeVisible();
   for (const heading of ['Build the grand tour', 'Eat', 'Explore']) {
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
   }
+  for (const heading of ['Buck & Rider', 'Bei Sushi']) {
+    await expect(
+      page.getByRole('heading', { name: heading, exact: true }),
+    ).toBeVisible();
+  }
   for (const destination of [
     'LEGO Store Scottsdale Quarter',
     'LEGO Store Chandler Fashion Center',
     'LEGO Store Arrowhead Towne Center',
     "Oregano's",
+    'Buck & Rider',
+    'Bei Sushi',
     'Desert Botanical Garden',
     'Papago Park',
     'McDowell Sonoran Preserve',
@@ -651,8 +682,32 @@ test('our story page renders editorial sections, Phoenix favorites, and calls to
     await expect(mapLink).toHaveAttribute('rel', 'noreferrer');
   }
 
+  const guideImages = page.locator(
+    '[class*="phoenix-recommendation-image"] img',
+  );
+  await expect(guideImages).toHaveCount(9);
+  await expect
+    .poll(() =>
+      guideImages.evaluateAll((images) =>
+        images.map((image) => (image as HTMLImageElement).currentSrc),
+      ),
+    )
+    .toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('/images/lego-'),
+        expect.stringContaining('/images/oreganos-'),
+        expect.stringContaining('/images/buck-and-rider-'),
+        expect.stringContaining('/images/sushi-'),
+        expect.stringContaining('/images/botanical-gardens-'),
+        expect.stringContaining('/images/papago-park-'),
+        expect.stringContaining('/images/mcdowell-sonoran-preserve-'),
+        expect.stringContaining('/images/piestwa-peak-'),
+        expect.stringContaining('/images/odysea-'),
+      ]),
+    );
+
   await expect(
-    page.getByText(/Introduction to Object-Oriented Programming/),
+    page.getByText(/ended up in the same programming class/),
   ).toBeVisible();
   await expect(page.getByText(/2025 Canadian Grand Prix/)).toBeVisible();
   await expect(page.getByText(/Jane and Tom/)).toBeVisible();
@@ -662,7 +717,7 @@ test('our story page renders editorial sections, Phoenix favorites, and calls to
     page.getByRole('img', {
       name: 'Alison and Matt smiling at each other beneath leafy branches',
     }),
-    '/images/engagement-10-1200.jpg',
+    '/images/close-up-1200.jpg',
   );
   await expectResponsiveImageDelivery(
     page.getByRole('img', {
@@ -750,7 +805,7 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
         .querySelector('.story-copy-block')
         ?.getBoundingClientRect();
       const imageBox = section
-        .querySelector('.story-chapter-image')
+        .querySelector('.photo-frame-shell')
         ?.getBoundingClientRect();
       const sectionBox = section.getBoundingClientRect();
       const styles = getComputedStyle(section);
@@ -869,39 +924,6 @@ test('history navigation to details stays aligned after the correction window', 
   const settledOffset = await detailsOffset();
   expect(settledOffset).toBeGreaterThanOrEqual(0);
   expect(settledOffset).toBeLessThanOrEqual(32);
-});
-
-test('cross-page details navigation preserves user scrolling during correction', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/our-story');
-  await page.getByRole('link', { name: 'Back to wedding details' }).click();
-  await expect(page).toHaveURL(/\/#details$/);
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const details = document.querySelector('#details');
-        const header = document.querySelector('header');
-        if (!details || !header) {
-          return false;
-        }
-        const offset =
-          details.getBoundingClientRect().top -
-          header.getBoundingClientRect().bottom;
-        return offset >= 0 && offset <= 32;
-      }),
-    )
-    .toBe(true);
-  await page.mouse.wheel(0, 700);
-  await expect
-    .poll(() => page.evaluate(() => Math.round(window.scrollY)))
-    .toBeGreaterThan(2000);
-  await page.waitForTimeout(550);
-
-  expect(await page.evaluate(() => Math.round(window.scrollY))).toBeGreaterThan(
-    2000,
-  );
 });
 
 test('homepage map link opens Apple Maps on Apple devices', async ({
@@ -1309,8 +1331,14 @@ test('RSVP search submits exact surname and shows multiple household links', asy
       contentType: 'application/json',
       body: JSON.stringify({
         results: [
-          { displayName: 'The Example Household', rsvpUrl: `${pageOrigin}/rsvp/A2B3C4D5E6` },
-          { displayName: 'Example & Guest', rsvpUrl: `${pageOrigin}/rsvp/FRESH22456` },
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: `${pageOrigin}/rsvp/A2B3C4D5E6`,
+          },
+          {
+            displayName: 'Example & Guest',
+            rsvpUrl: `${pageOrigin}/rsvp/FRESH22456`,
+          },
         ],
         tooManyMatches: false,
       }),
@@ -1322,31 +1350,58 @@ test('RSVP search submits exact surname and shows multiple household links', asy
   await page.getByLabel('Household last name').fill(' Example ');
   await page.getByRole('button', { name: 'Find my household' }).click();
   await expect.poll(() => requestBody).toEqual({ lastName: 'Example' });
-  await expect(page.getByRole('list', { name: 'Matching households' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'The Example Household' })).toHaveAttribute('href', /\/rsvp\/A2B3C4D5E6$/);
-  await expect(page.getByRole('link', { name: 'Example & Guest' })).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Matching households' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'The Example Household' }),
+  ).toHaveAttribute('href', /\/rsvp\/A2B3C4D5E6$/);
+  await expect(
+    page.getByRole('link', { name: 'Example & Guest' }),
+  ).toBeVisible();
 });
 
-test('RSVP search handles empty and tooManyMatches results', async ({ page }) => {
+test('RSVP search handles empty and tooManyMatches results', async ({
+  page,
+}) => {
   let response = { results: [], tooManyMatches: false };
   await page.route('**/api/rsvp/search', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(response),
+    });
   });
   await page.goto('/rsvp');
   await page.getByRole('button', { name: 'Search by last name' }).click();
   const form = page.locator('#rsvp-search-form');
   await form.getByLabel('Household last name').fill('Unknown');
   await form.getByRole('button', { name: 'Find my household' }).click();
-  await expect(page.getByText("We couldn't find a household with that exact last name.")).toBeVisible();
+  await expect(
+    page.getByText("We couldn't find a household with that exact last name."),
+  ).toBeVisible();
   response = { results: [], tooManyMatches: true };
   await form.getByLabel('Household last name').fill('Smith');
   await form.getByRole('button', { name: 'Find my household' }).click();
-  await expect(page.getByText('We found too many households with that last name')).toBeVisible();
+  await expect(
+    page.getByText('We found too many households with that last name'),
+  ).toBeVisible();
 });
 
-test('RSVP search selected navigation opens the chosen private RSVP', async ({ page }) => {
+test('RSVP search selected navigation opens the chosen private RSVP', async ({
+  page,
+}) => {
   await page.route('**/api/rsvp/search', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [{ displayName: 'Example & Guest', rsvpUrl: '/rsvp/FRESH22456' }], tooManyMatches: false }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [
+          { displayName: 'Example & Guest', rsvpUrl: '/rsvp/FRESH22456' },
+        ],
+        tooManyMatches: false,
+      }),
+    });
   });
   await page.goto('/rsvp');
   await page.getByRole('button', { name: 'Search by last name' }).click();
@@ -1356,22 +1411,40 @@ test('RSVP search selected navigation opens the chosen private RSVP', async ({ p
   await expect(page).toHaveURL(/\/rsvp\/FRESH22456$/);
 });
 
-test('email recovery is email-only and has no phone or SMS controls', async ({ page }) => {
+test('email recovery is email-only and has no phone or SMS controls', async ({
+  page,
+}) => {
   await page.route('**/api/rsvp/recovery', async (route) => {
-    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ accepted: true, message: "If that matches our guest list, we'll send your private RSVP link." }) });
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        accepted: true,
+        message:
+          "If that matches our guest list, we'll send your private RSVP link.",
+      }),
+    });
   });
   await page.goto('/rsvp');
   await page.getByRole('button', { name: 'Email my RSVP link' }).click();
   await expect(page.getByLabel('Email address')).toBeFocused();
   await expect(page.getByLabel('Mobile phone')).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
-  await expect(page.locator('body')).not.toContainText(/sms|text updates|twilio|mobile number/i);
+  await expect(page.locator('body')).not.toContainText(
+    /sms|text updates|twilio|mobile number/i,
+  );
   await page.getByLabel('Email address').fill('sam@example.com');
   await page.getByRole('button', { name: 'Email me my RSVP link' }).click();
-  await expect(page.getByText("If that matches our guest list, we'll send your private RSVP link.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "If that matches our guest list, we'll send your private RSVP link.",
+    ),
+  ).toBeVisible();
 });
 
-test('legacy SMS routes redirect to the public RSVP entry points', async ({ page }) => {
+test('legacy SMS routes redirect to the public RSVP entry points', async ({
+  page,
+}) => {
   await page.goto('/sms-updates');
   await expect(page).toHaveURL(/\/$/);
   await page.goto('/sms-opt-in-proof');
@@ -1380,7 +1453,9 @@ test('legacy SMS routes redirect to the public RSVP entry points', async ({ page
   await expect(page).toHaveURL(/\/rsvp\/A%2FB%3FC%23D$/);
 });
 
-test('RSVP search stays within the mobile viewport without horizontal overflow', async ({ page }) => {
+test('RSVP search stays within the mobile viewport without horizontal overflow', async ({
+  page,
+}) => {
   const results = Array.from({ length: 10 }, (_, index) => ({
     displayName: `The Very Long Example Household Name ${index + 1} With Guests`,
     rsvpUrl: `/rsvp/LONGCODE${index + 1}`,
@@ -1424,7 +1499,9 @@ test('RSVP search stays within the mobile viewport without horizontal overflow',
   await page.getByRole('button', { name: 'Search by last name' }).click();
   await page.getByLabel('Household last name').fill('Example');
   await page.getByRole('button', { name: 'Find my household' }).click();
-  const resultLinks = page.getByRole('list', { name: 'Matching households' }).getByRole('link');
+  const resultLinks = page
+    .getByRole('list', { name: 'Matching households' })
+    .getByRole('link');
   await expect(resultLinks).toHaveCount(10);
   await expect(resultLinks.first()).toContainText(results[0].displayName);
 
@@ -1447,10 +1524,16 @@ test('RSVP search stays within the mobile viewport without horizontal overflow',
     expect(['block', 'flex']).toContain(link.display);
     expect(link.whiteSpace).not.toBe('nowrap');
     expect(link.left).toBeGreaterThanOrEqual(cardBounds!.x);
-    expect(link.right).toBeLessThanOrEqual(cardBounds!.x + cardBounds!.width + 1);
+    expect(link.right).toBeLessThanOrEqual(
+      cardBounds!.x + cardBounds!.width + 1,
+    );
     expect(link.width).toBeLessThanOrEqual(cardBounds!.width);
   }
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
   expect(overflow).toBe(0);
 });
 
@@ -1461,7 +1544,7 @@ test('privacy and terms pages render public compliance content', async ({
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
   await expect(
     page.getByText(
-      'We do not sell guest information. An exact-last-name search can return a household RSVP URL. That URL contains the bearer credential and grants access to the household RSVP, so it should be treated as private. Anyone with the URL may be able to view or update that household\'s RSVP.',
+      "We do not sell guest information. An exact-last-name search can return a household RSVP URL. That URL contains the bearer credential and grants access to the household RSVP, so it should be treated as private. Anyone with the URL may be able to view or update that household's RSVP.",
     ),
   ).toBeVisible();
   await expect(

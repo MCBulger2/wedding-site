@@ -845,7 +845,7 @@ textarea:focus {
   }
 
   .our-story-hero-image {
-    align-self: auto;
+    align-self: start;
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     height: auto;

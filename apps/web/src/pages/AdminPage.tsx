@@ -1807,6 +1807,17 @@ export function AdminPage() {
 
       <section className={scoped(styles, 'admin-grid')}>
         <section className={scoped(styles, 'subsection-card')}>
+          <div
+            className={cx(
+              scoped(styles, 'confirmation-row'),
+              scoped(styles, 'update-status-banner'),
+            )}
+            role="status"
+            aria-label="Admin dashboard status"
+            aria-live="polite"
+          >
+            <p className="form-message">{message}</p>
+          </div>
           <div className={scoped(styles, 'stats-grid')}>
             {isHouseholdsLoading ? (
               <>

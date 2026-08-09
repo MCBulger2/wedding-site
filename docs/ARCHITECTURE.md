@@ -40,7 +40,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 ### Public Site
 
-The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, a static story route with responsive personal photography and device-aware Google/Apple map links for Phoenix recommendations, legal pages, and contact information. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
+The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, a hotel-block area with a friendly TBD message until a publicly shareable hotel is available, live registry links, a static story route with responsive personal photography and device-aware Google/Apple map links for Phoenix recommendations, legal pages, and contact information. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
 
 The venue map uses an OpenStreetMap embed with its native venue marker, so the marker stays synchronized while guests pan or zoom; the application retains the descriptive frame title and outbound map link.
 
