@@ -6,7 +6,6 @@ import {
   OurStoryPage,
   PrivacyPage,
   RegistryPage,
-  SmsUpdatesPage,
   TermsPage,
 } from './pages/PublicPages.js';
 
@@ -30,11 +29,6 @@ const RsvpSuccessPage = lazy(() =>
     default: module.RsvpSuccessPage,
   })),
 );
-const RsvpSmsUpdatesPage = lazy(() =>
-  import('./pages/RsvpPages.js').then((module) => ({
-    default: module.RsvpSmsUpdatesPage,
-  })),
-);
 
 type Route =
   | { name: 'home' }
@@ -44,9 +38,7 @@ type Route =
   | { name: 'rsvp_entry' }
   | { name: 'rsvp'; inviteCode: string }
   | { name: 'rsvp_success'; inviteCode: string }
-  | { name: 'rsvp_sms_updates'; inviteCode: string }
-  | { name: 'sms_updates' }
-  | { name: 'sms_opt_in_redirect' }
+  | { name: 'legacy_redirect'; path: string }
   | { name: 'terms' }
   | { name: 'admin' };
 
@@ -140,7 +132,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Header activeRoute={route.name === 'rsvp_sms_updates' ? 'rsvp' : route.name} />
+      <Header activeRoute={route.name === 'legacy_redirect' ? 'home' : route.name} />
       {route.name === 'home' && <HomePage />}
       {route.name === 'our_story' && <OurStoryPage />}
       {route.name === 'privacy' && <PrivacyPage />}
@@ -160,13 +152,7 @@ export function App() {
           <RsvpSuccessPage inviteCode={route.inviteCode} />
         </Suspense>
       )}
-      {route.name === 'rsvp_sms_updates' && (
-        <Suspense fallback={<RouteLoadingFallback />}>
-          <RsvpSmsUpdatesPage inviteCode={route.inviteCode} />
-        </Suspense>
-      )}
-      {route.name === 'sms_updates' && <SmsUpdatesPage />}
-      {route.name === 'sms_opt_in_redirect' && <LegacySmsOptInRedirect />}
+      {route.name === 'legacy_redirect' && <LegacyRedirect path={route.path} />}
       {route.name === 'terms' && <TermsPage />}
       {route.name === 'admin' && (
         <Suspense fallback={<RouteLoadingFallback />}>
@@ -192,11 +178,12 @@ export function parseRoute(pathname: string): Route {
     return { name: 'rsvp_entry' };
   }
   if (pathname.startsWith('/rsvp/') && pathname.endsWith('/sms-updates')) {
+    const inviteCode = decodeURIComponent(
+      pathname.slice('/rsvp/'.length, -'/sms-updates'.length),
+    );
     return {
-      name: 'rsvp_sms_updates',
-      inviteCode: decodeURIComponent(
-        pathname.slice('/rsvp/'.length, -'/sms-updates'.length),
-      ),
+      name: 'legacy_redirect',
+      path: `/rsvp/${encodeURIComponent(inviteCode)}`,
     };
   }
   if (pathname.startsWith('/rsvp/') && pathname.endsWith('/success')) {
@@ -216,11 +203,8 @@ export function parseRoute(pathname: string): Route {
   if (pathname === '/admin') {
     return { name: 'admin' };
   }
-  if (pathname === '/sms-updates') {
-    return { name: 'sms_updates' };
-  }
-  if (pathname === '/sms-opt-in-proof') {
-    return { name: 'sms_opt_in_redirect' };
+  if (pathname === '/sms-updates' || pathname === '/sms-opt-in-proof') {
+    return { name: 'legacy_redirect', path: '/' };
   }
   if (pathname === '/terms') {
     return { name: 'terms' };
@@ -228,14 +212,16 @@ export function parseRoute(pathname: string): Route {
   return { name: 'home' };
 }
 
-export function LegacySmsOptInRedirect({
+export function LegacyRedirect({
+  path,
   replace = (path: string) => window.location.replace(path),
 }: {
+  path: string;
   replace?: (path: string) => void;
 }) {
   useEffect(() => {
-    replace('/sms-updates');
-  }, [replace]);
+    replace(path);
+  }, [path, replace]);
 
   return null;
 }

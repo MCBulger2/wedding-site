@@ -9,6 +9,15 @@ const acceptedRecoveryResponse = {
   accepted: true as const,
   message: "If that matches our guest list, we'll send your private RSVP link.",
 };
+const rsvpSearchResponse = {
+  results: [
+    {
+      displayName: 'The Example Household',
+      rsvpUrl: 'https://frontend.example.com/rsvp/A2B3C4D5E6',
+    },
+  ],
+  tooManyMatches: false,
+};
 
 describe('handleRequest', () => {
   let consoleLog: ReturnType<typeof vi.spyOn>;
@@ -117,6 +126,61 @@ describe('handleRequest', () => {
     expect(httpResponse.statusCode).toBe(422);
     expect(JSON.parse(httpResponse.body as string)).toMatchObject({
       message: 'Recovery contact is invalid',
+    });
+  });
+
+  it('passes RSVP search requests through with source IP and canonical base URL', async () => {
+    const searchRsvps = vi.fn(async () => rsvpSearchResponse);
+    const service = createServiceDouble({ searchRsvps });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/search', 'POST', { lastName: 'Example' }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(200);
+    expect(JSON.parse(httpResponse.body as string)).toEqual(rsvpSearchResponse);
+    expect(searchRsvps).toHaveBeenCalledWith(
+      { lastName: 'Example' },
+      {
+        sourceIp: '203.0.113.10',
+        baseUrl: 'https://frontend.example.com',
+      },
+    );
+    expect(parseConsoleJson(consoleLog)).toContainEqual(
+      expect.objectContaining({
+        event: 'api.request.completed',
+        routeName: 'POST /rsvp/search',
+        method: 'POST',
+        statusCode: 200,
+        isAdminRoute: false,
+      }),
+    );
+  });
+
+  it('returns Retry-After for application-level RSVP search throttling', async () => {
+    const service = createServiceDouble({
+      searchRsvps: vi.fn(async () => {
+        throw new PublicError(
+          'Too many RSVP search attempts. Try again later.',
+          429,
+          undefined,
+          { 'retry-after': '1800' },
+        );
+      }),
+    });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/search', 'POST', { lastName: 'Example' }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(429);
+    expect(httpResponse.headers).toMatchObject({ 'retry-after': '1800' });
+    expect(JSON.parse(httpResponse.body as string)).toEqual({
+      message: 'Too many RSVP search attempts. Try again later.',
     });
   });
 
@@ -548,6 +612,7 @@ function createServiceDouble(
     importHouseholds: notUsed,
     listHouseholds: notUsed,
     requestRsvpRecovery: notUsed,
+    searchRsvps: notUsed,
     revealInvitation: notUsed,
     rotateInviteCode: notUsed,
     sendHouseholdNotification: notUsed,

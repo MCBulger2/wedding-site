@@ -9,7 +9,7 @@ Before invitations are printed or production traffic is announced, verify all of
 - staging deploys cleanly from `main`
 - production deploy wiring still matches the intended `v*` release flow
 - staging and production GitHub environment variables are correct
-- custom domains, Cognito auth domain, SES, Twilio, and WAF settings match the live plan
+- custom domains, Cognito auth domain, SES, and WAF settings match the live plan; dormant Twilio settings are documented separately
 - admin login, RSVP, export, and recovery flows still behave as expected
 
 Completing this checklist does not authorize a production deployment. Creating or publishing the production release requires separate, explicit authorization from the site owner.
@@ -35,10 +35,6 @@ Important deploy-time inputs to verify before launch:
 - `NOTIFICATION_SENDER_EMAIL`
 - `NOTIFICATION_RECIPIENT_EMAILS`
 - `OPERATIONS_ALERT_EMAILS`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_API_KEY_SID`
-- `TWILIO_API_KEY_SECRET_ARN`
-- `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`
 - `CONTACT_EMAIL_ADDRESS`
 - `CONTACT_FORWARDING_RECIPIENT_EMAIL`
 - `ENABLE_PASSKEYS`
@@ -82,46 +78,37 @@ Verify outbound email and optional inbound forwarding:
 
 Guest RSVP writes should continue even if notification delivery fails. Validate that failure mode before launch.
 
-## Twilio SMS Checks
+## RSVP Search and Recovery Checks
 
-Confirm production SMS wiring uses:
+Before launch, verify the visible guest flows:
 
-- account SID
-- API key SID
-- API key secret stored in Secrets Manager
-- either a Messaging Service SID or a from-number
+- an exact invited-member last-name match through `POST /api/rsvp/search` lets the guest select a result and opens its private RSVP URL
+- search results return only `displayName` and `rsvpUrl`; there is no separate `inviteCode` field, but `rsvpUrl` embeds the bearer credential and must be treated as private
+- no-match searches show the no-match state
+- searches with more than 10 matches return the too-many state and do not show partial results
+- the search limits are enforced at 5 attempts per term per hour and 20 attempts per source IP per hour, with API Gateway throttling also active
+- email recovery sends or accepts the request without revealing whether a guest exists, and the resulting link is recovered through KMS-protected invite-code ciphertext
+- admin household notifications are email-only in the visible website
+- no visible public or admin page exposes SMS enrollment, preferences, recovery, or notifications
+- legacy `/sms-updates`, `/sms-opt-in-proof`, and `/rsvp/{inviteCode}/sms-updates` URLs redirect without rendering SMS UI
 
-Twilio reviewer-visible consent checklist:
+## Optional SMS/Twilio Re-enable Checklist
 
-- use the exact public URL `https://matt-alison.com/sms-updates`; it must load without an invite code or authentication
-- show the `Matt & Alison Wedding` brand, sole proprietor `Matthew Bulger`, and `contact@matt-alison.com`
-- start with an empty phone field and an unchecked consent checkbox
-- require affirmative consent before `Sign up for text updates` submits
-- state the message purpose and variable frequency, that message and data rates may apply, and that consent is optional and independent from RSVP submission
-- include working Terms and Privacy Policy links, the HELP/STOP disclosure, and the promise that text-message opt-in data and consent are not shared with third parties
+SMS remains dormant and must not be enabled as part of the current launch. If it is deliberately re-enabled later:
 
-Before an authorized production deployment:
-
-- confirm consent copy and opt-out expectations are acceptable
-- confirm partial or broken Twilio config fails SMS delivery without breaking email delivery or RSVP writes
-- confirm the public route has API Gateway throttling of 1 request per second with a burst of 3, plus service limits of 3 attempts per normalized phone and 10 attempts per source IP per hour
-
-After an authorized production deployment, pass this controlled-handset gate before sharing the consent URL with Twilio or enabling guest messaging:
-
-- the exact public URL `https://matt-alison.com/sms-updates` loads and submits without authentication
-- a signup from one controlled handset receives one real branded `Matt & Alison Wedding` confirmation containing HELP and STOP instructions
-- DynamoDB contains one standalone `SmsSubscription` record that transitions from `pending_confirmation` to `opted_in` only after Twilio accepts delivery
-- repeating enrollment for the same normalized phone updates that record and does not create a duplicate
-- Lambda and API Gateway logs contain no raw phone number or source IP
-
-Do not send the public URL to Twilio for review until every item in the controlled-handset gate passes.
+- configure the documented Twilio identifiers and keep the API secret in Secrets Manager
+- restore only an explicitly reviewed website flow and verify the legacy redirects are intentionally replaced
+- obtain renewed legal, consent, messaging-purpose, HELP/STOP, opt-out, privacy, and regulatory review
+- verify rate limits, API Gateway throttling, delivery failure handling, and logging do not expose phone numbers or source IPs
+- test controlled-handset enrollment, confirmation, duplicate handling, opt-out, and admin-authored SMS in staging before production
+- confirm SMS re-enablement does not change email delivery or RSVP write behavior
 
 ## Abuse Protection and Security Checks
 
 Verify the live production environment has:
 
 - CloudFront WAF association for public RSVP traffic
-- API Gateway throttling on RSVP read, write, and recovery routes
+- API Gateway throttling on RSVP read, write, search, and recovery routes
 - private S3 buckets
 - HTTPS-only delivery
 - Cognito MFA and intended passkey behavior
@@ -138,8 +125,9 @@ Run a full staging rehearsal before printing invitations:
 - generate, reveal, export, and email invitation links
 - verify exported or sent households do not accidentally rotate to new mailed URLs without explicit confirmation
 - submit and update RSVPs from invite links
-- verify RSVP recovery by stored email and stored phone flows
-- verify phone recovery sends only for a matching current phone with active `opted_in` consent; recovery must never enroll or reactivate SMS
+- verify exact last-name search, result selection, no-match, and too-many-match states
+- verify RSVP recovery by email only, including generic responses and KMS-backed link recovery
+- verify no public or admin page exposes SMS controls and legacy SMS URLs redirect
 - confirm recovery messages contain the private RSVP link and do not expose extra plaintext invite-code fields
 - verify admin login, household editing, archive behavior, CSV export, and label export
 - verify public pages, RSVP routes, admin routes, and SPA refresh behavior
@@ -153,9 +141,5 @@ Immediately before production launch:
 - review alarms, dashboards, and log groups
 - confirm operations alert recipients have accepted SNS subscriptions
 - confirm contact, notification, and recovery destinations are correct
-- confirm the Twilio toll-free sender is in the intended Messaging Service sender pool and the canonical `/sms-updates`, Terms, and Privacy pages match the submitted consent flow
-- confirm the toll-free verification identifies sole proprietor `Matthew Bulger`, brand `Matt & Alison Wedding`, and `contact@matt-alison.com`
-- use the non-promotional, invited-guest estimate of approximately 100 messages for the verification submission; complete an internal pre-review before submitting
-- after the controlled-handset gate and Twilio approval, test live HELP, STOP, and START behavior end to end before enabling guest messaging
-- verify standalone SMS preferences transition pending to active only after a Twilio HTTP 2xx, failed confirmation remains retryable, and website opt-out blocks recovery and admin-authored SMS
+- if SMS was separately re-enabled, complete its optional Twilio and compliance checklist before enabling guest messaging
 - rerun the highest-risk production smoke checks after deploy

@@ -1,20 +1,20 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api.js';
 import {
   RsvpLookupPage,
   RsvpPage,
-  RsvpSmsUpdatesPage,
   RsvpSuccessPage,
 } from './RsvpPages.js';
 
-const { fetchRsvp, recoverRsvpLink, saveRsvp, saveSmsPreferences } = vi.hoisted(() => ({
+const { fetchRsvp, recoverRsvpLink, saveRsvp, saveSmsPreferences, searchRsvps } = vi.hoisted(() => ({
   fetchRsvp: vi.fn(),
   recoverRsvpLink: vi.fn(),
   saveRsvp: vi.fn(),
   saveSmsPreferences: vi.fn(),
+  searchRsvps: vi.fn(),
 }));
 
 vi.mock('../api.js', () => ({
@@ -31,6 +31,7 @@ vi.mock('../api.js', () => ({
   recoverRsvpLink,
   saveRsvp,
   saveSmsPreferences,
+  searchRsvps,
 }));
 
 const household = {
@@ -89,163 +90,20 @@ const savedRsvp = {
   updatedAt: '2026-06-15T22:07:00.000Z',
 };
 
-describe('RsvpSmsUpdatesPage', () => {
-  beforeEach(() => {
-    fetchRsvp.mockReset();
-    saveSmsPreferences.mockReset();
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
   });
-
-  it('shows a recoverable error when the initial preferences lookup fails', async () => {
-    fetchRsvp
-      .mockRejectedValueOnce(new Error('Network unavailable'))
-      .mockResolvedValueOnce({ household });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-
-    expect(await screen.findByRole('heading', { name: 'Unable to load text preferences' })).not.toBeNull();
-    expect(screen.getByText('Network unavailable')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
-  });
-
-  it('blocks enable while unchecked, then activates after explicit consent', async () => {
-    fetchRsvp.mockResolvedValue({ household });
-    saveSmsPreferences.mockResolvedValue({
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_in',
-        phone: '+14805550100',
-        source: 'sms_preferences',
-        consentedAt: '2026-07-11T18:00:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1',
-      },
-    });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByRole('heading', { name: 'Text updates' });
-    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(480) 555-0100' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    expect(saveSmsPreferences).not.toHaveBeenCalled();
-    expect(screen.getByText('Check the consent box to enable or update text messages.')).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
-      'invite-code-123',
-      { enabled: true, phone: '(480) 555-0100' },
-    ));
-    expect(await screen.findByText('Text updates are active.')).not.toBeNull();
-    expect(screen.getByText('Active')).not.toBeNull();
-  });
-
-  it('shows truthful off messaging when a resolved enable loses to opt-out', async () => {
-    fetchRsvp.mockResolvedValue({ household });
-    saveSmsPreferences.mockResolvedValue({
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_out',
-        phone: '+14805550100',
-        source: 'sms_preferences',
-        consentedAt: '2026-07-11T18:00:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1',
-      },
-    });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByRole('heading', { name: 'Text updates' });
-    fireEvent.change(screen.getByLabelText('Mobile phone'), {
-      target: { value: '(480) 555-0100' },
-    });
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Enable text updates' }));
-
-    expect(await screen.findByText('Off')).not.toBeNull();
-    expect(
-      screen.getByText('Text updates remain off because preferences changed in another request.'),
-    ).not.toBeNull();
-    expect(screen.queryByText('Text updates are active.')).toBeNull();
-  });
-
-  it('refetches a pending preference after provider failure during an active phone change', async () => {
-    const activeHousehold = {
-      ...household,
-      phone: '+14805550100',
-      smsConsent: {
-        status: 'opted_in' as const,
-        phone: '+14805550100',
-        source: 'rsvp_form' as const,
-        consentedAt: '2026-06-15T22:05:00.000Z',
-        consentTextVersion: 'twilio-tollfree-v1' as const,
-      },
-    };
-    const pendingHousehold = {
-      ...activeHousehold,
-      phone: '+16025550199',
-      smsConsent: {
-        ...activeHousehold.smsConsent,
-        status: 'pending_confirmation' as const,
-        phone: '+16025550199',
-        source: 'sms_preferences' as const,
-      },
-    };
-    fetchRsvp
-      .mockResolvedValueOnce({ household: activeHousehold })
-      .mockResolvedValueOnce({ household: pendingHousehold });
-    saveSmsPreferences.mockRejectedValue(new ApiError('SMS provider is temporarily unavailable', 503));
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-    await screen.findByText('Active');
-    fireEvent.change(screen.getByLabelText('Mobile phone'), { target: { value: '(602) 555-0199' } });
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'Update text updates' }));
-
-    expect(await screen.findByText('Pending confirmation')).not.toBeNull();
-    expect(screen.getByText(/SMS provider is temporarily unavailable/i)).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Enable text updates' })).not.toBeNull();
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-  });
-
-  it('requires a fresh unchecked consent and supports website opt-out', async () => {
-    fetchRsvp.mockResolvedValue({
-      household: {
-        ...household,
-        phone: '+14805550100',
-        smsConsent: {
-          status: 'opted_in',
-          phone: '+14805550100',
-          source: 'rsvp_form',
-          consentedAt: '2026-06-15T22:05:00.000Z',
-          consentTextVersion: 'twilio-tollfree-v1',
-        },
-      },
-    });
-    saveSmsPreferences.mockResolvedValue({ ...household, smsConsent: { status: 'opted_out' } });
-
-    render(<RsvpSmsUpdatesPage inviteCode="invite-code-123" />);
-
-    expect(await screen.findByRole('heading', { name: 'Text updates' })).not.toBeNull();
-    expect(screen.getByText('Active')).not.toBeNull();
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByRole('link', { name: 'Terms' })).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Privacy Policy' })).not.toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off text updates' }));
-    await waitFor(() => expect(saveSmsPreferences).toHaveBeenCalledWith(
-      'invite-code-123',
-      { enabled: false },
-    ));
-  });
-});
+  return { promise, resolve };
+}
 
 describe('RsvpLookupPage', () => {
   beforeEach(() => {
     fetchRsvp.mockReset();
     recoverRsvpLink.mockReset();
     saveRsvp.mockReset();
+    searchRsvps.mockReset();
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: {
@@ -255,88 +113,148 @@ describe('RsvpLookupPage', () => {
     });
   });
 
-  it('keeps the lost-code form collapsed by default and expands it with focus', async () => {
+  it('keeps both assistance panels collapsed by default and expands search with focus', async () => {
     render(<RsvpLookupPage />);
 
-    expect(screen.queryByLabelText('Email or mobile number')).toBeNull();
+    expect(screen.queryByLabelText('Household last name')).toBeNull();
+    expect(screen.queryByLabelText('Email address')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
 
-    const recoveryInput = await screen.findByLabelText(
-      'Email or mobile number',
-    );
+    const searchInput = await screen.findByLabelText('Household last name');
+    expect(searchInput.getAttribute('placeholder')).toBe('Example');
+    expect(searchInput.getAttribute('inputmode')).toBe('text');
+    expect(
+      screen.getByText(
+        'Search using the exact household last name printed on your invitation.',
+      ),
+    ).not.toBeNull();
     expect(
       screen
-        .getByRole('button', { name: "Don't have a code?" })
+        .getByRole('button', { name: 'Search by last name' })
         .getAttribute('aria-expanded'),
     ).toBe('true');
-    await waitFor(() => expect(document.activeElement).toBe(recoveryInput));
+    expect(
+      screen
+        .getByRole('button', { name: 'Email my RSVP link' })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
+    await waitFor(() => expect(document.activeElement).toBe(searchInput));
   });
 
-  it('validates recovery contact input before submitting', async () => {
+  it('requires a last name before searching', async () => {
     render(<RsvpLookupPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
-    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
-      target: { value: 'not-a-contact' },
-    });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
 
-    expect(recoverRsvpLink).not.toHaveBeenCalled();
+    expect(searchRsvps).not.toHaveBeenCalled();
+    expect(await screen.findByText('Enter your household last name.')).not.toBeNull();
+  });
+
+  it('enforces the 80-character last-name limit before searching', async () => {
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    const input = screen.getByLabelText('Household last name');
+    expect(input.getAttribute('maxlength')).toBe('80');
+    fireEvent.change(input, { target: { value: 'E'.repeat(81) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+
+    expect(searchRsvps).not.toHaveBeenCalled();
     expect(
-      await screen.findByText('Enter a valid email address or mobile number.'),
+      await screen.findByText('Enter a last name with 80 characters or fewer.'),
     ).not.toBeNull();
   });
 
-  it('shows generic success copy after recovery submit', async () => {
-    recoverRsvpLink.mockResolvedValue({
-      accepted: true,
-      message:
-        "If that matches our guest list, we'll send your private RSVP link.",
+  it('submits a search and shows accessible household links', async () => {
+    searchRsvps.mockResolvedValue({
+      results: [
+        {
+          displayName: 'The Example Household',
+          rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+        },
+      ],
+      tooManyMatches: false,
     });
     render(<RsvpLookupPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
-    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
-      target: { value: 'sam@example.com' },
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: ' Example ' },
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
 
     await waitFor(() =>
-      expect(recoverRsvpLink).toHaveBeenCalledWith({
-        contact: 'sam@example.com',
+      expect(searchRsvps).toHaveBeenCalledWith({
+        lastName: 'Example',
       }),
     );
+    expect(await screen.findByRole('list', { name: 'Matching households' })).not.toBeNull();
+    expect(
+      (
+        (await screen.findByRole('link', {
+          name: 'The Example Household',
+        })) as HTMLAnchorElement
+      ).href,
+    ).toBe('https://matt-alison.com/rsvp/A2B3C4D5E6');
+  });
+
+  it('explains when no matching households are found', async () => {
+    searchRsvps.mockResolvedValue({
+      results: [],
+      tooManyMatches: false,
+    });
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+
     expect(
       await screen.findByText(
-        "If that matches our guest list, we'll send your private RSVP link.",
+        "We couldn't find a household with that exact last name. Try the name printed on your invitation, or use email recovery instead.",
       ),
     ).not.toBeNull();
   });
 
-  it('submits phone recovery without SMS enrollment fields', async () => {
-    recoverRsvpLink.mockResolvedValue({ accepted: true, message: 'Accepted' });
+  it('warns when a search returns too many matches', async () => {
+    searchRsvps.mockResolvedValue({
+      results: [],
+      tooManyMatches: true,
+    });
     render(<RsvpLookupPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
-    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
-      target: { value: '(480) 555-0100' },
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Smith' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    );
+    expect(
+      await screen.findByText(
+        "We found too many households with that last name to safely list here. Use email recovery instead, or contact Matt or Alison for help.",
+      ),
+    ).not.toBeNull();
+  });
 
-    await waitFor(() =>
-      expect(recoverRsvpLink).toHaveBeenCalledWith({
-        contact: '(480) 555-0100',
-      }),
-    );
-    expect(screen.queryByRole('checkbox')).toBeNull();
+  it('shows a generic failure when search cannot complete', async () => {
+    searchRsvps.mockRejectedValue(new Error('search failed'));
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+
+    expect(
+      await screen.findByText(
+        'We could not search right now. Please try again, use email recovery, or contact Matt or Alison.',
+      ),
+    ).not.toBeNull();
   });
 
   it('preserves the invitation-code submit flow', () => {
@@ -350,22 +268,191 @@ describe('RsvpLookupPage', () => {
     expect(window.location.assign).toHaveBeenCalledWith('/rsvp/A2B3C4D5E6');
   });
 
-  it('uses silent visual feedback while recovering an RSVP link', async () => {
-    recoverRsvpLink.mockReturnValue(new Promise(() => {}));
+  it('uses a silent loader while searching for households', async () => {
+    searchRsvps.mockReturnValue(new Promise(() => {}));
     render(<RsvpLookupPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: "Don't have a code?" }));
-    fireEvent.change(screen.getByLabelText('Email or mobile number'), {
-      target: { value: 'sam@example.com' },
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Example' },
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Send private RSVP link' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
 
     const status = await screen.findByRole('status');
     expect(status.textContent).not.toMatch(
-      /Sending your RSVP link|Checking for a saved household contact/i,
+      /Searching for your household|Checking guest list/i,
     );
+  });
+
+  it('keeps the search and email recovery panels mutually exclusive', async () => {
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    await screen.findByLabelText('Household last name');
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+
+    expect(screen.queryByLabelText('Household last name')).toBeNull();
+    const emailInput = await screen.findByLabelText('Email address');
+    expect(emailInput.getAttribute('placeholder')).toBe('name@example.com');
+    expect(emailInput.getAttribute('inputmode')).toBe('email');
+    expect(
+      screen.getByText(
+        "Enter the email address already associated with your household and we'll send your RSVP link if we find a match.",
+      ),
+    ).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(emailInput));
+  });
+
+  it('resets a pending search when the search panel is closed and reopened', async () => {
+    const pending = createDeferred<{
+      results: Array<{ displayName: string; rsvpUrl: string }>;
+      tooManyMatches: boolean;
+    }>();
+    searchRsvps.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    const toggle = screen.getByRole('button', { name: 'Search by last name' });
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(
+      (screen.getByRole('button', { name: 'Find my household' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+
+    await act(async () => {
+      pending.resolve({
+        results: [
+          {
+            displayName: 'Stale Example Household',
+            rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+          },
+        ],
+        tooManyMatches: false,
+      });
+      await pending.promise;
+    });
+    expect(screen.queryByText('Stale Example Household')).toBeNull();
+  });
+
+  it('resets a pending recovery when the recovery panel is closed and reopened', async () => {
+    const pending = createDeferred<{ accepted: true; message: string }>();
+    recoverRsvpLink.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    const toggle = screen.getByRole('button', { name: 'Email my RSVP link' });
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(
+      (screen.getByRole('button', {
+        name: 'Email me my RSVP link',
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    await act(async () => {
+      pending.resolve({ accepted: true, message: 'Stale recovery response' });
+      await pending.promise;
+    });
+    expect(screen.queryByText('Stale recovery response')).toBeNull();
+  });
+
+  it('ignores a stale search response after the last name changes', async () => {
+    const pending = createDeferred<{
+      results: Array<{ displayName: string; rsvpUrl: string }>;
+      tooManyMatches: boolean;
+    }>();
+    searchRsvps.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    const input = screen.getByLabelText('Household last name');
+    fireEvent.change(input, { target: { value: 'Example' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+    fireEvent.change(input, { target: { value: 'Different' } });
+
+    pending.resolve({
+      results: [
+        {
+          displayName: 'The Example Household',
+          rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+        },
+      ],
+      tooManyMatches: false,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Find my household' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('list', { name: 'Matching households' })).toBeNull();
+  });
+
+  it('ignores a stale recovery response after switching panels', async () => {
+    const pending = createDeferred<{ accepted: true; message: string }>();
+    recoverRsvpLink.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+
+    pending.resolve({ accepted: true, message: 'Stale recovery response' });
+    await waitFor(() => expect(screen.getByLabelText('Household last name')).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+
+    expect(screen.queryByText('Stale recovery response')).toBeNull();
+  });
+
+  it('rejects non-email recovery input before submitting', async () => {
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: '(480) 555-0100' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+
+    expect(recoverRsvpLink).not.toHaveBeenCalled();
+    expect(await screen.findByText('Enter a valid email address.')).not.toBeNull();
+  });
+
+  it('submits email-only recovery and shows success copy', async () => {
+    recoverRsvpLink.mockResolvedValue({
+      accepted: true,
+      message:
+        "If that matches our guest list, we'll send your private RSVP link.",
+    });
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+
+    await waitFor(() =>
+      expect(recoverRsvpLink).toHaveBeenCalledWith({
+        contact: 'sam@example.com',
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "If that matches our guest list, we'll send your private RSVP link.",
+      ),
+    ).not.toBeNull();
   });
 });
 
@@ -465,7 +552,7 @@ describe('RsvpPage', () => {
       screen.getByRole('heading', { name: 'Anything else we should know?' }),
     ).not.toBeNull();
     expect(screen.getByLabelText('Household notes')).not.toBeNull();
-    expect(screen.getByText(/Text updates are managed separately/i)).not.toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(screen.queryByLabelText('Plus-one 1 first name')).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(
@@ -575,21 +662,21 @@ describe('RsvpPage', () => {
     expect(status.textContent).not.toMatch(/Saving your RSVP|Updating your response/i);
   });
 
-  it('links to standalone text preferences without SMS controls in RSVP', async () => {
+  it('keeps SMS controls and text-update links out of the RSVP flow', async () => {
     fetchRsvp.mockResolvedValue({ household });
 
     render(<RsvpPage inviteCode="invite-code-123" />);
 
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
-    expect(screen.getByRole('link', { name: 'Manage text updates' }).getAttribute('href'))
-      .toBe('/rsvp/invite-code-123/sms-updates');
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByLabelText('Mobile phone')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(screen.getByRole('button', { name: 'Save RSVP' })).not.toBeNull();
   });
 
-  it('keeps existing SMS consent out of the RSVP form', async () => {
+  it('keeps existing SMS consent out of the RSVP form and visible copy', async () => {
     fetchRsvp.mockResolvedValue({
       household: {
         ...household,
@@ -609,8 +696,9 @@ describe('RsvpPage', () => {
     await screen.findByRole('heading', { name: 'The Example Household' });
     fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
 
-    expect(screen.getByRole('link', { name: 'Manage text updates' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
     expect(screen.queryByText('+14805550100')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
   });
 });
 
@@ -649,6 +737,8 @@ describe('RsvpSuccessPage', () => {
       screen.getByRole('link', { name: 'Review or update RSVP' }),
     ).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Back home' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: 'Manage text updates' })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/text updates/i);
     expect(
       screen.queryByRole('button', { name: /Submit RSVP/i }),
     ).toBeNull();

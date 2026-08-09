@@ -385,6 +385,29 @@ export type SendHouseholdNotificationResponse = z.infer<
   typeof SendHouseholdNotificationResponseSchema
 >;
 
+export const RsvpSearchRequestSchema = z
+  .object({
+    lastName: z.string().trim().min(1).max(80),
+  })
+  .strict();
+export type RsvpSearchRequest = z.infer<typeof RsvpSearchRequestSchema>;
+
+export const RsvpSearchResultSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(160),
+    rsvpUrl: z.string().url(),
+  })
+  .strict();
+export type RsvpSearchResult = z.infer<typeof RsvpSearchResultSchema>;
+
+export const RsvpSearchResponseSchema = z
+  .object({
+    results: z.array(RsvpSearchResultSchema).max(10),
+    tooManyMatches: z.boolean(),
+  })
+  .strict();
+export type RsvpSearchResponse = z.infer<typeof RsvpSearchResponseSchema>;
+
 export const RsvpRecoveryRequestSchema = z.object({
   contact: RecoveryContactInputSchema,
 });

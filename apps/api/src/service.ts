@@ -16,6 +16,8 @@ import {
   type SmsConsent,
   type RsvpRecoveryAcceptedResponse,
   RsvpRecoveryRequestSchema,
+  RsvpSearchRequestSchema,
+  type RsvpSearchResponse,
   RsvpUpdateSchema,
   type SendInvitationEmailResponse,
   SendHouseholdNotificationInputSchema,
@@ -52,6 +54,10 @@ const RSVP_RECOVERY_IP_LIMIT = 10;
 const PUBLIC_SMS_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const PUBLIC_SMS_PHONE_LIMIT = 3;
 const PUBLIC_SMS_IP_LIMIT = 10;
+const RSVP_SEARCH_RESULT_LIMIT = 10;
+const RSVP_SEARCH_TERM_LIMIT = 5;
+const RSVP_SEARCH_IP_LIMIT = 20;
+const RSVP_SEARCH_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const POINTS_PER_INCH = 72;
 const AVERY_5160_LABEL = {
   pageWidth: 8.5 * POINTS_PER_INCH,
@@ -78,8 +84,18 @@ export class PublicError extends Error {
     message: string,
     readonly statusCode = 400,
     readonly details?: string[],
+    readonly responseHeaders?: Record<string, string>,
   ) {
     super(message);
+  }
+}
+
+class InviteCodeHashMismatchError extends PublicError {
+  constructor() {
+    super(
+      'Stored invite code does not match the current household invite hash',
+      409,
+    );
   }
 }
 
@@ -494,6 +510,107 @@ export class WeddingService {
       outcome: 'accepted',
     });
     return acceptedRecoveryResponse();
+  }
+
+  async searchRsvps(
+    input: unknown,
+    requestContext: { sourceIp?: string; baseUrl: string },
+  ): Promise<RsvpSearchResponse> {
+    const parsed = RsvpSearchRequestSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new PublicError(
+        'RSVP search is invalid',
+        422,
+        formatValidationIssues(parsed.error),
+      );
+    }
+
+    const baseUrl = requireCanonicalBaseUrl(requestContext.baseUrl);
+    const normalizedLastName = normalizeSearchLastName(parsed.data.lastName);
+    const termHash = stableHash(
+      `rsvp-search-term:${normalizedLastName}`,
+      this.inviteCodePepper,
+    );
+    const sourceIpHash = stableHash(
+      `rsvp-search-ip:${requestContext.sourceIp?.trim() || 'unknown'}`,
+      this.inviteCodePepper,
+    );
+
+    const rateLimit = await this.checkRsvpSearchRateLimit(termHash, sourceIpHash);
+    if (rateLimit.isLimited) {
+      logStructured({
+        level: 'warn',
+        event: 'rsvp.search.rateLimited',
+        message: 'RSVP search rate limited',
+        outcome: 'rate_limited',
+        resultCount: 0,
+        tooManyMatches: false,
+      });
+      throw new PublicError(
+        'Too many RSVP search attempts. Try again later.',
+        429,
+        undefined,
+        { 'retry-after': String(rateLimit.retryAfterSeconds) },
+      );
+    }
+
+    const recoverableMatches: RsvpSearchResponse['results'] = [];
+    const households = (await this.repository.listHouseholdsByLastName(normalizedLastName))
+      .filter(
+        (household) =>
+          !household.archivedAt &&
+          household.inviteLifecycleStatus !== 'archived',
+      )
+      .sort(compareHouseholdsByDisplayName);
+
+    for (const household of households) {
+      let inviteCode: string | undefined;
+      try {
+        inviteCode = await this.getRecoverableInviteCode(household);
+      } catch (error) {
+        if (!isSkippableRecoverableInviteCodeError(error)) {
+          throw error;
+        }
+        continue;
+      }
+      if (!inviteCode) {
+        continue;
+      }
+
+      recoverableMatches.push({
+        displayName: household.displayName,
+        rsvpUrl: this.buildInvitationDetails(household, inviteCode, baseUrl)
+          .rsvpUrl,
+      });
+
+      if (recoverableMatches.length > RSVP_SEARCH_RESULT_LIMIT) {
+        logStructured({
+          level: 'info',
+          event: 'rsvp.search.completed',
+          message: 'RSVP search completed',
+          outcome: 'success',
+          resultCount: 0,
+          tooManyMatches: true,
+        });
+        return {
+          results: [],
+          tooManyMatches: true,
+        };
+      }
+    }
+
+    logStructured({
+      level: 'info',
+      event: 'rsvp.search.completed',
+      message: 'RSVP search completed',
+      outcome: 'success',
+      resultCount: recoverableMatches.length,
+      tooManyMatches: false,
+    });
+    return {
+      results: recoverableMatches,
+      tooManyMatches: false,
+    };
   }
 
   async listHouseholds(): Promise<AdminHouseholdRecord[]> {
@@ -1272,10 +1389,7 @@ export class WeddingService {
         this.inviteCodePepper,
       )
     ) {
-      throw new PublicError(
-        'Stored invite code does not match the current household invite hash',
-        409,
-      );
+      throw new InviteCodeHashMismatchError();
     }
 
     return inviteCode;
@@ -1461,6 +1575,37 @@ export class WeddingService {
     return (
       phoneAttempts > PUBLIC_SMS_PHONE_LIMIT || ipAttempts > PUBLIC_SMS_IP_LIMIT
     );
+  }
+
+  private async checkRsvpSearchRateLimit(
+    termHash: string,
+    sourceIpHash: string,
+  ): Promise<{ isLimited: boolean; retryAfterSeconds: number }> {
+    const now = Date.now();
+    const windowStartsAt =
+      Math.floor(now / RSVP_SEARCH_RATE_LIMIT_WINDOW_MS) *
+      RSVP_SEARCH_RATE_LIMIT_WINDOW_MS;
+    const windowExpiresAt = windowStartsAt + RSVP_SEARCH_RATE_LIMIT_WINDOW_MS;
+    const termAttempts = await this.recordRsvpRecoveryAttempt(
+      'contact',
+      termHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    const ipAttempts = await this.recordRsvpRecoveryAttempt(
+      'ip',
+      sourceIpHash,
+      windowStartsAt,
+      windowExpiresAt,
+    );
+    return {
+      isLimited:
+        termAttempts > RSVP_SEARCH_TERM_LIMIT || ipAttempts > RSVP_SEARCH_IP_LIMIT,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((windowExpiresAt - Date.now()) / 1000),
+      ),
+    };
   }
 
   private async recordRsvpRecoveryAttempt(
@@ -1853,6 +1998,42 @@ function normalizeRecoveryContact(value: string): RecoveryContact {
   throw new PublicError('Recovery contact is invalid', 422, [
     'contact: Enter a valid email address or mobile number.',
   ]);
+}
+
+function requireCanonicalBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) {
+    throw new PublicError(
+      'FRONTEND_BASE_URL must be configured before generating recovery or invitation links',
+      503,
+    );
+  }
+
+  return trimmed;
+}
+
+function normalizeSearchLastName(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US');
+}
+
+function compareHouseholdsByDisplayName(a: Household, b: Household): number {
+  const baseComparison = a.displayName.localeCompare(b.displayName, undefined, {
+    sensitivity: 'base',
+  });
+  if (baseComparison !== 0) {
+    return baseComparison;
+  }
+
+  const exactComparison = compareOrdinal(a.displayName, b.displayName);
+  return exactComparison || compareOrdinal(a.householdId, b.householdId);
+}
+
+function compareOrdinal(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function isSkippableRecoverableInviteCodeError(error: unknown): boolean {
+  return error instanceof InviteCodeHashMismatchError;
 }
 
 function stableHash(value: string, pepper: string): string {

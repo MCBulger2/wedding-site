@@ -3,7 +3,7 @@
 import type { Household } from '@matt-alison-wedding/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App, LegacySmsOptInRedirect, parseRoute } from './App.js';
+import { App, LegacyRedirect, parseRoute } from './App.js';
 import {
   AdminPage,
   AdminBulkActionsMenu,
@@ -205,7 +205,7 @@ describe('App routes', () => {
     ).toBeNull();
   });
 
-  it('renders the terms route', () => {
+  it('renders the terms route without visible SMS policy copy', () => {
     window.history.pushState({}, '', '/terms');
 
     render(
@@ -217,12 +217,10 @@ describe('App routes', () => {
     expect(
       screen.getByRole('heading', { name: 'Terms' }),
     ).not.toBeNull();
-    expect(
-      screen.getByText(/Reply HELP for help or STOP to opt out./i),
-    ).not.toBeNull();
+    expect(document.body.textContent).not.toMatch(/sms|text updates|Twilio/i);
   });
 
-  it('renders the privacy route', () => {
+  it('renders the privacy route without visible SMS policy copy', () => {
     window.history.pushState({}, '', '/privacy');
 
     render(
@@ -235,56 +233,60 @@ describe('App routes', () => {
       screen.getByRole('heading', { name: 'Privacy' }),
     ).not.toBeNull();
     expect(
-      screen.getByText(
-        'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
-      ),
+      screen.getByText(/exact-last-name search can return a household RSVP URL/i),
     ).not.toBeNull();
-  });
-
-  it('renders the standalone SMS updates route', () => {
-    window.history.pushState({}, '', '/sms-updates');
-
-    render(
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>,
-    );
-
     expect(
-      screen.getByRole('heading', { name: 'Wedding text updates' }),
+      screen.getByText(/URL contains the bearer credential and grants access/i),
     ).not.toBeNull();
-    expect((screen.getByRole('textbox', { name: 'Mobile phone' }) as HTMLInputElement).value).toBe('');
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-    expect(screen.queryByText(/proof|example|does not submit|does not enroll/i)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/sms|text updates|Twilio/i);
   });
 
-  it('describes standalone public SMS consent in the policies', () => {
-    window.history.pushState({}, '', '/terms');
-    const { unmount } = render(<ThemeProvider><App /></ThemeProvider>);
-    expect(screen.getByText(/enter your mobile number and affirmatively agree/i)).not.toBeNull();
-    expect(screen.queryByText(/only for invited guests/i)).toBeNull();
-
-    unmount();
-    window.history.pushState({}, '', '/privacy');
-    render(<ThemeProvider><App /></ThemeProvider>);
-    expect(screen.getByText(/standalone wedding text updates form/i)).not.toBeNull();
+  it('maps legacy SMS routes to generic redirects', () => {
+    expect(parseRoute('/sms-updates')).toEqual({
+      name: 'legacy_redirect',
+      path: '/',
+    });
+    expect(parseRoute('/rsvp/A2B3C4D5E6/sms-updates')).toEqual({
+      name: 'legacy_redirect',
+      path: '/rsvp/A2B3C4D5E6',
+    });
+    expect(parseRoute('/sms-opt-in-proof')).toEqual({
+      name: 'legacy_redirect',
+      path: '/',
+    });
   });
 
-  it('replaces the legacy proof route without obsolete content flashing', async () => {
+  it('re-encodes reserved characters when redirecting legacy RSVP SMS routes', () => {
+    expect(parseRoute('/rsvp/A%2FB%3FC%23D/sms-updates')).toEqual({
+      name: 'legacy_redirect',
+      path: '/rsvp/A%2FB%3FC%23D',
+    });
+  });
+
+  it('replaces legacy routes without obsolete content flashing', async () => {
     const replace = vi.fn();
-    expect(parseRoute('/sms-opt-in-proof')).toEqual({ name: 'sms_opt_in_redirect' });
-    render(<LegacySmsOptInRedirect replace={replace} />);
+    render(<LegacyRedirect path="/" replace={replace} />);
     expect(document.body.textContent).not.toMatch(/proof|example|does not enroll/i);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/sms-updates'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
   });
 });
 
 describe('HouseholdNotificationForm', () => {
-  it('hides the SMS option when consent is missing', () => {
+  it('shows an email-only admin notification form even when SMS consent exists', () => {
     render(
       <HouseholdNotificationForm
-        household={{ ...household, phone: '+14805550100' }}
-        form={{ channel: 'email', subject: 'Update', message: '' }}
+        household={{
+          ...household,
+          phone: '+14805550100',
+          smsConsent: {
+            status: 'opted_in',
+            phone: '+14805550100',
+            source: 'rsvp_form',
+            consentedAt: '2026-01-01T00:00:00.000Z',
+            consentTextVersion: 'twilio-tollfree-v1',
+          },
+        }}
+        form={{ channel: 'email', subject: 'Update', message: 'See you soon.' }}
         setForm={vi.fn()}
         sending={false}
         onSubmit={async () => {}}
@@ -292,14 +294,16 @@ describe('HouseholdNotificationForm', () => {
       />,
     );
 
+    expect(screen.queryByLabelText('Delivery channel')).toBeNull();
+    expect(screen.getByText('example@example.com')).not.toBeNull();
     expect(
-      screen.queryByRole('option', { name: 'SMS' }),
-    ).toBeNull();
+      (screen.getByLabelText('Notification subject') as HTMLInputElement).value,
+    ).toBe('Update');
     expect(
-      screen.getByText(
-        /SMS delivery stays disabled until this household opts in through the standalone text preferences page./i,
-      ),
-    ).not.toBeNull();
+      (screen.getByLabelText('Notification message') as HTMLTextAreaElement)
+        .value,
+    ).toBe('See you soon.');
+    expect(document.body.textContent).not.toMatch(/sms|twilio|help|stop/i);
   });
 });
 
