@@ -12,7 +12,7 @@ import {
   KeyRound,
   MapPin,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import { ResponsiveImage } from '../components/ResponsiveImage.js';
 import { getNativeMapUrl } from '../nativeMapUrl.js';
@@ -21,6 +21,8 @@ import styles from './PublicPages.module.css';
 
 const PHOTO_WHEEL_SCROLL_THRESHOLD = 90;
 const PHOTO_WHEEL_NAVIGATION_INTERVAL_MS = 450;
+const PHOTO_CONTROLS_FOCUS_DURATION_MS = 500;
+const PHOTO_SCROLL_SETTLE_DELAY_MS = 120;
 
 export function HomePage() {
   const calendarHref = useMemo(() => {
@@ -69,7 +71,27 @@ export function HomePage() {
         </div>
       </section>
 
-      <PhotoCarousel photos={siteContent.photos} />
+      <section
+        className={scoped(styles, 'photo-section')}
+        aria-labelledby="photo-carousel-heading"
+      >
+        <div className={scoped(styles, 'photo-section-copy')}>
+          <p className="eyebrow">Photos</p>
+          <h2 id="photo-carousel-heading">A few favorite moments</h2>
+          <p className="page-lede">
+            A growing gallery for engagement and wedding-weekend photos, with
+            more memories to add as the celebration gets closer.
+          </p>
+          <a className="secondary-button button-inline" href="/our-story">
+            Read our story
+            <ArrowRight aria-hidden="true" />
+          </a>
+        </div>
+        <PhotoCarousel
+          ariaLabel="Matt and Alison photos"
+          photos={siteContent.photos}
+        />
+      </section>
 
       <section id="details" className={scoped(styles, 'section-grid')}>
         <div>
@@ -101,8 +123,7 @@ export function HomePage() {
             </li>
             <li>
               <Clock aria-hidden="true" />
-              Ceremony at {siteContent.ceremonyTime}; reception at{' '}
-              {siteContent.receptionTime}
+              Ceremony at {siteContent.ceremonyTime}; reception to follow
             </li>
             <li>
               <Heart aria-hidden="true" />
@@ -146,8 +167,6 @@ export function HomePage() {
         className={cx(
           scoped(styles, 'section-grid'),
           scoped(styles, 'travel-section'),
-          publicHotels.length === 0 &&
-            scoped(styles, 'travel-section-without-hotels'),
         )}
       >
         <div>
@@ -162,10 +181,10 @@ export function HomePage() {
             ))}
           </ul>
         </div>
-        {publicHotels.length > 0 && (
-          <div>
-            <p className="eyebrow">Hotel block</p>
-            <h2>Where to stay</h2>
+        <div>
+          <p className="eyebrow">Hotel block</p>
+          <h2>Where to stay</h2>
+          {publicHotels.length > 0 ? (
             <div className={scoped(styles, 'hotel-list')}>
               {publicHotels.map((hotel) => (
                 <article
@@ -221,8 +240,13 @@ export function HomePage() {
                 </article>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="page-lede">
+              We’re still finalizing our hotel block—check back soon for
+              updates. We’ll share the details here as soon as they’re ready.
+            </p>
+          )}
+        </div>
       </section>
 
       <section id="registry" className={scoped(styles, 'registry-section')}>
@@ -423,21 +447,39 @@ function PhoenixGuideSection({
                   className={scoped(styles, 'phoenix-recommendation')}
                   key={recommendation.id}
                 >
-                  <h4>{recommendation.title}</h4>
-                  <p>{recommendation.description}</p>
-                  <div className={scoped(styles, 'phoenix-map-links')}>
-                    {recommendation.destinations.map((destination) => (
-                      <a
-                        aria-label={`${recommendation.actionLabel}: ${destination.label}`}
-                        href={getNativeMapUrl(destination)}
-                        key={destination.label}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        <MapPin aria-hidden="true" />
-                        {destination.label}
-                      </a>
-                    ))}
+                  {recommendation.backgroundImage && (
+                    <div
+                      aria-hidden="true"
+                      className={scoped(styles, 'phoenix-recommendation-image')}
+                    >
+                      <ResponsiveImage
+                        alt=""
+                        sizes="(min-width: 900px) 40vw, 100vw"
+                        src={recommendation.backgroundImage}
+                      />
+                    </div>
+                  )}
+                  <div
+                    className={scoped(styles, 'phoenix-recommendation-content')}
+                  >
+                    <h4>{recommendation.title}</h4>
+                    <p>{recommendation.description}</p>
+                    <div className={scoped(styles, 'phoenix-map-links')}>
+                      {recommendation.destinations.map((destination) => (
+                        <a
+                          aria-label={`${recommendation.actionLabel}: ${destination.label}`}
+                          href={getNativeMapUrl(destination)}
+                          key={destination.label}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <MapPin aria-hidden="true" />
+                          {recommendation.destinations.length > 1
+                            ? destination.label
+                            : recommendation.actionLabel}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -459,6 +501,8 @@ function StoryChapterSection({
   chapter: (typeof siteContent.ourStory.chapters)[number];
   reverse: boolean;
 }) {
+  const useCarousel = chapter.id === 'asu' || chapter.id === 'life-together';
+
   return (
     <section
       className={cx(
@@ -469,20 +513,29 @@ function StoryChapterSection({
       aria-labelledby={`story-${chapter.id}`}
     >
       <div className={scoped(styles, 'story-chapter-media')}>
-        {chapter.images.map((image) => (
-          <figure
-            className={scoped(styles, 'story-chapter-image')}
-            key={image.src}
-          >
-            <ResponsiveImage
-              alt={image.alt}
-              decoding="async"
-              objectPosition={image.objectPosition}
-              sizes="(min-width: 900px) 48vw, 100vw"
-              src={image.src}
-            />
-          </figure>
-        ))}
+        {useCarousel ? (
+          <PhotoCarousel
+            ariaLabel={`${chapter.title} photos`}
+            className={scoped(styles, 'story-chapter-carousel')}
+            photos={chapter.images}
+          />
+        ) : (
+          chapter.images.map((image) => (
+            <figure
+              className={scoped(styles, 'story-chapter-image')}
+              key={image.src}
+            >
+              <ResponsiveImage
+                alt={image.alt}
+                decoding="async"
+                objectPosition={image.objectPosition}
+                sizes="(min-width: 900px) 48vw, 100vw"
+                src={image.src}
+                style={{ objectFit: image.objectFit ?? 'cover' }}
+              />
+            </figure>
+          ))
+        )}
       </div>
       <div className={scoped(styles, 'story-copy-block')}>
         <h2 id={`story-${chapter.id}`}>{chapter.title}</h2>
@@ -502,9 +555,9 @@ export function PrivacyPage() {
         <h1>Privacy</h1>
         <div className={scoped(styles, 'policy-copy')}>
           <p>
-            Matt &amp; Alison Wedding uses the contact details you provide through
-            an RSVP to manage responses, share wedding logistics, and help
-            guests recover private RSVP links.
+            Matt &amp; Alison Wedding uses the contact details you provide
+            through an RSVP to manage responses, share wedding logistics, and
+            help guests recover private RSVP links.
           </p>
           <p>
             We do not sell guest information. An exact-last-name search can
@@ -513,7 +566,10 @@ export function PrivacyPage() {
             private. Anyone with the URL may be able to view or update that
             household's RSVP.
           </p>
-          <p>Matt &amp; Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
+          <p>
+            Matt &amp; Alison Wedding is operated by sole proprietor Matthew
+            Bulger. Contact: contact@matt-alison.com.
+          </p>
         </div>
       </section>
     </main>
@@ -531,35 +587,76 @@ export function TermsPage() {
             This website and its private RSVP flow are provided for invited
             guests to review wedding details and submit or update responses.
           </p>
-          <p>Matt &amp; Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
+          <p>
+            Matt &amp; Alison Wedding is operated by sole proprietor Matthew
+            Bulger. Contact: contact@matt-alison.com.
+          </p>
         </div>
       </section>
     </main>
   );
 }
 
-function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
+type CarouselPhoto = {
+  src: string;
+  alt: string;
+  caption?: string;
+  detail?: string;
+  objectPosition?: string;
+  objectFit?: 'cover' | 'contain';
+};
+
+function PhotoCarousel({
+  ariaLabel,
+  className,
+  photos,
+}: {
+  ariaLabel: string;
+  className?: string;
+  photos: readonly CarouselPhoto[];
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
   const hasMultiplePhotos = photos.length > 1;
   const carouselRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | undefined>(undefined);
+  const scrollSettleTimerRef = useRef<number | undefined>(undefined);
   const programmaticScrollTargetRef = useRef<number | undefined>(undefined);
   const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
-  const photoProgress = ((activeIndex + 1) / photos.length) * 100;
+  const carouselPhotos = hasMultiplePhotos
+    ? [photos[photos.length - 1], ...photos, photos[0]]
+    : photos;
+
+  const resetToSlide = (slideIndex: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    scroller.style.scrollBehavior = 'auto';
+    scroller.scrollLeft = scroller.clientWidth * slideIndex;
+    window.requestAnimationFrame(() =>
+      scroller.style.removeProperty('scroll-behavior'),
+    );
+  };
+
+  useLayoutEffect(() => {
+    if (hasMultiplePhotos) resetToSlide(1);
+  }, [hasMultiplePhotos, photos.length]);
 
   useEffect(
     () => () => {
       if (scrollFrameRef.current !== undefined) {
         window.cancelAnimationFrame(scrollFrameRef.current);
       }
+      if (scrollSettleTimerRef.current !== undefined) {
+        window.clearTimeout(scrollSettleTimerRef.current);
+      }
     },
     [],
   );
 
-  const syncActivePhoto = () => {
+  const syncActivePhoto = (settled = false) => {
     const scroller = scrollerRef.current;
     if (!scroller) {
       return;
@@ -570,14 +667,31 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       return;
     }
 
+    const slideIndex = Math.round(scroller.scrollLeft / slideWidth);
+    const isBoundaryClone =
+      hasMultiplePhotos && (slideIndex === 0 || slideIndex === photos.length + 1);
+    if (isBoundaryClone) {
+      if (!settled) return;
+
+      if (slideIndex === 0) {
+        setActiveIndex(photos.length - 1);
+        resetToSlide(photos.length);
+      } else {
+        setActiveIndex(0);
+        resetToSlide(1);
+      }
+      return;
+    }
+
     const nextIndex = Math.min(
       photos.length - 1,
-      Math.max(0, Math.round(scroller.scrollLeft / slideWidth)),
+      Math.max(0, hasMultiplePhotos ? slideIndex - 1 : slideIndex),
     );
     const programmaticScrollTarget = programmaticScrollTargetRef.current;
     if (
       programmaticScrollTarget !== undefined &&
-      nextIndex !== programmaticScrollTarget
+      slideIndex !== programmaticScrollTarget &&
+      !settled
     ) {
       return;
     }
@@ -593,14 +707,36 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
       scrollFrameRef.current = undefined;
       syncActivePhoto();
     });
+    if (scrollSettleTimerRef.current !== undefined) {
+      window.clearTimeout(scrollSettleTimerRef.current);
+    }
+    scrollSettleTimerRef.current = window.setTimeout(() => {
+      scrollSettleTimerRef.current = undefined;
+      syncActivePhoto(true);
+    }, PHOTO_SCROLL_SETTLE_DELAY_MS);
+  };
+
+  const handlePhotoScrollEnd = () => {
+    if (scrollSettleTimerRef.current !== undefined) {
+      window.clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = undefined;
+    }
+    syncActivePhoto(true);
   };
 
   const showPhoto = (index: number) => {
     const nextIndex = (index + photos.length) % photos.length;
-    const slide = trackRef.current?.children.item(nextIndex) as
+    const targetSlideIndex = hasMultiplePhotos
+      ? index < 0
+        ? 0
+        : index >= photos.length
+          ? photos.length + 1
+          : nextIndex + 1
+      : nextIndex;
+    const slide = trackRef.current?.children.item(targetSlideIndex) as
       HTMLElement | null | undefined;
 
-    programmaticScrollTargetRef.current = nextIndex;
+    programmaticScrollTargetRef.current = targetSlideIndex;
     setActiveIndex(nextIndex);
     slide?.scrollIntoView({
       behavior: 'smooth',
@@ -611,6 +747,14 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
 
   const advancePhoto = (offset: number) => {
     showPhoto(activeIndex + offset);
+  };
+
+  const dismissPhotoControlFocus = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    if (event.detail === 0) return;
+    const button = event.currentTarget;
+    window.setTimeout(() => button.blur(), PHOTO_CONTROLS_FOCUS_DURATION_MS);
   };
 
   useEffect(() => {
@@ -657,83 +801,81 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   }
 
   return (
-    <section
-      className={scoped(styles, 'photo-section')}
-      aria-labelledby="photo-carousel-heading"
+    <div
+      ref={carouselRef}
+      className={cx(scoped(styles, 'photo-carousel'), className)}
+      aria-roledescription="carousel"
+      aria-label={ariaLabel}
     >
-      <div className={scoped(styles, 'photo-section-copy')}>
-        <p className="eyebrow">Photos</p>
-        <h2 id="photo-carousel-heading">A few favorite moments</h2>
-        <p className="page-lede">
-          A growing gallery for engagement and wedding-weekend photos, with more
-          memories to add as the celebration gets closer.
-        </p>
-        <a className="secondary-button button-inline" href="/our-story">
-          Read our story
-          <ArrowRight aria-hidden="true" />
-        </a>
-      </div>
-      <div
-        ref={carouselRef}
-        className={scoped(styles, 'photo-carousel')}
-        aria-roledescription="carousel"
-        aria-label="Matt and Alison photos"
-      >
-        <div className={scoped(styles, 'photo-frame-shell')}>
-          <div
-            ref={scrollerRef}
-            className={scoped(styles, 'photo-frame')}
-            data-testid="photo-carousel-scroller"
-            onScroll={handlePhotoScroll}
-          >
-            <div ref={trackRef} className={scoped(styles, 'photo-track')}>
-              {photos.map((photo, index) => (
+      <div className={scoped(styles, 'photo-frame-shell')}>
+        <div
+          ref={scrollerRef}
+          className={scoped(styles, 'photo-frame')}
+          data-testid="photo-carousel-scroller"
+          onScroll={handlePhotoScroll}
+          onScrollEnd={handlePhotoScrollEnd}
+        >
+          <div ref={trackRef} className={scoped(styles, 'photo-track')}>
+            {carouselPhotos.map((photo, index) => {
+              const photoIndex = hasMultiplePhotos
+                ? (index - 1 + photos.length) % photos.length
+                : index;
+              const isDuplicate =
+                hasMultiplePhotos &&
+                (index === 0 || index === carouselPhotos.length - 1);
+
+              return (
                 <figure
                   className={scoped(styles, 'photo-slide')}
-                  aria-hidden={index === activeIndex ? 'false' : 'true'}
-                  key={`${photo.src}-${photo.caption}`}
+                  aria-hidden={isDuplicate || photoIndex !== activeIndex ? 'true' : 'false'}
+                  key={`${index}-${photo.src}-${photo.caption ?? photo.alt}`}
                 >
                   <ResponsiveImage
                     src={photo.src}
                     alt={photo.alt}
-                    loading={index === 0 ? 'eager' : 'lazy'}
+                    loading={photoIndex === 0 ? 'eager' : 'lazy'}
                     decoding="async"
                     sizes="(min-width: 980px) 58vw, 100vw"
                     objectPosition={photo.objectPosition}
+                    style={{ objectFit: photo.objectFit ?? 'cover' }}
                   />
                 </figure>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          {hasMultiplePhotos && (
-            <div
-              className={scoped(styles, 'photo-controls')}
-              aria-label="Photo controls"
-            >
-              <button
-                type="button"
-                className={scoped(styles, 'photo-nav-button')}
-                aria-label="Show previous photo"
-                onClick={() => advancePhoto(-1)}
-              >
-                <ChevronLeft aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className={scoped(styles, 'photo-nav-button')}
-                aria-label="Show next photo"
-                onClick={() => advancePhoto(1)}
-              >
-                <ChevronRight aria-hidden="true" />
-              </button>
-            </div>
-          )}
         </div>
+        {hasMultiplePhotos && (
+          <div
+            className={scoped(styles, 'photo-controls')}
+            aria-label="Photo controls"
+          >
+            <button
+              type="button"
+              className={scoped(styles, 'photo-nav-button')}
+              aria-label="Show previous photo"
+              onClick={(event) => {
+                advancePhoto(-1);
+                dismissPhotoControlFocus(event);
+              }}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={scoped(styles, 'photo-nav-button')}
+              aria-label="Show next photo"
+              onClick={(event) => {
+                advancePhoto(1);
+                dismissPhotoControlFocus(event);
+              }}
+            >
+              <ChevronRight aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </div>
+      {(hasMultiplePhotos || activePhoto.caption || activePhoto.detail) && (
         <div className={scoped(styles, 'photo-caption-row')}>
-          <p>
-            <strong>{activePhoto.caption}</strong>
-            {activePhoto.detail && <span>{activePhoto.detail}</span>}
-          </p>
           {hasMultiplePhotos && (
             <div className={scoped(styles, 'photo-pagination')}>
               <span
@@ -749,15 +891,24 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
                 className={scoped(styles, 'photo-progress')}
                 aria-hidden="true"
               >
-                <div
-                  className={scoped(styles, 'photo-progress-fill')}
-                  style={{ width: `${photoProgress}%` }}
-                />
+                {photos.map((photo, index) => (
+                  <span
+                    className={scoped(styles, 'photo-progress-segment')}
+                    data-active={index === activeIndex ? 'true' : undefined}
+                    key={photo.src}
+                  />
+                ))}
               </div>
             </div>
           )}
+          {(activePhoto.caption || activePhoto.detail) && (
+            <p>
+              {activePhoto.caption && <strong>{activePhoto.caption}</strong>}
+              {activePhoto.detail && <span>{activePhoto.detail}</span>}
+            </p>
+          )}
         </div>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }

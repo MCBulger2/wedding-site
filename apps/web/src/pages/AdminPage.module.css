@@ -188,10 +188,13 @@
 
 .admin-toolbar {
   background: var(--admin-toolbar-bg);
-  border-radius: 8px;
   color: var(--hero-text);
   padding: clamp(1.25rem, 3vw, 2rem);
   flex-direction: column;
+
+  border-radius: 8px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .admin-toolbar :global(.eyebrow),
@@ -233,6 +236,8 @@
 .subsection-card {
   min-width: 0;
   padding: clamp(1.25rem, 3vw, 1.5rem);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .split-fields,
@@ -254,6 +259,8 @@
 
 .stats-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .stats-grid article {
@@ -365,7 +372,7 @@
 
 .filter-toggle {
   align-self: end;
-  min-height: 46px;
+  margin: 0;
 }
 
 .household-card {

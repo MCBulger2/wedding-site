@@ -27,9 +27,13 @@ interface GalleryPhoto {
   caption: string;
   detail?: string;
   objectPosition?: string;
+  objectFit?: 'cover' | 'contain';
 }
 
-type StoryImage = Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+type StoryImage = Pick<GalleryPhoto, 'src' | 'alt'> &
+  Partial<
+    Pick<GalleryPhoto, 'caption' | 'detail' | 'objectPosition' | 'objectFit'>
+  >;
 
 interface StoryChapter {
   id: 'asu' | 'life-together' | 'proposal' | 'always-side-by-side';
@@ -49,6 +53,8 @@ interface PhoenixRecommendation {
   id:
     | 'lego-tour'
     | 'oreganos'
+    | 'buck-and-rider'
+    | 'bei-sushi'
     | 'desert-botanical-garden'
     | 'papago-park'
     | 'mcdowell-sonoran-preserve'
@@ -57,6 +63,7 @@ interface PhoenixRecommendation {
   title: string;
   description: string;
   actionLabel: 'Open map' | 'Find nearby';
+  backgroundImage?: string;
   destinations: MapDestination[];
 }
 
@@ -158,10 +165,9 @@ const registry: RegistryContent = {
   ],
 };
 
-const contactEmail = resolveRuntimeValue(
-  'CONTACT_EMAIL_ADDRESS',
-  'VITE_CONTACT_EMAIL_ADDRESS',
-) ?? 'contact@matt-alison.com';
+const contactEmail =
+  resolveRuntimeValue('CONTACT_EMAIL_ADDRESS', 'VITE_CONTACT_EMAIL_ADDRESS') ??
+  'contact@matt-alison.com';
 
 const contact = {
   email: contactEmail,
@@ -173,7 +179,7 @@ const ourStory: OurStoryContent = {
   intro:
     "From meeting in a programming class at ASU to making a home together in Phoenix, we've shared plenty of adventures along the way. Here's a little about the story that brought us here.",
   heroImage: {
-    src: '/engagement-10.jpg',
+    src: '/close-up.jpg',
     alt: 'Alison and Matt smiling at each other beneath leafy branches',
   },
   chapters: [
@@ -181,7 +187,7 @@ const ourStory: OurStoryContent = {
       id: 'asu',
       title: 'It started at ASU',
       paragraphs: [
-        'We met during freshman year at Arizona State University in Introduction to Object-Oriented Programming. Matt was a computer science major, while Alison had to take the class despite being a math major rather than a computer science major like Matt (luckily for both of us!).',
+        'We met in 2019 during freshman year at Arizona State University—luckily for both of us, we ended up in the same programming class.',
         "We got to know each other through several more classes and stayed in touch even after the COVID-19 pandemic sent Matt away from the dorms. Once he returned, it wasn't long before we were dating, and the rest is history.",
         "We both graduated from ASU in 2023: Alison with an MS in Actuarial Science and Matt with a BS in Computer Science. Since then, we've made our home together in the Phoenix and Scottsdale area.",
       ],
@@ -189,6 +195,28 @@ const ourStory: OurStoryContent = {
         {
           src: '/asu-graduation.jpg',
           alt: 'Alison and Matt wearing their ASU graduation regalia together on campus',
+          caption: 'ASU graduation day',
+          detail: 'Celebrating our degrees together on campus.',
+        },
+        {
+          src: '/asu-spin.JPEG',
+          alt: 'Alison and Matt dancing together outside an ASU building',
+          caption: 'A spin around ASU',
+          detail: 'Dancing through an afternoon on campus.',
+          objectFit: 'contain',
+        },
+        {
+          src: '/asu.JPEG',
+          alt: 'Alison and Matt standing together outside an ASU building',
+          caption: 'Back at ASU',
+          detail: 'One of our favorite spots on campus.',
+          objectFit: 'contain',
+        },
+        {
+          src: '/asu-hockey.JPEG',
+          alt: 'Alison and Matt at an Arizona State hockey game',
+          caption: 'ASU hockey night',
+          detail: 'Cheering on the Sun Devils.',
         },
       ],
     },
@@ -203,6 +231,47 @@ const ourStory: OurStoryContent = {
         {
           src: '/canadian-grand-prix.jpg',
           alt: 'Alison and Matt together beside a Formula 1 show car at the 2025 Canadian Grand Prix',
+          caption: 'At the Canadian Grand Prix',
+          detail: 'A favorite weekend from the 2025 race season.',
+        },
+        {
+          src: '/drs.JPEG',
+          alt: 'Matt holding a DRS sign at a Formula 1 race',
+          caption: 'DRS',
+          detail: 'Matt found one of the best signs at the track.',
+          objectFit: 'contain',
+        },
+        {
+          src: '/canada-ferris-wheel.JPEG',
+          alt: 'Alison and Matt smiling beside a Ferris wheel in Montreal',
+          caption: 'Montreal by the water',
+          detail: 'Taking in the view by the Old Port.',
+        },
+        {
+          src: '/canada-alison-flowers.JPEG',
+          alt: 'Alison standing beside bright flowers in Montreal',
+          caption: 'A little color',
+          detail: 'Alison stopping to smell the flowers.',
+          objectFit: 'contain',
+        },
+        {
+          src: '/san-diego.JPEG',
+          alt: 'Alison and Matt smiling together beside the ocean in San Diego',
+          caption: 'By the Pacific',
+          detail: 'A windy day by the San Diego coast.',
+        },
+        {
+          src: '/vegas-bellagio.JPEG',
+          alt: 'Alison and Matt standing beside the Bellagio fountains in Las Vegas',
+          caption: 'A weekend in Las Vegas',
+          detail: 'Taking in the Bellagio fountains.',
+          objectFit: 'contain',
+        },
+        {
+          src: '/niagara-falls.JPEG',
+          alt: 'Alison and Matt smiling in front of Niagara Falls',
+          caption: 'Niagara Falls',
+          detail: 'A memorable stop at the falls.',
         },
       ],
     },
@@ -253,8 +322,9 @@ const ourStory: OurStoryContent = {
             id: 'lego-tour',
             title: 'The Phoenix LEGO Store tour',
             description:
-              "We can never resist a LEGO Store, and the Phoenix area has three. If you're feeling ambitious, see how many you can visit while you're here.",
+              "We can never resist a LEGO Store, and the Phoenix area has three. If you're feeling ambitious, see how many you can visit while you're here. Make sure to get your LEGO passport stamped!",
             actionLabel: 'Open map',
+            backgroundImage: '/lego.jpg',
             destinations: [
               mapDestination(
                 'LEGO Store Scottsdale Quarter',
@@ -283,10 +353,32 @@ const ourStory: OurStoryContent = {
             id: 'oreganos',
             title: "Oregano's",
             description:
-              "One of our favorite Arizona restaurant chains and an easy choice when you're in the mood for pizza or pasta.",
+              'One of our favorite Arizona restaurant chains—particularly the Big Rig Pasta and Pizookie!',
             actionLabel: 'Find nearby',
+            backgroundImage: '/oreganos.jpg',
             destinations: [
               mapDestination("Oregano's", "Oregano's Phoenix Arizona"),
+            ],
+          },
+          {
+            id: 'buck-and-rider',
+            title: 'Buck & Rider',
+            description:
+              'In the mood for oysters or seafood? This is the place to go.',
+            actionLabel: 'Find nearby',
+            backgroundImage: '/buck-and-rider.jpg',
+            destinations: [
+              mapDestination('Buck & Rider', 'Buck & Rider Phoenix Arizona'),
+            ],
+          },
+          {
+            id: 'bei-sushi',
+            title: 'Bei Sushi',
+            description: 'One of our favorite sushi spots in the Phoenix area.',
+            actionLabel: 'Find nearby',
+            backgroundImage: '/sushi.jpg',
+            destinations: [
+              mapDestination('Bei Sushi', 'Bei Sushi Phoenix Arizona'),
             ],
           },
         ],
@@ -301,6 +393,7 @@ const ourStory: OurStoryContent = {
             description:
               'A beautiful way to explore the plants and landscapes that make the Sonoran Desert special.',
             actionLabel: 'Open map',
+            backgroundImage: '/botanical-gardens.jpeg',
             destinations: [
               mapDestination(
                 'Desert Botanical Garden',
@@ -315,6 +408,7 @@ const ourStory: OurStoryContent = {
             description:
               'An easy place to enjoy red-rock scenery, desert trails, and a great Phoenix sunset.',
             actionLabel: 'Open map',
+            backgroundImage: '/papago-park.jpg',
             destinations: [
               mapDestination('Papago Park', 'Papago Park Phoenix Arizona'),
             ],
@@ -325,6 +419,7 @@ const ourStory: OurStoryContent = {
             description:
               'Miles of Sonoran Desert trails with plenty of options for a morning outside.',
             actionLabel: 'Open map',
+            backgroundImage: '/mcdowell-sonoran-preserve.jpg',
             destinations: [
               mapDestination(
                 'McDowell Sonoran Preserve',
@@ -339,6 +434,7 @@ const ourStory: OurStoryContent = {
             description:
               "One of Phoenix's classic hikes, with rewarding views across the Valley.",
             actionLabel: 'Open map',
+            backgroundImage: '/piestwa-peak.png',
             destinations: [
               mapDestination('Piestewa Peak', 'Piestewa Peak Phoenix Arizona'),
             ],
@@ -349,6 +445,7 @@ const ourStory: OurStoryContent = {
             description:
               'A fun indoor stop in Scottsdale when you want a break from the desert trails.',
             actionLabel: 'Open map',
+            backgroundImage: '/odysea.jpg',
             destinations: [
               mapDestination(
                 'OdySea Aquarium',
@@ -367,11 +464,11 @@ const ourStory: OurStoryContent = {
   },
 };
 
-const rsvpDeadline = 'February 20, 2027';
+const rsvpDeadline = 'December 4, 2026';
 
 export const siteContent = {
   coupleNames: 'Matt & Alison',
-  dateLabel: 'January 18, 2027',
+  dateLabel: 'January 17, 2027',
   location: 'Mesa, Arizona',
   venueName: venue.name,
   venueAddress: venue.location,
@@ -379,18 +476,18 @@ export const siteContent = {
   venueAppleMapsUrl: venue.urls.appleMaps,
   venueMapEmbedUrl: venue.urls.openStreetMapEmbed,
   ceremonyTime: '4:30 PM',
-  receptionTime: '10:00 PM',
+  receptionTime: '10:30 PM',
   rsvpDeadline,
   dressCode:
-    'Garden formal. Ceremony and cocktail hour are planned outdoors, so choose shoes that work on lawn and desert paths.',
+    'Semi-formal attire. Ceremony and cocktail hour are planned outdoors, while the reception will be indoors. Bring a light layer for the evening.',
   announcement:
     'We are getting married in Mesa, Arizona, and would love to celebrate with you. Invitations include a private RSVP link for each household.',
   schedule: [
     { time: '4:00 PM', detail: 'Guest arrival at Superstition Manor' },
-    { time: '4:30 PM', detail: 'Ceremony at the North Garden' },
+    { time: '4:30 PM', detail: 'Ceremony at the North Villa' },
     { time: '5:00 PM', detail: 'Cocktail hour on the terrace' },
     { time: '6:00 PM', detail: 'Dinner and reception' },
-    { time: '9:00 PM', detail: 'Send-off' },
+    { time: '10:30 PM', detail: 'Send-off' },
   ],
   travel: [
     'Phoenix Sky Harbor International Airport is the closest major airport.',
@@ -404,20 +501,6 @@ export const siteContent = {
   weddingEvent,
   photos: [
     {
-      src: '/ring.jpg',
-      alt: "A close up of Alison's engagement ring",
-      caption: 'Engagement ring',
-      detail: "Alison's beautiful engagement ring.",
-      objectPosition: 'center',
-    },
-    {
-      src: '/smile.jpg',
-      alt: 'Alison & Matt, shortly after the proposal',
-      caption: 'Alison & Matt after the proposal',
-      detail: 'Alison & Matt, shortly after the proposal.',
-      objectPosition: 'center',
-    },
-    {
       src: '/engagement-01.jpg',
       alt: 'Alison and Matt sitting together outdoors among trees and rocks',
       caption: 'Together outdoors',
@@ -425,24 +508,24 @@ export const siteContent = {
       objectPosition: 'center',
     },
     {
+      src: '/ring.jpg',
+      alt: "A close up of Alison's engagement ring",
+      caption: 'Engagement ring',
+      detail: "Alison's beautiful engagement ring.",
+      objectPosition: '50% 80%',
+    },
+    {
       src: '/engagement-02.jpg',
       alt: 'Alison and Matt smiling together outdoors',
       caption: 'A garden smile',
       detail: 'Alison and Matt enjoying their engagement photos.',
-      objectPosition: 'center',
+      objectPosition: '50% 70%',
     },
     {
       src: '/engagement-03.jpg',
       alt: 'Alison standing behind Matt with her hand resting on his shoulder',
       caption: 'Side by side',
       detail: 'A favorite portrait from the day.',
-      objectPosition: 'center',
-    },
-    {
-      src: '/engagement-04.jpg',
-      alt: 'Alison and Matt standing together in a garden',
-      caption: 'In the garden',
-      detail: 'Alison and Matt surrounded by green and golden light.',
       objectPosition: 'center',
     },
     {
@@ -471,7 +554,7 @@ export const siteContent = {
       alt: 'Matt kissing Alison’s cheek as they laugh outdoors',
       caption: 'A happy laugh',
       detail: 'The kind of moment that feels like us.',
-      objectPosition: 'center',
+      objectPosition: '50% 40%',
     },
     {
       src: '/engagement-09.jpg',
@@ -492,7 +575,15 @@ export const siteContent = {
       alt: 'Alison and Matt smiling face to face outdoors',
       caption: 'Face to face',
       detail: 'A little joy in every direction.',
-      objectPosition: 'center',
+      objectPosition: '50% 40%',
+    },
+    {
+      src: '/smile.jpg',
+      alt: 'Alison & Matt, shortly after the proposal',
+      caption: 'Alison & Matt after the proposal',
+      detail: 'Alison & Matt, shortly after the proposal.',
+      objectPosition: '50% 50%',
+      objectFit: 'contain',
     },
   ] satisfies GalleryPhoto[],
   faqs: [
@@ -508,7 +599,7 @@ export const siteContent = {
     {
       question: 'What should I wear?',
       answer:
-        'Garden formal attire is encouraged. Bring a light layer for the evening.',
+        'Semi-formal attire is encouraged. Ceremony and cocktail hour are planned outdoors, while the reception will be indoors. Bring a light layer for the evening.',
     },
     {
       question: 'Where should I find updates?',
@@ -529,9 +620,9 @@ export const siteContent = {
 type RuntimeEnv = Record<string, string | undefined>;
 
 function resolveRuntimeValue(...names: string[]): string | undefined {
-  const runtimeEnv =
-    (globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } })
-      .process?.env;
+  const runtimeEnv = (
+    globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } }
+  ).process?.env;
 
   for (const name of names) {
     const value = runtimeEnv?.[name]?.trim();

@@ -494,7 +494,7 @@ describe('RsvpPage', () => {
     expect(screen.queryByLabelText('Accessibility notes')).toBeNull();
     expect(screen.getByLabelText('RSVP details')).not.toBeNull();
     expect(screen.queryByLabelText('Wedding event at a glance')).toBeNull();
-    expect(screen.getByText('January 18, 2027')).not.toBeNull();
+    expect(screen.getByText('January 17, 2027')).not.toBeNull();
     expect(screen.getByText(/Ceremony at 4:30 PM/i)).not.toBeNull();
     expect(screen.getByText('Superstition Manor')).not.toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();

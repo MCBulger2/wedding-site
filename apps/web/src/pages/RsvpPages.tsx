@@ -241,7 +241,6 @@ export function RsvpLookupPage() {
                 aria-label="Invitation code"
                 autoCapitalize="characters"
                 autoCorrect="off"
-                autoFocus
                 inputMode="text"
                 maxLength={128}
                 placeholder="Enter your code"

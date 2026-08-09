@@ -12,6 +12,7 @@ export default defineConfig({
     command: `npm run dev -w apps/web -- --host 127.0.0.1 --port ${e2ePort}`,
     env: {
       VITE_ENABLE_LOCAL_ADMIN_MOCKS: "false",
+      VITE_ENABLE_LOCAL_RSVP_MOCKS: "false",
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,

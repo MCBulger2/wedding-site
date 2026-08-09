@@ -708,7 +708,7 @@
   .rsvp-lookup-intro {
     background: var(--summary-bg), var(--surface-strong);
     grid-area: intro;
-    padding: 1.5rem 1.5rem 0;
+    padding: 1.5rem 1.5rem 1.5rem;
   }
 
   .rsvp-lookup-panel {
@@ -724,11 +724,15 @@
     background: var(--summary-bg), var(--surface-strong);
     grid-area: steps;
     margin: 0;
-    padding: 0 1.5rem 1.5rem;
+    padding: 1.5rem 1.5rem 1.5rem;
   }
 
   .rsvp-lookup-intro h1 {
     font-size: clamp(2.2rem, 13vw, 3.4rem);
+  }
+
+  .rsvp-lookup-intro :global(.page-lede) {
+    display: none;
   }
 
   .event-glance-grid,

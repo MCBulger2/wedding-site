@@ -106,13 +106,13 @@ describe('App routes', () => {
       configurable: true,
       value: scrollIntoView,
     });
-    Object.defineProperty(window, 'requestAnimationFrame', {
-      configurable: true,
-      value: vi.fn((callback: FrameRequestCallback) => {
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
         postPaint = callback;
         return 1;
       }),
-    });
+    );
     window.history.pushState({}, '', '/#details');
 
     try {
@@ -130,7 +130,6 @@ describe('App routes', () => {
       expect(scrollIntoView).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
-      Reflect.deleteProperty(window, 'requestAnimationFrame');
     }
   });
 
@@ -148,13 +147,13 @@ describe('App routes', () => {
       configurable: true,
       value: scrollIntoView,
     });
-    Object.defineProperty(window, 'requestAnimationFrame', {
-      configurable: true,
-      value: vi.fn((callback: FrameRequestCallback) => {
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
         postPaint = callback;
         return 1;
       }),
-    });
+    );
     window.history.pushState({}, '', '/#details');
 
     try {
@@ -172,7 +171,6 @@ describe('App routes', () => {
       expect(scrollIntoView).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
-      Reflect.deleteProperty(window, 'requestAnimationFrame');
     }
   });
 
