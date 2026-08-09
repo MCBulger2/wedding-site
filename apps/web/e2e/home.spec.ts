@@ -616,31 +616,62 @@ test('our story page renders editorial sections and calls to action', async ({
 
   await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
   await expect(
-    page.getByText(
-      'A little about the moments and everyday joys that brought us here.',
-    ),
+    page.getByText(/From meeting in a programming class at ASU/),
   ).toBeVisible();
+
+  for (const heading of [
+    'It started at ASU',
+    'Life together',
+    'The proposal',
+    'Always side by side',
+  ]) {
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+
   await expect(
-    page.getByRole('img', {
-      name: 'Matt proposing to Alison by the lake',
-    }),
+    page.getByText(/Introduction to Object-Oriented Programming/),
   ).toBeVisible();
+  await expect(page.getByText(/2025 Canadian Grand Prix/)).toBeVisible();
+  await expect(page.getByText(/Jane and Tom/)).toBeVisible();
+  await expect(page.getByText(/always be by each other's side/)).toBeVisible();
+
   await expectResponsiveImageDelivery(
     page.getByRole('img', {
-      name: 'Matt proposing to Alison by the lake',
+      name: 'Alison and Matt smiling at each other beneath leafy branches',
+    }),
+    '/images/engagement-10-1200.jpg',
+  );
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Alison and Matt wearing their ASU graduation regalia together on campus',
+    }),
+    '/images/asu-graduation-1920.jpg',
+  );
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Alison and Matt together beside a Formula 1 show car at the 2025 Canadian Grand Prix',
+    }),
+    '/images/canadian-grand-prix-1920.jpg',
+  );
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Matt proposing to Alison at City Park in Denver',
     }),
     '/images/hero-wedding-1920.jpg',
   );
-  await expect(page.getByRole('heading', { name: 'How we met' })).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'The proposal' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'What we love together' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Looking ahead' }),
-  ).toBeVisible();
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Alison and Matt smiling together after the proposal',
+    }),
+    '/images/smile-1200.jpg',
+  );
+  await expectResponsiveImageDelivery(
+    page.getByRole('img', {
+      name: 'Matt kissing Alison on the cheek as they laugh together outdoors',
+    }),
+    '/images/engagement-08-1200.jpg',
+  );
+
   await expect(
     page.getByRole('link', { name: 'Back to wedding details' }),
   ).toHaveAttribute('href', '/#details');
@@ -659,14 +690,15 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
       .getByRole('link', { name: 'Our Story' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Our Story' })).toBeVisible();
-  const mobileMeetLayout = await page
-    .locator('.story-section-meet')
+  const firstChapterLayout = await page
+    .locator('.story-chapter')
+    .first()
     .evaluate((section) => {
       const copyBox = section
         .querySelector('.story-copy-block')
         ?.getBoundingClientRect();
       const imageBox = section
-        .querySelector('.story-thumbnail')
+        .querySelector('.story-chapter-image')
         ?.getBoundingClientRect();
       const sectionBox = section.getBoundingClientRect();
       const styles = getComputedStyle(section);
@@ -682,8 +714,8 @@ test('our story page renders on mobile without overflow', async ({ page }) => {
         contentWidth: Math.round(contentWidth),
       };
     });
-  expect(mobileMeetLayout.copyTop).toBeLessThan(mobileMeetLayout.imageTop);
-  expect(mobileMeetLayout.imageWidth).toBe(mobileMeetLayout.contentWidth);
+  expect(firstChapterLayout.imageTop).toBeLessThan(firstChapterLayout.copyTop);
+  expect(firstChapterLayout.imageWidth).toBe(firstChapterLayout.contentWidth);
   const heroImageRadii = await page
     .locator('.our-story-hero-image')
     .evaluate((element) => {

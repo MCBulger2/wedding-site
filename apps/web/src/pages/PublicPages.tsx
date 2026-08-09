@@ -345,8 +345,6 @@ export function RegistryPage() {
 
 export function OurStoryPage() {
   const { ourStory } = siteContent;
-  const [meetSection, proposalSection, loveSection, futureSection] =
-    ourStory.sections;
 
   return (
     <main className={scoped(styles, 'our-story-page')}>
@@ -369,58 +367,13 @@ export function OurStoryPage() {
         </figure>
       </section>
 
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-meet'),
-        )}
-      >
-        {meetSection?.image && (
-          <figure className={scoped(styles, 'story-thumbnail')}>
-            <ResponsiveImage
-              src={meetSection.image.src}
-              alt={meetSection.image.alt}
-              decoding="async"
-              sizes="(min-width: 760px) 180px, 100vw"
-              objectPosition={meetSection.image.objectPosition}
-            />
-          </figure>
-        )}
-        <StoryText title={meetSection?.title} body={meetSection?.body} />
-      </section>
-
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-proposal'),
-        )}
-      >
-        <StoryText
-          title={proposalSection?.title}
-          body={proposalSection?.body}
+      {ourStory.chapters.map((chapter, index) => (
+        <StoryChapterSection
+          chapter={chapter}
+          key={chapter.id}
+          reverse={index % 2 === 1}
         />
-        {proposalSection?.image && (
-          <figure className={scoped(styles, 'story-landscape')}>
-            <ResponsiveImage
-              src={proposalSection.image.src}
-              alt={proposalSection.image.alt}
-              decoding="async"
-              sizes="(min-width: 900px) 44vw, 100vw"
-              objectPosition={proposalSection.image.objectPosition}
-            />
-          </figure>
-        )}
-      </section>
-
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-duo'),
-        )}
-      >
-        <StoryText title={loveSection?.title} body={loveSection?.body} />
-        <StoryText title={futureSection?.title} body={futureSection?.body} />
-      </section>
+      ))}
 
       <section
         className={scoped(styles, 'story-cta-band')}
@@ -436,6 +389,48 @@ export function OurStoryPage() {
         </a>
       </section>
     </main>
+  );
+}
+
+function StoryChapterSection({
+  chapter,
+  reverse,
+}: {
+  chapter: (typeof siteContent.ourStory.chapters)[number];
+  reverse: boolean;
+}) {
+  return (
+    <section
+      className={cx(
+        scoped(styles, 'story-chapter'),
+        reverse && scoped(styles, 'story-chapter-reverse'),
+        scoped(styles, `story-chapter-${chapter.id}`),
+      )}
+      aria-labelledby={`story-${chapter.id}`}
+    >
+      <div className={scoped(styles, 'story-chapter-media')}>
+        {chapter.images.map((image) => (
+          <figure
+            className={scoped(styles, 'story-chapter-image')}
+            key={image.src}
+          >
+            <ResponsiveImage
+              alt={image.alt}
+              decoding="async"
+              objectPosition={image.objectPosition}
+              sizes="(min-width: 900px) 48vw, 100vw"
+              src={image.src}
+            />
+          </figure>
+        ))}
+      </div>
+      <div className={scoped(styles, 'story-copy-block')}>
+        <h2 id={`story-${chapter.id}`}>{chapter.title}</h2>
+        {chapter.paragraphs.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -480,19 +475,6 @@ export function TermsPage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function StoryText({ title, body }: { title?: string; body?: string }) {
-  if (!title || !body) {
-    return null;
-  }
-
-  return (
-    <article className={scoped(styles, 'story-copy-block')}>
-      <h2>{title}</h2>
-      <p>{body}</p>
-    </article>
   );
 }
 

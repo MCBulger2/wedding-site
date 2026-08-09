@@ -79,11 +79,6 @@ interface OurStoryContent {
   heroImage: StoryImage;
   chapters: StoryChapter[];
   phoenixGuide: PhoenixGuideContent;
-  sections: Array<{
-    title: string;
-    body: string;
-    image?: StoryImage;
-  }>;
   ctas: {
     detailsLabel: string;
     rsvpLabel: string;
@@ -366,38 +361,6 @@ const ourStory: OurStoryContent = {
       },
     ],
   },
-  sections: [
-    {
-      title: 'How we met',
-      body:
-        'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
-      image: {
-        src: '/ring.jpg',
-        alt: "Alison's engagement ring",
-        objectPosition: 'center',
-      },
-    },
-    {
-      title: 'The proposal',
-      body:
-        'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
-      image: {
-        src: '/smile.jpg',
-        alt: 'Alison and Matt smiling after the proposal',
-        objectPosition: 'center',
-      },
-    },
-    {
-      title: 'What we love together',
-      body:
-        'Exploring new places, cooking at home, desert sunsets, morning coffee, live music, and time with family and friends. We balance each other, laugh a lot, and are always up for our next adventure.',
-    },
-    {
-      title: 'Looking ahead',
-      body:
-        'We are so excited to celebrate this next chapter with our favorite people. We cannot wait for a day filled with love, good food, and unforgettable memories in Mesa, Arizona. See you there!',
-    },
-  ],
   ctas: {
     detailsLabel: 'Back to wedding details',
     rsvpLabel: 'RSVP',

@@ -827,9 +827,7 @@ textarea:focus {
   .registry-card,
   .registry-callout,
   .rsvp-lookup-card,
-  .story-section-duo,
-  .story-section-meet,
-  .story-section-proposal,
+  .story-chapter,
   .section-grid {
     grid-template-columns: 1fr;
   }
@@ -846,17 +844,15 @@ textarea:focus {
     min-height: 0;
   }
 
-  .story-thumbnail {
-    aspect-ratio: 16 / 9;
-    order: 2;
-    width: 100%;
+  .story-chapter-reverse .story-chapter-media,
+  .story-chapter-reverse .story-copy-block {
+    order: initial;
   }
 
-  .story-section-duo .story-copy-block + .story-copy-block {
-    border-left: 0;
-    border-top: 1px solid var(--field-border);
-    padding-left: 0;
-    padding-top: clamp(1.5rem, 5vw, 3rem);
+  .story-chapter-media,
+  .story-chapter-image {
+    min-width: 0;
+    width: 100%;
   }
 
   .rsvp-lookup-guide,
@@ -971,6 +967,10 @@ textarea:focus {
   .story-cta-band {
     align-items: stretch;
     display: grid;
+  }
+
+  .story-chapter-proposal .story-chapter-media {
+    grid-template-columns: 1fr;
   }
 
   .button-inline,

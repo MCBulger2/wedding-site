@@ -555,61 +555,87 @@
 }
 
 .our-story-hero-image,
-.story-thumbnail,
-.story-landscape {
+.story-chapter-image {
   margin: 0;
   overflow: hidden;
 }
 
 .our-story-hero-image {
-  align-self: stretch;
+  align-self: center;
+  aspect-ratio: 3 / 2;
   border-bottom-left-radius: 8px;
-  min-height: clamp(420px, 42vw, 560px);
+  max-height: 620px;
 }
 
 .our-story-hero-image img,
-.story-thumbnail img,
-.story-landscape img {
+.story-chapter-image img {
   display: block;
   height: 100%;
   object-fit: cover;
   width: 100%;
 }
 
-.story-section {
+.story-chapter {
+  align-items: center;
   display: grid;
   gap: clamp(1.5rem, 5vw, 4rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 auto;
   max-width: 1180px;
   padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 5vw, 4rem);
 }
 
-.story-section-meet {
-  align-items: center;
-  grid-template-columns: 180px minmax(0, 1fr);
+.story-chapter-reverse .story-chapter-media {
+  order: 2;
 }
 
-.story-section-proposal {
-  align-items: center;
+.story-chapter-reverse .story-copy-block {
+  order: 1;
+}
+
+.story-chapter-media {
+  display: grid;
+  min-width: 0;
+}
+
+.story-chapter-image {
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+.story-chapter-proposal {
   background: var(--story-proposal-bg), var(--page-bg);
-  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
   max-width: none;
   padding-inline: max(clamp(1.25rem, 5vw, 4rem), calc((100vw - 1180px) / 2));
 }
 
-.story-section-duo {
+.story-chapter-proposal .story-chapter-media {
+  gap: clamp(0.75rem, 2vw, 1.25rem);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.story-section-duo .story-copy-block + .story-copy-block {
-  border-left: 1px solid var(--field-border);
-  padding-left: clamp(1.5rem, 5vw, 4rem);
+.story-chapter-proposal .story-chapter-image {
+  aspect-ratio: 4 / 5;
+}
+
+.story-chapter-always-side-by-side {
+  padding-block: clamp(2rem, 4vw, 3.25rem);
+}
+
+.story-chapter-always-side-by-side .story-chapter-image {
+  aspect-ratio: 16 / 9;
+}
+
+.story-copy-block {
+  display: grid;
+  gap: 1rem;
 }
 
 .story-copy-block h2 {
   color: var(--accent-strong);
   font-size: clamp(2rem, 3vw, 2.7rem);
-  margin-bottom: 0.75rem;
+  margin: 0 0 0.25rem;
 }
 
 .story-copy-block p {
@@ -617,18 +643,6 @@
   line-height: 1.65;
   margin: 0;
   max-width: 680px;
-}
-
-.story-thumbnail {
-  aspect-ratio: 1;
-  border-radius: 8px;
-  box-shadow: var(--map-shadow);
-}
-
-.story-landscape {
-  aspect-ratio: 16 / 5.4;
-  border-radius: 8px;
-  box-shadow: var(--card-shadow);
 }
 
 .story-cta-band {
