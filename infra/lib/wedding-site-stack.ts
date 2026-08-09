@@ -358,6 +358,12 @@ export class WeddingSiteStack extends Stack {
       integration: apiIntegration,
     });
 
+    const searchRoutes = api.addRoutes({
+      path: '/api/rsvp/search',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration,
+    });
+
     const smsSubscriptionRoutes = api.addRoutes({
       path: '/api/sms-subscriptions',
       methods: [apigwv2.HttpMethod.POST],
@@ -368,6 +374,7 @@ export class WeddingSiteStack extends Stack {
       ...rsvpRoutes,
       ...smsPreferencesRoutes,
       ...recoveryRoutes,
+      ...searchRoutes,
       ...smsSubscriptionRoutes,
     ]) {
       defaultApiStage.node.addDependency(route);
@@ -392,6 +399,10 @@ export class WeddingSiteStack extends Stack {
         ThrottlingRateLimit: 5,
       },
       'POST /api/rsvp/recovery': {
+        ThrottlingBurstLimit: 5,
+        ThrottlingRateLimit: 2,
+      },
+      'POST /api/rsvp/search': {
         ThrottlingBurstLimit: 5,
         ThrottlingRateLimit: 2,
       },

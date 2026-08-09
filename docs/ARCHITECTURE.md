@@ -24,7 +24,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
   - RSVP recovery flow
   - household CRUD and CSV import
   - invitation generation, reveal, export, labels, and email delivery
-  - household notifications by email or SMS
+  - household notifications by email, with dormant SMS backend support
 - `packages/shared`: shared contracts
   - Zod schemas
   - API payload and response types
@@ -40,7 +40,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 ### Public Site
 
-The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, contact information, and the unauthenticated wedding-text enrollment page at the canonical `/sms-updates` URL. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
+The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, confirmed hotel blocks when configured, live registry links, story pages, legal pages, and contact information. The hotel-block area stays hidden until a publicly shareable hotel is available. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
 
 The venue map uses an OpenStreetMap embed with its native venue marker, so the marker stays synchronized while guests pan or zoom; the application retains the descriptive frame title and outbound map link.
 
@@ -51,17 +51,22 @@ Frontend image delivery is optimized through generated responsive assets under `
 Guests can:
 
 - enter an invite code at `/rsvp`,
+- search for a household by the exact last name printed on the invitation,
 - open a direct household link at `/rsvp/{inviteCode}`,
 - submit or revise their RSVP,
-- and request recovery of their RSVP link through `/rsvp/recovery`.
+- and request recovery of their RSVP link by email through `/rsvp/recovery`.
+
+The public `POST /api/rsvp/search` route trims and lowercases the submitted term, then performs an exact normalized match against active invited-member last names. Each successful result returns the household `displayName` and `rsvpUrl`. No separate `inviteCode` field is returned, but `rsvpUrl` embeds the bearer credential that grants access to the household RSVP and must be treated as private. Search returns at most 10 results. If more than 10 recoverable households match, it returns an empty result list with `tooManyMatches: true` instead of partially disclosing the matches. The route is limited to 5 attempts per normalized search term per hour and 20 attempts per source IP per hour, in addition to API Gateway throttling of 2 requests per second with a burst of 5. Application-level `429` responses include `Retry-After` for the remaining fixed-window duration. The route obtains each RSVP URL through the existing recoverable-invite-code path, which decrypts the stored invite-code ciphertext with the KMS-backed protector and verifies the resulting code before constructing the URL.
+
+The current website recovery experience is email-only: the RSVP page exposes an email address field and sends `POST /api/rsvp/recovery`. It does not expose phone or SMS recovery controls. The backend retains a generic accepted response and the existing KMS-backed link recovery so that guest existence is not disclosed.
 
 The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
 
-SMS enrollment is independent from RSVP submission and recovery. A guest uses `/rsvp/{inviteCode}/sms-updates`; enabling stores `pending_confirmation`, sends the required Twilio confirmation, and moves to `opted_in` only after Twilio returns HTTP 2xx. Provider failure leaves the preference pending and retryable. Disabling immediately records `opted_out` without clearing the household phone. Only an `opted_in` record whose phone matches the household's current phone authorizes recovery or admin-authored application SMS. Email recovery and SES behavior are unchanged.
+### Dormant SMS/Twilio backend
 
-The canonical public `/sms-updates` page provides the same affirmative-consent flow without requiring an invitation or RSVP. It submits to `POST /api/sms-subscriptions`. Public enrollments are stored as standalone `SmsSubscription` records rather than household records. The API normalizes the phone number and derives a stable, peppered subscription identifier, so repeat enrollment updates one record instead of creating duplicates. Each pending write also receives a unique opaque attempt identifier; activation conditions on that identifier so concurrent requests remain ordered even when their consent timestamps match. The attempt identifier stays internal to persistence and is never logged or sent to Twilio. The API writes `pending_confirmation` before asking Twilio to send the branded confirmation and conditionally changes that same record to `opted_in` only after Twilio returns HTTP 2xx. Delivery failure leaves the record pending and retryable.
+SMS support is preserved as dormant backend capability and is separate from the current visible website behavior. The service still contains the RSVP SMS-preference flow, public `POST /api/sms-subscriptions` enrollment, phone-based recovery handling, and admin-authored SMS notification delivery through Twilio when explicitly configured. These paths are not linked from the current public or admin website: there is no visible SMS enrollment, preference, recovery, or admin notification control. Legacy `/sms-updates`, `/sms-opt-in-proof`, and `/rsvp/{inviteCode}/sms-updates` website paths redirect to the current home or RSVP route rather than rendering SMS UI.
 
-Public enrollment has two abuse-control layers: API Gateway throttles `POST /api/sms-subscriptions` to 1 request per second with a burst of 3, while the service allows 3 attempts per normalized phone and 10 attempts per source IP in a fixed one-hour window. The rate-limit keys are peppered hashes, and structured application logs record stable event names and outcomes without raw phone numbers or source IPs.
+The preserved Twilio integration expects `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET_ARN`, and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`. Twilio secret material remains in AWS Secrets Manager. Re-enabling this capability would require a deliberate UI/configuration change and renewed consent, messaging, opt-out, and regulatory review; these settings are not part of the current visible RSVP launch flow.
 
 The intended security model is:
 
@@ -90,7 +95,9 @@ Current admin capabilities include:
 - export invitation label PDFs,
 - send single-household invitation emails,
 - send bulk invitation emails,
-- send direct household notifications by email or SMS.
+- send direct household notifications by email.
+
+The current admin notification UI is email-only and does not expose an SMS notification control; the backend SMS notification path is preserved as dormant support.
 
 The frontend includes a local admin mock path for isolated UI work, but deployed admin behavior is backed by Cognito and the API.
 
@@ -140,21 +147,14 @@ Email flows use Amazon SES for:
 - RSVP notifications,
 - optional inbound contact forwarding when the hosted zone and contact address are configured together.
 
-SMS flows use Twilio through the API Lambda. Runtime configuration expects:
-
-- `TWILIO_ACCOUNT_SID`,
-- `TWILIO_API_KEY_SID`,
-- `TWILIO_API_KEY_SECRET_ARN`,
-- and either `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_PHONE_NUMBER`.
-
-Twilio secret material belongs in AWS Secrets Manager, not in environment variables or committed files.
+The preserved SMS/Twilio backend and its configuration are described in [Dormant SMS/Twilio backend](#dormant-smstwilio-backend). They are not current website controls or a current visible notification channel.
 
 ### Protection and Observability
 
 The architecture uses layered abuse protection:
 
 - CloudFront-attached WAF support for public RSVP traffic,
-- API Gateway throttling on RSVP read, write, and recovery routes,
+- API Gateway throttling on RSVP read, write, search, and recovery routes,
 - least-privilege IAM grants,
 - private S3 buckets,
 - HTTPS-only delivery,
@@ -182,8 +182,14 @@ Current API routes implemented by `apps/api/src/handler.ts`:
 
 - `GET /api/rsvp/{inviteCode}`
 - `PUT /api/rsvp/{inviteCode}`
-- `PUT /api/rsvp/{inviteCode}/sms-preferences`
+- `POST /api/rsvp/search`
 - `POST /api/rsvp/recovery`
+
+### Dormant SMS backend routes
+
+These routes remain implemented for possible future re-enablement but are not linked by the current website:
+
+- `PUT /api/rsvp/{inviteCode}/sms-preferences`
 - `POST /api/sms-subscriptions`
 
 ### Admin routes
@@ -200,7 +206,7 @@ Current API routes implemented by `apps/api/src/handler.ts`:
 - `POST /api/admin/households/{householdId}/invite-code`
 - `GET /api/admin/households/{householdId}/invitation`
 - `POST /api/admin/households/{householdId}/invitation-email`
-- `POST /api/admin/households/{householdId}/notifications`
+- `POST /api/admin/households/{householdId}/notifications` (current website uses email; dormant backend also retains SMS support)
 - `POST /api/admin/invitations/email`
 - `GET /api/admin/invitations/export`
 - `GET /api/admin/invitations/labels`
@@ -238,6 +244,7 @@ Repository scripts cover:
 CI and deploy verification currently run:
 
 - `npm ci`
+- responsive-image cache restoration followed by one explicit responsive-image preparation step
 - lint
 - typecheck
 - `npm run test:ci`
@@ -256,4 +263,4 @@ The repo expectation is:
 - CloudFront certificate support still requires `us-east-1`.
 - The site is low traffic and should stay cheap to operate.
 - AWS serverless primitives are the default choice unless a real need proves otherwise.
-- Staging remains the proving ground for domain, Cognito, SES, Twilio, WAF, and launch rehearsals before production changes are trusted.
+- Staging remains the proving ground for domain, Cognito, SES, WAF, and launch rehearsals before production changes are trusted. Any future SMS/Twilio re-enable requires a separate configuration and compliance rehearsal.
