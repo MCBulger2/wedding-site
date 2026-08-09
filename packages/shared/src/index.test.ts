@@ -430,21 +430,66 @@ describe('structured public planning data', () => {
     expect(embedUrl.searchParams.get('marker')).toBe('33.4374400,-111.5989000');
   });
 
-  it('does not publish unfinished hotel, story, or registry placeholder copy', () => {
-    expect(siteContent.hotels).toEqual([]);
-    expect(siteContent.ourStory.intro).not.toMatch(/placeholder|temporary/i);
+  it('publishes the approved story chapters and personal photography', () => {
+    expect(siteContent.ourStory.intro).toBe(
+      "From meeting in a programming class at ASU to making a home together in Phoenix, we've shared plenty of adventures along the way. Here's a little about the story that brought us here.",
+    );
+    expect(siteContent.ourStory.heroImage.src).toBe('/engagement-10.jpg');
+    expect(siteContent.ourStory.chapters.map((chapter) => chapter.id)).toEqual([
+      'asu',
+      'life-together',
+      'proposal',
+      'always-side-by-side',
+    ]);
+    expect(siteContent.ourStory.chapters[0]).toMatchObject({
+      title: 'It started at ASU',
+      images: [{ src: '/asu-graduation.jpg' }],
+    });
+    expect(siteContent.ourStory.chapters[1]).toMatchObject({
+      title: 'Life together',
+      images: [{ src: '/canadian-grand-prix.jpg' }],
+    });
+    expect(siteContent.ourStory.chapters[2]).toMatchObject({
+      title: 'The proposal',
+      images: [{ src: '/hero-wedding.jpg' }, { src: '/smile.jpg' }],
+    });
+    expect(siteContent.ourStory.chapters[3]).toMatchObject({
+      title: 'Always side by side',
+      images: [{ src: '/engagement-08.jpg' }],
+    });
+  });
+
+  it('publishes grouped Phoenix favorites with paired map URLs', () => {
+    const groups = siteContent.ourStory.phoenixGuide.groups;
+    expect(groups.map((group) => group.id)).toEqual(['build', 'eat', 'explore']);
+
+    const recommendations = groups.flatMap((group) => group.recommendations);
+    const legoTour = recommendations.find((item) => item.id === 'lego-tour');
+    expect(legoTour?.destinations.map((destination) => destination.label)).toEqual([
+      'LEGO Store Scottsdale Quarter',
+      'LEGO Store Chandler Fashion Center',
+      'LEGO Store Arrowhead Towne Center',
+    ]);
+    expect(recommendations.map((item) => item.id)).toEqual([
+      'lego-tour',
+      'oreganos',
+      'desert-botanical-garden',
+      'papago-park',
+      'mcdowell-sonoran-preserve',
+      'piestewa-peak',
+      'odysea-aquarium',
+    ]);
     expect(
-      siteContent.ourStory.sections.flatMap((section) =>
-        section.image ? [section.image.alt] : [],
-      ),
-    ).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/placeholder|temporary/i)]),
-    );
-    expect(siteContent.registry.intro).not.toMatch(
-      /shared here|finalized|coming soon/i,
-    );
-    expect(siteContent.registry.note).not.toMatch(
-      /will link|selected registries/i,
+      recommendations
+        .flatMap((item) => item.destinations)
+        .every(
+          (destination) =>
+            new URL(destination.googleMapsUrl).hostname === 'www.google.com' &&
+            new URL(destination.appleMapsUrl).hostname === 'maps.apple.com',
+        ),
+    ).toBe(true);
+    expect(siteContent.ourStory.phoenixGuide.hikingNote).toMatch(
+      /Bring water and check current trail conditions/,
     );
   });
 
