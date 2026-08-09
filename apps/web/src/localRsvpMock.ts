@@ -11,7 +11,8 @@ const baseTimestamp = '2026-06-15T22:00:00.000Z';
 const localRsvpStorageKey = 'wedding.local-rsvp-mock.response';
 
 export const localRsvpMockEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_LOCAL_RSVP_MOCKS === 'true';
+  import.meta.env.DEV &&
+  import.meta.env.VITE_ENABLE_LOCAL_RSVP_MOCKS === 'true';
 
 const localRsvpHousehold: Household = {
   householdId: 'local-rsvp',
@@ -55,6 +56,7 @@ const localRsvpHousehold: Household = {
 
 let localRsvp: StoredRsvp | undefined = readStoredRsvp();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function mockFetchRsvp(_inviteCode: string) {
   localRsvp = readStoredRsvp() ?? localRsvp;
   return {
@@ -75,18 +77,22 @@ export async function mockSaveRsvp(_inviteCode: string, payload: RsvpUpdate) {
 }
 
 export async function mockSaveSmsPreferences(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _inviteCode: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _payload: SmsPreferencesRequest,
 ) {
   return clone(localRsvpHousehold);
 }
 
 export async function mockRecoverRsvpLink(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _payload: unknown,
 ): Promise<RsvpRecoveryAcceptedResponse> {
   return {
     accepted: true,
-    message: "If that matches our guest list, we'll send your private RSVP link.",
+    message:
+      "If that matches our guest list, we'll send your private RSVP link.",
   };
 }
 
