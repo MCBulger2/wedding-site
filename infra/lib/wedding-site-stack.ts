@@ -1041,7 +1041,8 @@ export class WeddingSiteStack extends Stack {
       sources: [s3deploy.Source.asset(path.join(repoRoot, 'apps/web/dist'))],
       destinationBucket: siteBucket,
       distribution,
-      distributionPaths: ['/*'],
+      // Invalidate only SPA shell entry points; hashed assets roll forward by URL.
+      distributionPaths: ['/', '/index.html', '/site.webmanifest', '/robots.txt'],
       prune: true,
     });
 
