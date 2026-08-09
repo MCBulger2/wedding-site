@@ -20,7 +20,7 @@ const navItems: Array<{
   label: string;
   activeRoutes: HeaderRoute[];
 }> = [
-  { href: '/#details', label: 'Details', activeRoutes: ['home'] },
+  { href: '/', label: 'Details', activeRoutes: ['home'] },
   { href: '/our-story', label: 'Our Story', activeRoutes: ['our_story'] },
   { href: '/registry', label: 'Registry', activeRoutes: ['registry'] },
   {
@@ -80,9 +80,8 @@ export function SiteFooter({ showAdminLink }: { showAdminLink: boolean }) {
   return (
     <footer className={scoped(styles, 'site-footer')}>
       <span className={scoped(styles, 'footer-details')}>
-        <span>Matt &amp; Alison Wedding · {siteContent.dateLabel}</span>
+        <span key="wedding">Matt &amp; Alison Wedding</span> · <span key="date">{siteContent.dateLabel}</span> · 
         <a href={siteContent.contact.href}>
-          <span aria-hidden="true">· </span>
           {siteContent.contact.email}
         </a>
       </span>

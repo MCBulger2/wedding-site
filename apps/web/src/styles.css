@@ -460,7 +460,7 @@ label {
   width: 1.1rem;
 }
 
-input,
+input:not([type='checkbox']),
 select,
 textarea {
   background: var(--field-bg);
@@ -626,6 +626,9 @@ textarea:focus {
 
 .loading-card {
   min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .loading-pulse {
@@ -655,32 +658,27 @@ textarea:focus {
 
 .loading-mark {
   align-items: center;
-  background: var(--accent-wash);
-  border-radius: 8px;
-  color: var(--accent-strong);
-  display: grid;
-  height: 92px;
-  justify-items: center;
-  position: relative;
-  width: 92px;
+  display: inline-flex;
+  gap: 0.42rem;
+  justify-content: center;
+  min-height: 2rem;
+  width: 3rem;
 }
 
-.loading-mark::before {
-  animation: shimmer-rotate 2.6s linear infinite;
-  border: 2px solid var(--accent-wash);
-  border-top-color: var(--secondary-accent);
+.loading-dot {
+  animation: loading-dot-bounce 900ms ease-in-out infinite;
+  background: var(--skeleton-gradient);
   border-radius: 50%;
-  content: '';
-  height: 68px;
-  position: absolute;
-  width: 68px;
+  height: 0.62rem;
+  width: 0.62rem;
 }
 
-.loading-mark svg {
-  height: 1.5rem;
-  position: relative;
-  width: 1.5rem;
-  z-index: 1;
+.loading-dot:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 240ms;
 }
 
 .skeleton-stack,
@@ -786,13 +784,17 @@ textarea:focus {
   }
 }
 
-@keyframes shimmer-rotate {
-  from {
-    transform: rotate(0deg);
+@keyframes loading-dot-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.48;
+    transform: translateY(0) scale(0.86);
   }
 
-  to {
-    transform: rotate(360deg);
+  30% {
+    opacity: 1;
+    transform: translateY(-0.42rem) scale(1);
   }
 }
 
@@ -897,7 +899,6 @@ textarea:focus {
   .rsvp-summary-band,
   .section-heading,
   .admin-toolbar,
-  .toolbar-actions,
   .invite-actions-row,
   .token-row,
   .member-row,
@@ -906,6 +907,10 @@ textarea:focus {
   .confirmation-row,
   .loading-pulse {
     grid-template-columns: 1fr;
+  }
+
+  .toolbar-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .section-heading,
@@ -978,11 +983,16 @@ textarea:focus {
   .rsvp-summary-band > a,
   .hero-actions > a,
   .hero-actions > button,
+  .toolbar-actions,
   .toolbar-actions > a,
   .toolbar-actions > button,
   .invite-actions-row > a,
   .invite-actions-row > button {
     width: 100%;
+  }
+
+  .toolbar-actions {
+    grid-template-columns: 1fr;
   }
 
   .text-button {
@@ -1048,5 +1058,10 @@ textarea:focus {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+  }
+
+  .loading-dot {
+    opacity: 0.72;
+    transform: none;
   }
 }

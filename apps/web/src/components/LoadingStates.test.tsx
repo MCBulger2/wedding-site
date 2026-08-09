@@ -20,6 +20,9 @@ describe('shared loading states', () => {
     expect(container.textContent).not.toMatch(visibleProgressCopy);
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(container.querySelector('.loading-mark')).not.toBeNull();
+    expect(container.querySelectorAll('.loading-dot')).toHaveLength(3);
+    expect(container.querySelector('svg')).toBeNull();
+    expect(container.querySelector('.loading-mark')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('renders full-card loading skeletons without visible progress copy', () => {

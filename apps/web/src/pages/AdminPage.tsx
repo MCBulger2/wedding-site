@@ -1696,8 +1696,6 @@ export function AdminPage() {
         </div>
       </section>
 
-      <p className="form-message">{message}</p>
-
       {showCreateHouseholdModal && (
         <Modal
           title="Create household"
@@ -1809,12 +1807,6 @@ export function AdminPage() {
 
       <section className={scoped(styles, 'admin-grid')}>
         <section className={scoped(styles, 'subsection-card')}>
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Results</p>
-              <h2>View responses</h2>
-            </div>
-          </div>
           <div className={scoped(styles, 'stats-grid')}>
             {isHouseholdsLoading ? (
               <>

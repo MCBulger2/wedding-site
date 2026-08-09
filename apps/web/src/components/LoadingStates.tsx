@@ -1,4 +1,3 @@
-import { Heart } from 'lucide-react';
 import { cx } from '../classNames.js';
 
 export function LoadingPulse({
@@ -15,7 +14,9 @@ export function LoadingPulse({
       aria-label={status ? 'Loading' : undefined}
     >
       <div className="loading-mark" aria-hidden="true">
-        <Heart />
+        <span className="loading-dot" />
+        <span className="loading-dot" />
+        <span className="loading-dot" />
       </div>
     </div>
   );
