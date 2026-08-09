@@ -133,7 +133,8 @@ Replace the current fixed four-item story assumption with explicit structures:
 
 - `StoryChapter`: stable identifier, title, paragraphs, and one or more image references.
 - `MapDestination`: label, optional address, Google Maps URL, and Apple Maps URL.
-- `PhoenixRecommendation`: identifier, title, description, category, and one or more map destinations.
+- `PhoenixGuideGroup`: category identifier, title, and ordered recommendations.
+- `PhoenixRecommendation`: identifier, title, description, action label, and one or more map destinations. Its parent `PhoenixGuideGroup` owns the Build, Eat, or Explore category.
 - `OurStoryContent`: title, introduction, hero image, ordered chapters, Phoenix guide content, and existing calls to action.
 
 Render ordered chapters rather than destructuring specific array positions. Keep the Phoenix guide as a focused section within `OurStoryPage`; do not create a new route.
@@ -175,8 +176,8 @@ Extract the duplicated native-map decision logic from the public and RSVP pages 
 
 - Add the two selected supplied photos to `apps/web/image-sources` under semantic names.
 - Add them to the responsive image configuration.
-- Regenerate committed responsive image metadata and assets using the existing image build workflow.
-- Confirm unrelated generated files do not drift.
+- Regenerate responsive image metadata and assets locally using the existing image build workflow; these generated outputs remain ignored and unstaged.
+- Commit only the semantic source images and responsive image configuration, and confirm unrelated generated files do not drift.
 
 ### Application verification
 

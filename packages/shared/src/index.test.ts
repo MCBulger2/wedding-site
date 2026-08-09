@@ -441,6 +441,41 @@ describe('structured public planning data', () => {
       'proposal',
       'always-side-by-side',
     ]);
+    expect(
+      siteContent.ourStory.chapters.map(({ id, paragraphs }) => ({
+        id,
+        paragraphs,
+      })),
+    ).toEqual([
+      {
+        id: 'asu',
+        paragraphs: [
+          'We met during freshman year at Arizona State University in Introduction to Object-Oriented Programming. Matt was a computer science major, while Alison had to take the class despite being a math major rather than a computer science major like Matt (luckily for both of us!).',
+          "We got to know each other through several more classes and stayed in touch even after the COVID-19 pandemic sent Matt away from the dorms. Once he returned, it wasn't long before we were dating, and the rest is history.",
+          "We both graduated from ASU in 2023: Alison with an MS in Actuarial Science and Matt with a BS in Computer Science. Since then, we've made our home together in the Phoenix and Scottsdale area.",
+        ],
+      },
+      {
+        id: 'life-together',
+        paragraphs: [
+          "We spend many race weekends watching Formula 1 (and cheering for Max Verstappen!). Attending the 2025 Canadian Grand Prix was an experience we'll never forget.",
+          'We also love cooking together, building LEGO sets, and working on puzzles. In fact, our dining room table is much better known as the designated puzzle table.',
+        ],
+      },
+      {
+        id: 'proposal',
+        paragraphs: [
+          'During Easter weekend 2026, we traveled to Denver. We spent a lovely day sightseeing, including buying some LEGO, of course. Later, at City Park, Matt asked Alison to marry him.',
+          "Matt's parents, Jane and Tom, and his brothers, Tim and Joe, were there to share the moment with us. Tim graciously captured it all in the proposal photos you see here.",
+        ],
+      },
+      {
+        id: 'always-side-by-side',
+        paragraphs: [
+          "We're excited to take this big next step in our lives and celebrate it with the people we love. Whatever comes next, we know we'll always be by each other's side.",
+        ],
+      },
+    ]);
     expect(siteContent.ourStory.chapters[0]).toMatchObject({
       title: 'It started at ASU',
       images: [{ src: '/asu-graduation.jpg' }],
@@ -478,6 +513,95 @@ describe('structured public planning data', () => {
       'mcdowell-sonoran-preserve',
       'piestewa-peak',
       'odysea-aquarium',
+    ]);
+    expect(
+      recommendations.flatMap((recommendation) =>
+        recommendation.destinations.map((destination) => ({
+          recommendationId: recommendation.id,
+          label: destination.label,
+          address: destination.address,
+          googleQuery: new URL(destination.googleMapsUrl).searchParams.get(
+            'query',
+          ),
+          appleQuery: new URL(destination.appleMapsUrl).searchParams.get('q'),
+        })),
+      ),
+    ).toEqual([
+      {
+        recommendationId: 'lego-tour',
+        label: 'LEGO Store Scottsdale Quarter',
+        address: '15257 N Scottsdale Road, Suite 170, Scottsdale, AZ 85254',
+        googleQuery:
+          'LEGO Store Scottsdale Quarter 15257 N Scottsdale Road Suite 170 Scottsdale AZ 85254',
+        appleQuery:
+          'LEGO Store Scottsdale Quarter 15257 N Scottsdale Road Suite 170 Scottsdale AZ 85254',
+      },
+      {
+        recommendationId: 'lego-tour',
+        label: 'LEGO Store Chandler Fashion Center',
+        address: '3111 W Chandler Boulevard, Chandler, AZ 85226',
+        googleQuery:
+          'LEGO Store Chandler Fashion Center 3111 W Chandler Boulevard Chandler AZ 85226',
+        appleQuery:
+          'LEGO Store Chandler Fashion Center 3111 W Chandler Boulevard Chandler AZ 85226',
+      },
+      {
+        recommendationId: 'lego-tour',
+        label: 'LEGO Store Arrowhead Towne Center',
+        address: '7700 W Arrowhead Towne Center, Glendale, AZ 85308',
+        googleQuery:
+          'LEGO Store Arrowhead Towne Center 7700 W Arrowhead Towne Center Glendale AZ 85308',
+        appleQuery:
+          'LEGO Store Arrowhead Towne Center 7700 W Arrowhead Towne Center Glendale AZ 85308',
+      },
+      {
+        recommendationId: 'oreganos',
+        label: "Oregano's",
+        address: undefined,
+        googleQuery: "Oregano's Phoenix Arizona",
+        appleQuery: "Oregano's Phoenix Arizona",
+      },
+      {
+        recommendationId: 'desert-botanical-garden',
+        label: 'Desert Botanical Garden',
+        address: '1201 N Galvin Parkway, Phoenix, AZ 85008',
+        googleQuery:
+          'Desert Botanical Garden 1201 N Galvin Parkway Phoenix AZ 85008',
+        appleQuery:
+          'Desert Botanical Garden 1201 N Galvin Parkway Phoenix AZ 85008',
+      },
+      {
+        recommendationId: 'papago-park',
+        label: 'Papago Park',
+        address: undefined,
+        googleQuery: 'Papago Park Phoenix Arizona',
+        appleQuery: 'Papago Park Phoenix Arizona',
+      },
+      {
+        recommendationId: 'mcdowell-sonoran-preserve',
+        label: 'McDowell Sonoran Preserve',
+        address: '18333 N Thompson Peak Parkway, Scottsdale, AZ 85255',
+        googleQuery:
+          'Gateway Trailhead 18333 N Thompson Peak Parkway Scottsdale AZ 85255',
+        appleQuery:
+          'Gateway Trailhead 18333 N Thompson Peak Parkway Scottsdale AZ 85255',
+      },
+      {
+        recommendationId: 'piestewa-peak',
+        label: 'Piestewa Peak',
+        address: undefined,
+        googleQuery: 'Piestewa Peak Phoenix Arizona',
+        appleQuery: 'Piestewa Peak Phoenix Arizona',
+      },
+      {
+        recommendationId: 'odysea-aquarium',
+        label: 'OdySea Aquarium',
+        address: '9500 E Via de Ventura, Suite A-100, Scottsdale, AZ 85256',
+        googleQuery:
+          'OdySea Aquarium 9500 E Via de Ventura Suite A-100 Scottsdale AZ 85256',
+        appleQuery:
+          'OdySea Aquarium 9500 E Via de Ventura Suite A-100 Scottsdale AZ 85256',
+      },
     ]);
     expect(
       recommendations
