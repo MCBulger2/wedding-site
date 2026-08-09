@@ -31,6 +31,7 @@ import {
 } from '../api.js';
 import { cx, scoped } from '../classNames.js';
 import { LoadingPulse, LoadingScreen } from '../components/LoadingStates.js';
+import { getNativeMapUrl } from '../nativeMapUrl.js';
 import { siteContent } from '../siteContent.js';
 import styles from './RsvpPages.module.css';
 
@@ -1337,7 +1338,10 @@ function RsvpContextPanel({
   savedRsvp?: StoredRsvp;
   showLookupLink?: boolean;
 }) {
-  const venueMapHref = getNativeMapUrl();
+  const venueMapHref = getNativeMapUrl({
+    googleMapsUrl: siteContent.venueMapUrl,
+    appleMapsUrl: siteContent.venueAppleMapsUrl,
+  });
 
   return (
     <section
@@ -1421,21 +1425,6 @@ function RsvpContextPanel({
       )}
     </section>
   );
-}
-
-function getNativeMapUrl(): string {
-  if (typeof navigator === 'undefined') {
-    return siteContent.venueMapUrl;
-  }
-
-  const platform = navigator.platform.toLowerCase();
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isAppleDevice =
-    /mac|iphone|ipad|ipod/.test(platform) ||
-    /iphone|ipad|ipod/.test(userAgent) ||
-    (platform === 'macintel' && navigator.maxTouchPoints > 1);
-
-  return isAppleDevice ? siteContent.venueAppleMapsUrl : siteContent.venueMapUrl;
 }
 
 function toEditableRsvp(household: Household, rsvp?: StoredRsvp): RsvpPayload {

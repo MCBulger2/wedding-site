@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import { ResponsiveImage } from '../components/ResponsiveImage.js';
+import { getNativeMapUrl } from '../nativeMapUrl.js';
 import { siteContent } from '../siteContent.js';
 import styles from './PublicPages.module.css';
 
@@ -26,7 +27,10 @@ export function HomePage() {
     const ics = generateIcs(siteContent.weddingEvent);
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
-  const venueMapHref = getNativeMapUrl();
+  const venueMapHref = getNativeMapUrl({
+    googleMapsUrl: siteContent.venueMapUrl,
+    appleMapsUrl: siteContent.venueAppleMapsUrl,
+  });
   const publicHotels = siteContent.hotels.filter(
     (hotel) => hotel.publiclyShareable,
   );
@@ -263,23 +267,6 @@ export function HomePage() {
       </section>
     </main>
   );
-}
-
-function getNativeMapUrl(): string {
-  if (typeof navigator === 'undefined') {
-    return siteContent.venueMapUrl;
-  }
-
-  const platform = navigator.platform.toLowerCase();
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isAppleDevice =
-    /mac|iphone|ipad|ipod/.test(platform) ||
-    /iphone|ipad|ipod/.test(userAgent) ||
-    (platform === 'macintel' && navigator.maxTouchPoints > 1);
-
-  return isAppleDevice
-    ? siteContent.venueAppleMapsUrl
-    : siteContent.venueMapUrl;
 }
 
 export function RegistryPage() {
