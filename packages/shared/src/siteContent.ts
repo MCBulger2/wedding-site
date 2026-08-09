@@ -468,7 +468,7 @@ const rsvpDeadline = 'December 4, 2026';
 
 export const siteContent = {
   coupleNames: 'Matt & Alison',
-  dateLabel: 'January 18, 2027',
+  dateLabel: 'January 17, 2027',
   location: 'Mesa, Arizona',
   venueName: venue.name,
   venueAddress: venue.location,
@@ -476,7 +476,7 @@ export const siteContent = {
   venueAppleMapsUrl: venue.urls.appleMaps,
   venueMapEmbedUrl: venue.urls.openStreetMapEmbed,
   ceremonyTime: '4:30 PM',
-  receptionTime: '10:00 PM',
+  receptionTime: '10:30 PM',
   rsvpDeadline,
   dressCode:
     'Semi-formal attire. Ceremony and cocktail hour are planned outdoors, while the reception will be indoors. Bring a light layer for the evening.',
@@ -526,13 +526,6 @@ export const siteContent = {
       alt: 'Alison standing behind Matt with her hand resting on his shoulder',
       caption: 'Side by side',
       detail: 'A favorite portrait from the day.',
-      objectPosition: 'center',
-    },
-    {
-      src: '/engagement-04.jpg',
-      alt: 'Alison and Matt standing together in a garden',
-      caption: 'In the garden',
-      detail: 'Alison and Matt surrounded by green and golden light.',
       objectPosition: 'center',
     },
     {
