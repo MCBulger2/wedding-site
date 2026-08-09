@@ -29,17 +29,56 @@ interface GalleryPhoto {
   objectPosition?: string;
 }
 
-interface StorySection {
+type StoryImage = Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+
+interface StoryChapter {
+  id: 'asu' | 'life-together' | 'proposal' | 'always-side-by-side';
   title: string;
-  body: string;
-  image?: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
+  paragraphs: string[];
+  images: StoryImage[];
+}
+
+interface MapDestination {
+  label: string;
+  address?: string;
+  googleMapsUrl: string;
+  appleMapsUrl: string;
+}
+
+interface PhoenixRecommendation {
+  id:
+    | 'lego-tour'
+    | 'oreganos'
+    | 'desert-botanical-garden'
+    | 'papago-park'
+    | 'mcdowell-sonoran-preserve'
+    | 'piestewa-peak'
+    | 'odysea-aquarium';
+  title: string;
+  description: string;
+  actionLabel: 'Open map' | 'Find nearby';
+  destinations: MapDestination[];
+}
+
+interface PhoenixGuideGroup {
+  id: 'build' | 'eat' | 'explore';
+  title: string;
+  recommendations: PhoenixRecommendation[];
+}
+
+interface PhoenixGuideContent {
+  title: 'Our Phoenix favorites';
+  intro: string;
+  hikingNote: string;
+  groups: PhoenixGuideGroup[];
 }
 
 interface OurStoryContent {
   title: string;
   intro: string;
-  heroImage: Pick<GalleryPhoto, 'src' | 'alt' | 'objectPosition'>;
-  sections: StorySection[];
+  heroImage: StoryImage;
+  chapters: StoryChapter[];
+  phoenixGuide: PhoenixGuideContent;
   ctas: {
     detailsLabel: string;
     rsvpLabel: string;
@@ -68,6 +107,22 @@ const weddingEvent: CalendarEvent = {
 };
 
 const hotels: HotelBlock[] = [];
+
+const googleMapsSearch = (query: string) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+const appleMapsSearch = (query: string) =>
+  `https://maps.apple.com/?q=${encodeURIComponent(query)}`;
+
+const mapDestination = (
+  label: string,
+  query: string,
+  address?: string,
+): MapDestination => ({
+  label,
+  address,
+  googleMapsUrl: googleMapsSearch(query),
+  appleMapsUrl: appleMapsSearch(query),
+});
 
 const registry: RegistryContent = {
   title: 'Wedding Registry',
@@ -115,44 +170,197 @@ const contact = {
 
 const ourStory: OurStoryContent = {
   title: 'Our Story',
-  intro: 'A little about the moments and everyday joys that brought us here.',
+  intro:
+    "From meeting in a programming class at ASU to making a home together in Phoenix, we've shared plenty of adventures along the way. Here's a little about the story that brought us here.",
   heroImage: {
-    src: '/hero-wedding.jpg',
-    alt: 'Matt proposing to Alison by the lake',
-    objectPosition: 'center',
+    src: '/engagement-10.jpg',
+    alt: 'Alison and Matt smiling at each other beneath leafy branches',
   },
-  sections: [
+  chapters: [
     {
-      title: 'How we met',
-      body:
-        'We met in the spring of 2021 through mutual friends at a small get-together in Phoenix. A long conversation about travel, tacos, and terrible pool volleyball sealed the deal. We have been adventuring together ever since.',
-      image: {
-        src: '/ring.jpg',
-        alt: "Alison's engagement ring",
-        objectPosition: 'center',
-      },
+      id: 'asu',
+      title: 'It started at ASU',
+      paragraphs: [
+        'We met during freshman year at Arizona State University in Introduction to Object-Oriented Programming. Matt was a computer science major, while Alison had to take the class despite being a math major rather than a computer science major like Matt (luckily for both of us!).',
+        "We got to know each other through several more classes and stayed in touch even after the COVID-19 pandemic sent Matt away from the dorms. Once he returned, it wasn't long before we were dating, and the rest is history.",
+        "We both graduated from ASU in 2023: Alison with an MS in Actuarial Science and Matt with a BS in Computer Science. Since then, we've made our home together in the Phoenix and Scottsdale area.",
+      ],
+      images: [
+        {
+          src: '/asu-graduation.jpg',
+          alt: 'Alison and Matt wearing their ASU graduation regalia together on campus',
+        },
+      ],
     },
     {
+      id: 'life-together',
+      title: 'Life together',
+      paragraphs: [
+        "We spend many race weekends watching Formula 1 (and cheering for Max Verstappen!). Attending the 2025 Canadian Grand Prix was an experience we'll never forget.",
+        'We also love cooking together, building LEGO sets, and working on puzzles. In fact, our dining room table is much better known as the designated puzzle table.',
+      ],
+      images: [
+        {
+          src: '/canadian-grand-prix.jpg',
+          alt: 'Alison and Matt together beside a Formula 1 show car at the 2025 Canadian Grand Prix',
+        },
+      ],
+    },
+    {
+      id: 'proposal',
       title: 'The proposal',
-      body:
-        'On a quiet morning hike in Sedona, Matt found the perfect spot to ask the question. There were happy tears, a lot of hugging, and a celebratory coffee in town.',
-      image: {
-        src: '/smile.jpg',
-        alt: 'Alison and Matt smiling after the proposal',
-        objectPosition: 'center',
-      },
+      paragraphs: [
+        'During Easter weekend 2026, we traveled to Denver. We spent a lovely day sightseeing, including buying some LEGO, of course. Later, at City Park, Matt asked Alison to marry him.',
+        "Matt's parents, Jane and Tom, and his brothers, Tim and Joe, were there to share the moment with us. Tim graciously captured it all in the proposal photos you see here.",
+      ],
+      images: [
+        {
+          src: '/hero-wedding.jpg',
+          alt: 'Matt proposing to Alison at City Park in Denver',
+        },
+        {
+          src: '/smile.jpg',
+          alt: 'Alison and Matt smiling together after the proposal',
+        },
+      ],
     },
     {
-      title: 'What we love together',
-      body:
-        'Exploring new places, cooking at home, desert sunsets, morning coffee, live music, and time with family and friends. We balance each other, laugh a lot, and are always up for our next adventure.',
-    },
-    {
-      title: 'Looking ahead',
-      body:
-        'We are so excited to celebrate this next chapter with our favorite people. We cannot wait for a day filled with love, good food, and unforgettable memories in Mesa, Arizona. See you there!',
+      id: 'always-side-by-side',
+      title: 'Always side by side',
+      paragraphs: [
+        "We're excited to take this big next step in our lives and celebrate it with the people we love. Whatever comes next, we know we'll always be by each other's side.",
+      ],
+      images: [
+        {
+          src: '/engagement-08.jpg',
+          alt: 'Matt kissing Alison on the cheek as they laugh together outdoors',
+        },
+      ],
     },
   ],
+  phoenixGuide: {
+    title: 'Our Phoenix favorites',
+    intro:
+      "If you have some time while you're here, these are a few of the places around Phoenix that we enjoy and think are worth a visit.",
+    hikingNote:
+      'Desert trails can be demanding even in cooler weather. Bring water and check current trail conditions before heading out.',
+    groups: [
+      {
+        id: 'build',
+        title: 'Build the grand tour',
+        recommendations: [
+          {
+            id: 'lego-tour',
+            title: 'The Phoenix LEGO Store tour',
+            description:
+              "We can never resist a LEGO Store, and the Phoenix area has three. If you're feeling ambitious, see how many you can visit while you're here.",
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination(
+                'LEGO Store Scottsdale Quarter',
+                'LEGO Store Scottsdale Quarter 15257 N Scottsdale Road Suite 170 Scottsdale AZ 85254',
+                '15257 N Scottsdale Road, Suite 170, Scottsdale, AZ 85254',
+              ),
+              mapDestination(
+                'LEGO Store Chandler Fashion Center',
+                'LEGO Store Chandler Fashion Center 3111 W Chandler Boulevard Chandler AZ 85226',
+                '3111 W Chandler Boulevard, Chandler, AZ 85226',
+              ),
+              mapDestination(
+                'LEGO Store Arrowhead Towne Center',
+                'LEGO Store Arrowhead Towne Center 7700 W Arrowhead Towne Center Glendale AZ 85308',
+                '7700 W Arrowhead Towne Center, Glendale, AZ 85308',
+              ),
+            ],
+          },
+        ],
+      },
+      {
+        id: 'eat',
+        title: 'Eat',
+        recommendations: [
+          {
+            id: 'oreganos',
+            title: "Oregano's",
+            description:
+              "One of our favorite Arizona restaurant chains and an easy choice when you're in the mood for pizza or pasta.",
+            actionLabel: 'Find nearby',
+            destinations: [
+              mapDestination("Oregano's", "Oregano's Phoenix Arizona"),
+            ],
+          },
+        ],
+      },
+      {
+        id: 'explore',
+        title: 'Explore',
+        recommendations: [
+          {
+            id: 'desert-botanical-garden',
+            title: 'Desert Botanical Garden',
+            description:
+              'A beautiful way to explore the plants and landscapes that make the Sonoran Desert special.',
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination(
+                'Desert Botanical Garden',
+                'Desert Botanical Garden 1201 N Galvin Parkway Phoenix AZ 85008',
+                '1201 N Galvin Parkway, Phoenix, AZ 85008',
+              ),
+            ],
+          },
+          {
+            id: 'papago-park',
+            title: 'Papago Park',
+            description:
+              'An easy place to enjoy red-rock scenery, desert trails, and a great Phoenix sunset.',
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination('Papago Park', 'Papago Park Phoenix Arizona'),
+            ],
+          },
+          {
+            id: 'mcdowell-sonoran-preserve',
+            title: 'McDowell Sonoran Preserve',
+            description:
+              'Miles of Sonoran Desert trails with plenty of options for a morning outside.',
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination(
+                'McDowell Sonoran Preserve',
+                'Gateway Trailhead 18333 N Thompson Peak Parkway Scottsdale AZ 85255',
+                '18333 N Thompson Peak Parkway, Scottsdale, AZ 85255',
+              ),
+            ],
+          },
+          {
+            id: 'piestewa-peak',
+            title: 'Piestewa Peak',
+            description:
+              "One of Phoenix's classic hikes, with rewarding views across the Valley.",
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination('Piestewa Peak', 'Piestewa Peak Phoenix Arizona'),
+            ],
+          },
+          {
+            id: 'odysea-aquarium',
+            title: 'OdySea Aquarium',
+            description:
+              'A fun indoor stop in Scottsdale when you want a break from the desert trails.',
+            actionLabel: 'Open map',
+            destinations: [
+              mapDestination(
+                'OdySea Aquarium',
+                'OdySea Aquarium 9500 E Via de Ventura Suite A-100 Scottsdale AZ 85256',
+                '9500 E Via de Ventura, Suite A-100, Scottsdale, AZ 85256',
+              ),
+            ],
+          },
+        ],
+      },
+    ],
+  },
   ctas: {
     detailsLabel: 'Back to wedding details',
     rsvpLabel: 'RSVP',

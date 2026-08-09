@@ -38,6 +38,16 @@ export const responsiveImages = [
     widths: [480, 800, 1200],
   },
   {
+    key: '/asu-graduation.jpg',
+    source: 'asu-graduation.jpg',
+    widths: [640, 960, 1440, 1920],
+  },
+  {
+    key: '/canadian-grand-prix.jpg',
+    source: 'canadian-grand-prix.jpg',
+    widths: [640, 960, 1440, 1920],
+  },
+  {
     key: '/engagement-01.jpg',
     source: 'engagement-01.jpg',
     widths: [480, 800, 1200],
