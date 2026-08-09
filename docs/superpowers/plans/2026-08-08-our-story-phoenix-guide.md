@@ -29,7 +29,7 @@
 - Add `apps/web/image-sources/asu-graduation.jpg`: selected wide ASU graduation photo.
 - Add `apps/web/image-sources/canadian-grand-prix.jpg`: selected Canadian Grand Prix couple photo.
 - Modify `apps/web/scripts/responsive-image-config.mjs`: responsive variants for both selected source images.
-- Regenerate `apps/web/src/generated/responsiveImageAssets.ts` and the responsive files under `apps/web/public/images/` through the existing generator.
+- Regenerate the ignored responsive manifest and files locally through the existing generator; do not stage generated outputs.
 - Modify `apps/web/src/pages/PublicPages.tsx`: generic story chapters, Phoenix guide rendering, and shared map selection.
 - Modify `apps/web/src/pages/RsvpPages.tsx`: remove its local map selector and import the shared utility.
 - Modify `apps/web/src/pages/PublicPages.module.css`: editorial chapter, proposal pair, closing, and Phoenix guide presentation.
@@ -197,9 +197,9 @@ git commit -m "refactor: share native map selection"
 - Add: `apps/web/image-sources/asu-graduation.jpg`
 - Add: `apps/web/image-sources/canadian-grand-prix.jpg`
 - Modify: `apps/web/scripts/responsive-image-config.mjs`
-- Regenerate: `apps/web/src/generated/responsiveImageAssets.ts`
-- Regenerate: `apps/web/public/images/asu-graduation-*`
-- Regenerate: `apps/web/public/images/canadian-grand-prix-*`
+- Regenerate locally (ignored): `apps/web/src/generated/responsiveImageAssets.ts`
+- Regenerate locally (ignored): `apps/web/public/images/asu-graduation-*`
+- Regenerate locally (ignored): `apps/web/public/images/canadian-grand-prix-*`
 
 **Interfaces:**
 - Consumes: existing `GalleryPhoto` image fields and responsive image keys.
@@ -334,7 +334,7 @@ interface PhoenixGuideContent {
 }
 ```
 
-Change `OurStoryContent` to expose `chapters: StoryChapter[]` and `phoenixGuide: PhoenixGuideContent` instead of `sections`.
+Change `OurStoryContent` to expose `chapters: StoryChapter[]` and `phoenixGuide: PhoenixGuideContent`. Temporarily retain the existing `sections` field through Task 2 so the existing renderer remains type-safe; Task 3 removes it after migrating the renderer to `chapters`.
 
 - [ ] **Step 4: Add the exact approved story data**
 
@@ -577,14 +577,15 @@ Run:
 ```powershell
 npm run images:generate -w apps/web
 npx vitest run packages/shared/src/index.test.ts apps/web/src/components/ResponsiveImage.test.tsx
+npm run typecheck
 ```
 
-Expected: PASS, with committed AVIF/WebP/JPEG variants and manifest entries for both semantic source keys.
+Expected: PASS, with locally generated ignored AVIF/WebP/JPEG variants and manifest entries for both semantic source keys.
 
 - [ ] **Step 8: Commit content and assets**
 
 ```powershell
-git add packages/shared/src/siteContent.ts packages/shared/src/index.test.ts apps/web/image-sources/asu-graduation.jpg apps/web/image-sources/canadian-grand-prix.jpg apps/web/scripts/responsive-image-config.mjs apps/web/src/generated/responsiveImageAssets.ts apps/web/public/images
+git add packages/shared/src/siteContent.ts packages/shared/src/index.test.ts apps/web/image-sources/asu-graduation.jpg apps/web/image-sources/canadian-grand-prix.jpg apps/web/scripts/responsive-image-config.mjs
 git commit -m "feat: add personal story content and photos"
 ```
 
@@ -601,6 +602,7 @@ git commit -m "feat: add personal story content and photos"
 **Interfaces:**
 - Consumes: `ourStory.heroImage` and ordered `ourStory.chapters` from Task 2.
 - Produces: semantic chapter markup and class hooks later used by the guide and full-page E2E coverage.
+- Removes: the temporary legacy `ourStory.sections` compatibility field after the renderer is migrated.
 
 - [ ] **Step 1: Rewrite the editorial E2E test for the approved content**
 
@@ -866,6 +868,8 @@ Change the `llms.txt` Our Story description to:
 ```text
 - [Our story](https://matt-alison.com/our-story): How Matt and Alison met, their life together, their proposal, and a guide to favorite Phoenix-area places.
 ```
+
+Remove the stale `/sms-updates` public-page entry because that legacy route now redirects to `/`.
 
 Update the Public Site paragraph in `docs/ARCHITECTURE.md` to state that the static story route includes responsive personal photography and device-aware Google/Apple map links for Phoenix recommendations. Do not document provider hours or other time-sensitive attraction details.
 
