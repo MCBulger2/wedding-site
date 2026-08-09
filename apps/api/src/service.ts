@@ -57,6 +57,7 @@ const PUBLIC_SMS_IP_LIMIT = 10;
 const RSVP_SEARCH_RESULT_LIMIT = 10;
 const RSVP_SEARCH_TERM_LIMIT = 5;
 const RSVP_SEARCH_IP_LIMIT = 20;
+const RSVP_SEARCH_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const POINTS_PER_INCH = 72;
 const AVERY_5160_LABEL = {
   pageWidth: 8.5 * POINTS_PER_INCH,
@@ -83,6 +84,7 @@ export class PublicError extends Error {
     message: string,
     readonly statusCode = 400,
     readonly details?: string[],
+    readonly responseHeaders?: Record<string, string>,
   ) {
     super(message);
   }
@@ -534,7 +536,8 @@ export class WeddingService {
       this.inviteCodePepper,
     );
 
-    if (await this.isRsvpSearchRateLimited(termHash, sourceIpHash)) {
+    const rateLimit = await this.checkRsvpSearchRateLimit(termHash, sourceIpHash);
+    if (rateLimit.isLimited) {
       logStructured({
         level: 'warn',
         event: 'rsvp.search.rateLimited',
@@ -543,7 +546,12 @@ export class WeddingService {
         resultCount: 0,
         tooManyMatches: false,
       });
-      throw new PublicError('Too many RSVP search attempts. Try again later.', 429);
+      throw new PublicError(
+        'Too many RSVP search attempts. Try again later.',
+        429,
+        undefined,
+        { 'retry-after': String(rateLimit.retryAfterSeconds) },
+      );
     }
 
     const recoverableMatches: RsvpSearchResponse['results'] = [];
@@ -1569,15 +1577,15 @@ export class WeddingService {
     );
   }
 
-  private async isRsvpSearchRateLimited(
+  private async checkRsvpSearchRateLimit(
     termHash: string,
     sourceIpHash: string,
-  ): Promise<boolean> {
+  ): Promise<{ isLimited: boolean; retryAfterSeconds: number }> {
     const now = Date.now();
     const windowStartsAt =
-      Math.floor(now / PUBLIC_SMS_RATE_LIMIT_WINDOW_MS) *
-      PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
-    const windowExpiresAt = windowStartsAt + PUBLIC_SMS_RATE_LIMIT_WINDOW_MS;
+      Math.floor(now / RSVP_SEARCH_RATE_LIMIT_WINDOW_MS) *
+      RSVP_SEARCH_RATE_LIMIT_WINDOW_MS;
+    const windowExpiresAt = windowStartsAt + RSVP_SEARCH_RATE_LIMIT_WINDOW_MS;
     const termAttempts = await this.recordRsvpRecoveryAttempt(
       'contact',
       termHash,
@@ -1590,9 +1598,14 @@ export class WeddingService {
       windowStartsAt,
       windowExpiresAt,
     );
-    return (
-      termAttempts > RSVP_SEARCH_TERM_LIMIT || ipAttempts > RSVP_SEARCH_IP_LIMIT
-    );
+    return {
+      isLimited:
+        termAttempts > RSVP_SEARCH_TERM_LIMIT || ipAttempts > RSVP_SEARCH_IP_LIMIT,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((windowExpiresAt - Date.now()) / 1000),
+      ),
+    };
   }
 
   private async recordRsvpRecoveryAttempt(

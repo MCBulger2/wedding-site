@@ -85,6 +85,8 @@ export function RsvpLookupPage() {
   const openPanel = (panel: Exclude<AssistancePanel, null>) => {
     searchRequestSequence.current += 1;
     recoveryRequestSequence.current += 1;
+    setSearchStatus('idle');
+    setRecoveryStatus('idle');
     setActivePanel((current) => (current === panel ? null : panel));
     if (panel === 'search') {
       setRecoveryError('');
@@ -300,6 +302,7 @@ export function RsvpLookupPage() {
                   autoCapitalize="words"
                   autoCorrect="off"
                   inputMode="text"
+                  maxLength={80}
                   placeholder="Example"
                   value={searchTerm}
                   onChange={(event) => {
@@ -1694,6 +1697,10 @@ function normalizeValidationMessage(message: string): string {
 function validateSearchLastName(value: string): string | undefined {
   if (!value.trim()) {
     return 'Enter your household last name.';
+  }
+
+  if (value.length > 80) {
+    return 'Enter a last name with 80 characters or fewer.';
   }
 
   return undefined;

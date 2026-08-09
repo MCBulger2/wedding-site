@@ -34,7 +34,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
     );
   } catch (error) {
     if (error instanceof PublicError) {
-      const response = json({ message: error.message, details: error.details }, error.statusCode);
+      const response = json(
+        { message: error.message, details: error.details },
+        error.statusCode,
+        error.responseHeaders,
+      );
       logStructured({
         level: 'warn',
         event: 'api.request.publicError',
@@ -325,7 +329,11 @@ export async function handleRequest(
     return completeRequest(json({ message: 'Not found' }, 404));
   } catch (error) {
     if (error instanceof PublicError) {
-      const response = json({ message: error.message, details: error.details }, error.statusCode);
+      const response = json(
+        { message: error.message, details: error.details },
+        error.statusCode,
+        error.responseHeaders,
+      );
       logStructured({
         level: 'warn',
         event: 'api.request.publicError',
@@ -376,10 +384,15 @@ function parseBody(body?: string): any {
   }
 }
 
-function json(body: unknown, statusCode = 200): APIGatewayProxyResultV2 {
+function json(
+  body: unknown,
+  statusCode = 200,
+  responseHeaders?: Record<string, string>,
+): APIGatewayProxyResultV2 {
   return {
     statusCode,
     headers: {
+      ...responseHeaders,
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
     },

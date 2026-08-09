@@ -159,6 +159,31 @@ describe('handleRequest', () => {
     );
   });
 
+  it('returns Retry-After for application-level RSVP search throttling', async () => {
+    const service = createServiceDouble({
+      searchRsvps: vi.fn(async () => {
+        throw new PublicError(
+          'Too many RSVP search attempts. Try again later.',
+          429,
+          undefined,
+          { 'retry-after': '1800' },
+        );
+      }),
+    });
+
+    const response = await handleRequest(
+      service,
+      createEvent('/api/rsvp/search', 'POST', { lastName: 'Example' }),
+    );
+
+    const httpResponse = response as Exclude<typeof response, string>;
+    expect(httpResponse.statusCode).toBe(429);
+    expect(httpResponse.headers).toMatchObject({ 'retry-after': '1800' });
+    expect(JSON.parse(httpResponse.body as string)).toEqual({
+      message: 'Too many RSVP search attempts. Try again later.',
+    });
+  });
+
   it('returns a generic accepted response when recovery is throttled', async () => {
     const service = createServiceDouble({
       requestRsvpRecovery: vi.fn(async () => acceptedRecoveryResponse),

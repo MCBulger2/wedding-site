@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api.js';
 import {
@@ -152,6 +152,21 @@ describe('RsvpLookupPage', () => {
     expect(await screen.findByText('Enter your household last name.')).not.toBeNull();
   });
 
+  it('enforces the 80-character last-name limit before searching', async () => {
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    const input = screen.getByLabelText('Household last name');
+    expect(input.getAttribute('maxlength')).toBe('80');
+    fireEvent.change(input, { target: { value: 'E'.repeat(81) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+
+    expect(searchRsvps).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText('Enter a last name with 80 characters or fewer.'),
+    ).not.toBeNull();
+  });
+
   it('submits a search and shows accessible household links', async () => {
     searchRsvps.mockResolvedValue({
       results: [
@@ -286,6 +301,70 @@ describe('RsvpLookupPage', () => {
       ),
     ).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(emailInput));
+  });
+
+  it('resets a pending search when the search panel is closed and reopened', async () => {
+    const pending = createDeferred<{
+      results: Array<{ displayName: string; rsvpUrl: string }>;
+      tooManyMatches: boolean;
+    }>();
+    searchRsvps.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    const toggle = screen.getByRole('button', { name: 'Search by last name' });
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('Household last name'), {
+      target: { value: 'Example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(
+      (screen.getByRole('button', { name: 'Find my household' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+
+    await act(async () => {
+      pending.resolve({
+        results: [
+          {
+            displayName: 'Stale Example Household',
+            rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+          },
+        ],
+        tooManyMatches: false,
+      });
+      await pending.promise;
+    });
+    expect(screen.queryByText('Stale Example Household')).toBeNull();
+  });
+
+  it('resets a pending recovery when the recovery panel is closed and reopened', async () => {
+    const pending = createDeferred<{ accepted: true; message: string }>();
+    recoverRsvpLink.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    const toggle = screen.getByRole('button', { name: 'Email my RSVP link' });
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(
+      (screen.getByRole('button', {
+        name: 'Email me my RSVP link',
+      }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    await act(async () => {
+      pending.resolve({ accepted: true, message: 'Stale recovery response' });
+      await pending.promise;
+    });
+    expect(screen.queryByText('Stale recovery response')).toBeNull();
   });
 
   it('ignores a stale search response after the last name changes', async () => {

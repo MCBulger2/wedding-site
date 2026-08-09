@@ -1569,6 +1569,36 @@ describe('WeddingService', () => {
       });
     });
 
+    it('reports the remaining fixed-window duration when search is rate limited', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-08-08T12:10:00.000Z'));
+      const { service } = await createSeededService();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: `203.0.113.${attempt + 1}`,
+            baseUrl: 'https://wedding.example.com',
+          },
+        );
+      }
+
+      vi.setSystemTime(new Date('2026-08-08T12:30:00.000Z'));
+      await expect(
+        service.searchRsvps(
+          { lastName: 'Example' },
+          {
+            sourceIp: '203.0.113.6',
+            baseUrl: 'https://wedding.example.com',
+          },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 429,
+        responseHeaders: { 'retry-after': '1800' },
+      });
+    });
+
     it('shares the term rate limit across en-US case variants of the same last name', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-08-08T12:00:00.000Z'));

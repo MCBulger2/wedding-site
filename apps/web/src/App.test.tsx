@@ -232,6 +232,12 @@ describe('App routes', () => {
     expect(
       screen.getByRole('heading', { name: 'Privacy' }),
     ).not.toBeNull();
+    expect(
+      screen.getByText(/exact-last-name search can return a household RSVP URL/i),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(/URL contains the bearer credential and grants access/i),
+    ).not.toBeNull();
     expect(document.body.textContent).not.toMatch(/sms|text updates|Twilio/i);
   });
 

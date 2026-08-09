@@ -465,8 +465,11 @@ export function PrivacyPage() {
             guests recover private RSVP links.
           </p>
           <p>
-            We do not sell guest information, and we keep invitation links and
-            household details private to the invited household.
+            We do not sell guest information. An exact-last-name search can
+            return a household RSVP URL. That URL contains the bearer credential
+            and grants access to the household RSVP, so it should be treated as
+            private. Anyone with the URL may be able to view or update that
+            household's RSVP.
           </p>
           <p>Matt &amp; Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.</p>
         </div>

@@ -170,7 +170,9 @@ export class DynamoWeddingRepository implements WeddingRepository {
     const normalizedLastName = normalizeLastName(lastName);
     return (await this.listHouseholds()).filter((household) =>
       household.members.some(
-        (member) => normalizeLastName(member.lastName) === normalizedLastName,
+        (member) =>
+          !member.archivedAt &&
+          normalizeLastName(member.lastName) === normalizedLastName,
       ),
     );
   }
@@ -532,7 +534,9 @@ export class InMemoryWeddingRepository implements WeddingRepository {
     const normalizedLastName = normalizeLastName(lastName);
     return [...this.households.values()].filter((household) =>
       household.members.some(
-        (member) => normalizeLastName(member.lastName) === normalizedLastName,
+        (member) =>
+          !member.archivedAt &&
+          normalizeLastName(member.lastName) === normalizedLastName,
       ),
     );
   }

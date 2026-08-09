@@ -1372,7 +1372,7 @@ test('privacy and terms pages render public compliance content', async ({
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
   await expect(
     page.getByText(
-      'We do not sell guest information, and we keep invitation links and household details private to the invited household.',
+      'We do not sell guest information. An exact-last-name search can return a household RSVP URL. That URL contains the bearer credential and grants access to the household RSVP, so it should be treated as private. Anyone with the URL may be able to view or update that household\'s RSVP.',
     ),
   ).toBeVisible();
   await expect(

@@ -381,6 +381,48 @@ describe('exact last-name household lookup', () => {
 
     expect(matches.map((household) => household.householdId)).toEqual(['h1', 'h2']);
   });
+
+  it('excludes archived member surnames while matching active members in memory', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('archived-member', {
+      members: [
+        { id: 'archived-member-1', firstName: 'Former', lastName: 'Example', canBringPlusOne: false, archivedAt: '2026-08-08T12:00:00.000Z' },
+        { id: 'archived-member-2', firstName: 'Active', lastName: 'Different', canBringPlusOne: false },
+      ],
+    }) as Household);
+    await repository.saveHousehold(householdItem('active-member', {
+      members: [
+        { id: 'active-member-1', firstName: 'Current', lastName: 'Example', canBringPlusOne: false },
+      ],
+    }) as Household);
+
+    const matches = await repository.listHouseholdsByLastName('example');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['active-member']);
+  });
+
+  it('excludes archived member surnames while matching active members in DynamoDB', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    mockRepositorySend(repository).mockResolvedValueOnce({
+      Items: [
+        householdItem('archived-member', {
+          members: [
+            { id: 'archived-member-1', firstName: 'Former', lastName: 'Example', canBringPlusOne: false, archivedAt: '2026-08-08T12:00:00.000Z' },
+            { id: 'archived-member-2', firstName: 'Active', lastName: 'Different', canBringPlusOne: false },
+          ],
+        }),
+        householdItem('active-member', {
+          members: [
+            { id: 'active-member-1', firstName: 'Current', lastName: 'Example', canBringPlusOne: false },
+          ],
+        }),
+      ],
+    });
+
+    const matches = await repository.listHouseholdsByLastName('example');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['active-member']);
+  });
 });
 
 describe('SMS preference activation', () => {

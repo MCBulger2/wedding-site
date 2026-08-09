@@ -83,7 +83,7 @@ Guest RSVP writes should continue even if notification delivery fails. Validate 
 Before launch, verify the visible guest flows:
 
 - an exact invited-member last-name match through `POST /api/rsvp/search` lets the guest select a result and opens its private RSVP URL
-- search results disclose only `displayName` and `rsvpUrl`
+- search results return only `displayName` and `rsvpUrl`; there is no separate `inviteCode` field, but `rsvpUrl` embeds the bearer credential and must be treated as private
 - no-match searches show the no-match state
 - searches with more than 10 matches return the too-many state and do not show partial results
 - the search limits are enforced at 5 attempts per term per hour and 20 attempts per source IP per hour, with API Gateway throttling also active
