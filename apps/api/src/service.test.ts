@@ -1345,23 +1345,6 @@ describe('WeddingService', () => {
       await saveSearchableHousehold(
         repository,
         {
-          householdId: 'h2',
-          displayName: 'Another Example Household',
-          email: 'alex@example.com',
-          members: [
-            {
-              id: 'h2-1',
-              firstName: 'Alex',
-              lastName: 'Example',
-              canBringPlusOne: false,
-            },
-          ],
-        },
-        'Z9Y8X7W6V5',
-      );
-      await saveSearchableHousehold(
-        repository,
-        {
           householdId: 'h3',
           displayName: 'another example household',
           email: 'jamie@example.com',
@@ -1375,6 +1358,23 @@ describe('WeddingService', () => {
           ],
         },
         'M4N5P6Q7R8',
+      );
+      await saveSearchableHousehold(
+        repository,
+        {
+          householdId: 'h2',
+          displayName: 'Another Example Household',
+          email: 'alex@example.com',
+          members: [
+            {
+              id: 'h2-1',
+              firstName: 'Alex',
+              lastName: 'Example',
+              canBringPlusOne: false,
+            },
+          ],
+        },
+        'Z9Y8X7W6V5',
       );
 
       const response = await service.searchRsvps(

@@ -17,7 +17,7 @@ const rsvpSearchResponse = {
     },
   ],
   tooManyMatches: false,
-} as const;
+};
 
 describe('handleRequest', () => {
   let consoleLog: ReturnType<typeof vi.spyOn>;

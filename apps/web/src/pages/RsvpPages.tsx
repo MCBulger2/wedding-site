@@ -58,6 +58,8 @@ export function RsvpLookupPage() {
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const recoveryInputRef = useRef<HTMLInputElement | null>(null);
+  const searchRequestSequence = useRef(0);
+  const recoveryRequestSequence = useRef(0);
 
   useEffect(() => {
     if (activePanel === 'search') {
@@ -81,6 +83,8 @@ export function RsvpLookupPage() {
   };
 
   const openPanel = (panel: Exclude<AssistancePanel, null>) => {
+    searchRequestSequence.current += 1;
+    recoveryRequestSequence.current += 1;
     setActivePanel((current) => (current === panel ? null : panel));
     if (panel === 'search') {
       setRecoveryError('');
@@ -110,9 +114,13 @@ export function RsvpLookupPage() {
     setSearchError('');
     setSearchMessage('');
     setSearchResults([]);
+    const requestSequence = ++searchRequestSequence.current;
 
     try {
       const response = await searchRsvps({ lastName: normalized });
+      if (requestSequence !== searchRequestSequence.current) {
+        return;
+      }
       setSearchStatus('idle');
 
       if (response.tooManyMatches) {
@@ -131,6 +139,9 @@ export function RsvpLookupPage() {
 
       setSearchResults(response.results);
     } catch {
+      if (requestSequence !== searchRequestSequence.current) {
+        return;
+      }
       setSearchStatus('idle');
       setSearchMessage(
         'We could not search right now. Please try again, use email recovery, or contact Matt or Alison.',
@@ -151,12 +162,19 @@ export function RsvpLookupPage() {
     setRecoveryStatus('submitting');
     setRecoveryError('');
     setRecoveryMessage('');
+    const requestSequence = ++recoveryRequestSequence.current;
 
     try {
       const response = await recoverRsvpLink({ contact: normalized });
+      if (requestSequence !== recoveryRequestSequence.current) {
+        return;
+      }
       setRecoveryStatus('success');
       setRecoveryMessage(response.message || GenericRecoverySuccessMessage);
     } catch (error) {
+      if (requestSequence !== recoveryRequestSequence.current) {
+        return;
+      }
       setRecoveryStatus('idle');
       if (error instanceof ApiError && error.statusCode === 422) {
         const parsed = parseRecoveryApiError(error);
@@ -285,13 +303,12 @@ export function RsvpLookupPage() {
                   placeholder="Example"
                   value={searchTerm}
                   onChange={(event) => {
+                    searchRequestSequence.current += 1;
                     setSearchTerm(event.target.value);
                     setSearchError('');
                     setSearchMessage('');
                     setSearchResults([]);
-                    if (searchStatus !== 'submitting') {
-                      setSearchStatus('idle');
-                    }
+                    setSearchStatus('idle');
                   }}
                 />
                 {searchError && (
@@ -375,12 +392,11 @@ export function RsvpLookupPage() {
                   placeholder="name@example.com"
                   value={recoveryEmail}
                   onChange={(event) => {
+                    recoveryRequestSequence.current += 1;
                     setRecoveryEmail(event.target.value);
                     setRecoveryError('');
-                    if (recoveryStatus !== 'submitting') {
-                      setRecoveryMessage('');
-                      setRecoveryStatus('idle');
-                    }
+                    setRecoveryMessage('');
+                    setRecoveryStatus('idle');
                   }}
                 />
                 {recoveryError && (

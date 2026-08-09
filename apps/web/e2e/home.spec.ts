@@ -1216,13 +1216,14 @@ test('RSVP search submits exact surname and shows multiple household links', asy
   await page.route('**/api/rsvp/search', async (route) => {
     expect(route.request().method()).toBe('POST');
     requestBody = route.request().postDataJSON();
+    const pageOrigin = new URL(route.request().url()).origin;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         results: [
-          { displayName: 'The Example Household', rsvpUrl: 'http://127.0.0.1:54723/rsvp/A2B3C4D5E6' },
-          { displayName: 'Example & Guest', rsvpUrl: 'http://127.0.0.1:54723/rsvp/FRESH22456' },
+          { displayName: 'The Example Household', rsvpUrl: `${pageOrigin}/rsvp/A2B3C4D5E6` },
+          { displayName: 'Example & Guest', rsvpUrl: `${pageOrigin}/rsvp/FRESH22456` },
         ],
         tooManyMatches: false,
       }),

@@ -90,6 +90,14 @@ const savedRsvp = {
   updatedAt: '2026-06-15T22:07:00.000Z',
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe('RsvpLookupPage', () => {
   beforeEach(() => {
     fetchRsvp.mockReset();
@@ -114,6 +122,13 @@ describe('RsvpLookupPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
 
     const searchInput = await screen.findByLabelText('Household last name');
+    expect(searchInput.getAttribute('placeholder')).toBe('Example');
+    expect(searchInput.getAttribute('inputmode')).toBe('text');
+    expect(
+      screen.getByText(
+        'Search using the exact household last name printed on your invitation.',
+      ),
+    ).not.toBeNull();
     expect(
       screen
         .getByRole('button', { name: 'Search by last name' })
@@ -263,7 +278,63 @@ describe('RsvpLookupPage', () => {
 
     expect(screen.queryByLabelText('Household last name')).toBeNull();
     const emailInput = await screen.findByLabelText('Email address');
+    expect(emailInput.getAttribute('placeholder')).toBe('name@example.com');
+    expect(emailInput.getAttribute('inputmode')).toBe('email');
+    expect(
+      screen.getByText(
+        "Enter the email address already associated with your household and we'll send your RSVP link if we find a match.",
+      ),
+    ).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(emailInput));
+  });
+
+  it('ignores a stale search response after the last name changes', async () => {
+    const pending = createDeferred<{
+      results: Array<{ displayName: string; rsvpUrl: string }>;
+      tooManyMatches: boolean;
+    }>();
+    searchRsvps.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+    const input = screen.getByLabelText('Household last name');
+    fireEvent.change(input, { target: { value: 'Example' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find my household' }));
+    fireEvent.change(input, { target: { value: 'Different' } });
+
+    pending.resolve({
+      results: [
+        {
+          displayName: 'The Example Household',
+          rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+        },
+      ],
+      tooManyMatches: false,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Find my household' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('list', { name: 'Matching households' })).toBeNull();
+  });
+
+  it('ignores a stale recovery response after switching panels', async () => {
+    const pending = createDeferred<{ accepted: true; message: string }>();
+    recoverRsvpLink.mockReturnValue(pending.promise);
+    render(<RsvpLookupPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'sam@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Email me my RSVP link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search by last name' }));
+
+    pending.resolve({ accepted: true, message: 'Stale recovery response' });
+    await waitFor(() => expect(screen.getByLabelText('Household last name')).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Email my RSVP link' }));
+
+    expect(screen.queryByText('Stale recovery response')).toBeNull();
   });
 
   it('rejects non-email recovery input before submitting', async () => {

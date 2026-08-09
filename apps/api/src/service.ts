@@ -88,6 +88,15 @@ export class PublicError extends Error {
   }
 }
 
+class InviteCodeHashMismatchError extends PublicError {
+  constructor() {
+    super(
+      'Stored invite code does not match the current household invite hash',
+      409,
+    );
+  }
+}
+
 export class WeddingService {
   constructor(
     private readonly repository: WeddingRepository,
@@ -1372,10 +1381,7 @@ export class WeddingService {
         this.inviteCodePepper,
       )
     ) {
-      throw new PublicError(
-        'Stored invite code does not match the current household invite hash',
-        409,
-      );
+      throw new InviteCodeHashMismatchError();
     }
 
     return inviteCode;
@@ -1998,18 +2004,23 @@ function normalizeSearchLastName(value: string): string {
 }
 
 function compareHouseholdsByDisplayName(a: Household, b: Household): number {
-  return a.displayName.localeCompare(b.displayName, undefined, {
+  const baseComparison = a.displayName.localeCompare(b.displayName, undefined, {
     sensitivity: 'base',
   });
+  if (baseComparison !== 0) {
+    return baseComparison;
+  }
+
+  const exactComparison = compareOrdinal(a.displayName, b.displayName);
+  return exactComparison || compareOrdinal(a.householdId, b.householdId);
+}
+
+function compareOrdinal(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function isSkippableRecoverableInviteCodeError(error: unknown): boolean {
-  return (
-    error instanceof PublicError &&
-    error.statusCode === 409 &&
-    error.message ===
-      'Stored invite code does not match the current household invite hash'
-  );
+  return error instanceof InviteCodeHashMismatchError;
 }
 
 function stableHash(value: string, pepper: string): string {

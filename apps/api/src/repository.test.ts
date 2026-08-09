@@ -38,10 +38,11 @@ function householdItem(householdId: string, overrides: Partial<Household> = {}) 
   };
 }
 
-const plusOneOnlyRsvp = {
+function plusOneOnlyRsvp(householdId: string) {
+  return {
   members: [
     {
-      memberId: 'h4-member',
+      memberId: `${householdId}-member`,
       attending: true,
       mealChoice: 'buffet',
       dietaryNotes: '',
@@ -49,7 +50,7 @@ const plusOneOnlyRsvp = {
   ],
   plusOnes: [
     {
-      sponsorMemberId: 'h4-member',
+      sponsorMemberId: `${householdId}-member`,
       firstName: 'Plus',
       lastName: 'Example',
       mealChoice: 'fish',
@@ -60,7 +61,8 @@ const plusOneOnlyRsvp = {
   accessibilityNotes: '',
   submittedAt: '2026-07-04T12:00:00.000Z',
   updatedAt: '2026-07-04T12:00:00.000Z',
-} satisfies Parameters<InMemoryWeddingRepository['saveRsvpUpdate']>[1];
+  } satisfies Parameters<InMemoryWeddingRepository['saveRsvpUpdate']>[1];
+}
 
 function mockRepositorySend(repository: DynamoWeddingRepository) {
   return vi.spyOn(
@@ -168,6 +170,7 @@ describe('Dynamo household scan pagination', () => {
   it('returns only invited households with an exact last-name match across paginated scans', async () => {
     const repository = new DynamoWeddingRepository('wedding-table');
     const send = mockRepositorySend(repository)
+      .mockResolvedValueOnce({})
       .mockResolvedValueOnce({
         Items: [
           householdItem('h1', {
@@ -204,7 +207,6 @@ describe('Dynamo household scan pagination', () => {
                 canBringPlusOne: false,
               },
             ],
-            rsvp: plusOneOnlyRsvp,
           }),
           householdItem('h2', {
             members: [
@@ -219,17 +221,31 @@ describe('Dynamo household scan pagination', () => {
         ],
       });
 
+    const h4 = householdItem('h4', {
+      members: [
+        {
+          id: 'h4-member',
+          firstName: 'Guest',
+          lastName: 'Different',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household;
+    await repository.saveRsvpUpdate(h4, plusOneOnlyRsvp('h4'));
     const households = await repository.listHouseholdsByLastName('  EXAMPLE  ');
 
     expect(households.map((household) => household.householdId)).toEqual(['h1', 'h2']);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(3);
     expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      Item: expect.objectContaining({ rsvp: plusOneOnlyRsvp('h4') }),
+    });
+    expect((send.mock.calls[1][0] as CommandWithInput).input).toMatchObject({
       FilterExpression: 'entityType = :entityType',
       ExpressionAttributeValues: {
         ':entityType': 'Household',
       },
     });
-    expect((send.mock.calls[1][0] as CommandWithInput).input).toMatchObject({
+    expect((send.mock.calls[2][0] as CommandWithInput).input).toMatchObject({
       FilterExpression: 'entityType = :entityType',
       ExpressionAttributeValues: {
         ':entityType': 'Household',
@@ -348,7 +364,7 @@ describe('exact last-name household lookup', () => {
         },
       ],
     }) as Household);
-    await repository.saveHousehold(householdItem('h3', {
+    const h3 = householdItem('h3', {
       members: [
         {
           id: 'h3-member',
@@ -357,8 +373,9 @@ describe('exact last-name household lookup', () => {
           canBringPlusOne: false,
         },
       ],
-      rsvp: plusOneOnlyRsvp,
-    }) as Household);
+    }) as Household;
+    await repository.saveHousehold(h3);
+    await repository.saveRsvpUpdate(h3, plusOneOnlyRsvp('h3'));
 
     const matches = await repository.listHouseholdsByLastName('  EXAMPLE  ');
 
