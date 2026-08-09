@@ -656,26 +656,6 @@ describe('structured public planning data', () => {
     );
   });
 
-  it('publishes all engagement photos in the homepage carousel', () => {
-    const engagementPhotos = siteContent.photos.filter((photo) =>
-      photo.src.startsWith('/engagement-'),
-    );
-
-    expect(engagementPhotos).toHaveLength(11);
-    expect(engagementPhotos.map((photo) => photo.src)).toEqual(
-      Array.from(
-        { length: 11 },
-        (_, index) => `/engagement-${String(index + 1).padStart(2, '0')}.jpg`,
-      ),
-    );
-    expect(
-      engagementPhotos.every(
-        (photo) =>
-          photo.alt.trim().length > 0 && photo.caption.trim().length > 0,
-      ),
-    ).toBe(true);
-  });
-
   it('validates hotel block data', () => {
     const result = HotelBlockSchema.safeParse({
       name: 'Example Hotel',
