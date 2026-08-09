@@ -179,10 +179,8 @@
 }
 
 .photo-caption-row {
-  align-items: center;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .photo-caption-row p {
@@ -198,44 +196,30 @@
   color: var(--accent-strong);
 }
 
-.photo-dots {
+.photo-pagination {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  justify-content: flex-end;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.photo-dot {
-  background: transparent;
   display: grid;
-  justify-items: center;
-  min-height: 12px;
-  padding: 0;
-  width: 32px;
+  gap: 0.75rem;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
 }
 
-.photo-dot::before {
-  background: var(--photo-dot-bg);
+.photo-position {
+  color: var(--copy-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-progress {
+  background: var(--photo-progress-bg);
   border-radius: 999px;
-  content: '';
-  display: block;
-  height: 12px;
-  transition:
-    background-color 160ms ease,
-    width 160ms ease;
-  width: 12px;
+  height: 0.4rem;
+  overflow: hidden;
 }
 
-.photo-dot[aria-current='true'] {
-  background: transparent;
-}
-
-.photo-dot[aria-current='true']::before {
+.photo-progress-fill {
   background: var(--accent);
-  width: 32px;
+  border-radius: inherit;
+  height: 100%;
+  transition: width 160ms ease;
 }
 
 .section-grid,

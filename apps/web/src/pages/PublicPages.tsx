@@ -548,6 +548,7 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
   const programmaticScrollTargetRef = useRef<number | undefined>(undefined);
   const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
+  const photoProgress = ((activeIndex + 1) / photos.length) * 100;
 
   useEffect(
     () => () => {
@@ -729,25 +730,30 @@ function PhotoCarousel({ photos }: { photos: typeof siteContent.photos }) {
           )}
         </div>
         <div className={scoped(styles, 'photo-caption-row')}>
-          <p aria-live="polite">
+          <p>
             <strong>{activePhoto.caption}</strong>
             {activePhoto.detail && <span>{activePhoto.detail}</span>}
           </p>
           {hasMultiplePhotos && (
-            <div
-              className={scoped(styles, 'photo-dots')}
-              aria-label="Choose a photo"
-            >
-              {photos.map((photo, index) => (
-                <button
-                  type="button"
-                  aria-label={`Show photo ${index + 1}: ${photo.caption}`}
-                  aria-current={index === activeIndex ? 'true' : 'false'}
-                  className={scoped(styles, 'photo-dot')}
-                  key={`${photo.caption}-dot`}
-                  onClick={() => showPhoto(index)}
+            <div className={scoped(styles, 'photo-pagination')}>
+              <span
+                className={scoped(styles, 'photo-position')}
+                role="status"
+                aria-atomic="true"
+                aria-label="Photo position"
+                aria-live="polite"
+              >
+                {activeIndex + 1} of {photos.length}
+              </span>
+              <div
+                className={scoped(styles, 'photo-progress')}
+                aria-hidden="true"
+              >
+                <div
+                  className={scoped(styles, 'photo-progress-fill')}
+                  style={{ width: `${photoProgress}%` }}
                 />
-              ))}
+              </div>
             </div>
           )}
         </div>
