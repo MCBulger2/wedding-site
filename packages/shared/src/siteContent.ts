@@ -54,7 +54,7 @@ const venue = {
       'https://www.google.com/maps/place/Superstition+Manor+Wedding+%26+Event+Center/@33.437824,-111.6011223,1301m/data=!3m2!1e3!4b1!4m6!3m5!1s0x872bb099b11510fd:0x63a10ccbb2e45498!8m2!3d33.437824!4d-111.5985474!16s%2Fg%2F11b5plb0_6?entry=ttu&g_ep=EgoyMDI2MDYyNC4wIKXMDSoASAFQAw%3D%3D',
     appleMaps: 'https://maps.apple/p/.MpX6qJ9zEasjg',
     openStreetMapEmbed:
-      'https://www.openstreetmap.org/export/embed.html?bbox=-111.60154044628145%2C33.43481681617157%2C-111.59690022468568%2C33.44042143559003&layer=mapnik',
+      'https://www.openstreetmap.org/export/embed.html?bbox=-111.60154044628145%2C33.43481681617157%2C-111.59690022468568%2C33.44042143559003&layer=mapnik&marker=33.4374400%2C-111.5989000',
   },
 };
 
