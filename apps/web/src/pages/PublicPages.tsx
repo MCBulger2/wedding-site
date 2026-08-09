@@ -375,6 +375,8 @@ export function OurStoryPage() {
         />
       ))}
 
+      <PhoenixGuideSection guide={ourStory.phoenixGuide} />
+
       <section
         className={scoped(styles, 'story-cta-band')}
         aria-label="Our story next steps"
@@ -389,6 +391,64 @@ export function OurStoryPage() {
         </a>
       </section>
     </main>
+  );
+}
+
+function PhoenixGuideSection({
+  guide,
+}: {
+  guide: typeof siteContent.ourStory.phoenixGuide;
+}) {
+  return (
+    <section
+      className={scoped(styles, 'phoenix-guide')}
+      aria-labelledby="phoenix-guide-heading"
+    >
+      <div className={scoped(styles, 'phoenix-guide-heading')}>
+        <p className="eyebrow">While you're here</p>
+        <h2 id="phoenix-guide-heading">{guide.title}</h2>
+        <p>{guide.intro}</p>
+      </div>
+      <div className={scoped(styles, 'phoenix-guide-groups')}>
+        {guide.groups.map((group) => (
+          <section
+            className={scoped(styles, `phoenix-guide-group-${group.id}`)}
+            key={group.id}
+            aria-labelledby={`phoenix-guide-${group.id}`}
+          >
+            <h3 id={`phoenix-guide-${group.id}`}>{group.title}</h3>
+            <div className={scoped(styles, 'phoenix-recommendations')}>
+              {group.recommendations.map((recommendation) => (
+                <article
+                  className={scoped(styles, 'phoenix-recommendation')}
+                  key={recommendation.id}
+                >
+                  <h4>{recommendation.title}</h4>
+                  <p>{recommendation.description}</p>
+                  <div className={scoped(styles, 'phoenix-map-links')}>
+                    {recommendation.destinations.map((destination) => (
+                      <a
+                        aria-label={`${recommendation.actionLabel}: ${destination.label}`}
+                        href={getNativeMapUrl(destination)}
+                        key={destination.label}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <MapPin aria-hidden="true" />
+                        {destination.label}
+                      </a>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <p className={scoped(styles, 'phoenix-hiking-note')}>
+        {guide.hikingNote}
+      </p>
+    </section>
   );
 }
 

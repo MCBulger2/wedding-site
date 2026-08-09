@@ -609,7 +609,7 @@ test('mobile header keeps all primary links on one compact navigation row', asyn
   }
 });
 
-test('our story page renders editorial sections and calls to action', async ({
+test('our story page renders editorial sections, Phoenix favorites, and calls to action', async ({
   page,
 }) => {
   await page.goto('/our-story');
@@ -626,6 +626,31 @@ test('our story page renders editorial sections and calls to action', async ({
     'Always side by side',
   ]) {
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+
+  await expect(
+    page.getByRole('heading', { name: 'Our Phoenix favorites' }),
+  ).toBeVisible();
+  for (const heading of ['Build the grand tour', 'Eat', 'Explore']) {
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+  for (const destination of [
+    'LEGO Store Scottsdale Quarter',
+    'LEGO Store Chandler Fashion Center',
+    'LEGO Store Arrowhead Towne Center',
+    "Oregano's",
+    'Desert Botanical Garden',
+    'Papago Park',
+    'McDowell Sonoran Preserve',
+    'Piestewa Peak',
+    'OdySea Aquarium',
+  ]) {
+    const mapLink = page.getByRole('link', {
+      name: new RegExp(destination, 'i'),
+    });
+    await expect(mapLink).toHaveAttribute('href', /google\.com\/maps/);
+    await expect(mapLink).toHaveAttribute('target', '_blank');
+    await expect(mapLink).toHaveAttribute('rel', 'noreferrer');
   }
 
   await expect(
@@ -678,6 +703,35 @@ test('our story page renders editorial sections and calls to action', async ({
   await expect(
     page.locator('.story-cta-band').getByRole('link', { name: 'RSVP' }),
   ).toHaveAttribute('href', '/rsvp');
+});
+
+test('Phoenix favorites use Apple Maps on the story page for Apple devices', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'platform', {
+      configurable: true,
+      value: 'iPhone',
+    });
+  });
+
+  await page.goto('/our-story');
+
+  for (const destination of [
+    'LEGO Store Scottsdale Quarter',
+    'LEGO Store Chandler Fashion Center',
+    'LEGO Store Arrowhead Towne Center',
+    "Oregano's",
+    'Desert Botanical Garden',
+    'Papago Park',
+    'McDowell Sonoran Preserve',
+    'Piestewa Peak',
+    'OdySea Aquarium',
+  ]) {
+    await expect(
+      page.getByRole('link', { name: new RegExp(destination, 'i') }),
+    ).toHaveAttribute('href', /maps\.apple\.com/);
+  }
 });
 
 test('our story page renders on mobile without overflow', async ({ page }) => {

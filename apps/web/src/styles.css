@@ -823,6 +823,8 @@ textarea:focus {
   .admin-login-shell,
   .faq-grid,
   .our-story-hero,
+  .phoenix-guide-groups,
+  .phoenix-recommendations,
   .photo-section,
   .registry-card,
   .registry-callout,
@@ -830,6 +832,10 @@ textarea:focus {
   .story-chapter,
   .section-grid {
     grid-template-columns: 1fr;
+  }
+
+  .phoenix-guide-group-build {
+    grid-column: auto;
   }
 
   .our-story-hero {
@@ -971,6 +977,10 @@ textarea:focus {
 
   .story-chapter-proposal .story-chapter-media {
     grid-template-columns: 1fr;
+  }
+
+  .phoenix-map-links a {
+    width: 100%;
   }
 
   .button-inline,
