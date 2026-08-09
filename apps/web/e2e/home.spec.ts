@@ -65,8 +65,6 @@ const thirdGalleryPhoto = {
   caption: 'Together outdoors',
 };
 
-const expectedDotWidths = () => Array.from({ length: 13 }, () => 32);
-
 async function expectResponsiveImageDelivery(
   image: Locator,
   expectedFallbackPath: string,
@@ -1041,85 +1039,73 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
   const carousel = page.getByLabel('Matt and Alison photos');
   const scroller = page.getByTestId('photo-carousel-scroller');
   const controls = carousel.locator('.photo-controls');
-  const dots = carousel.locator('.photo-dot');
   const activeCaption = carousel.locator('.photo-caption-row strong');
+  const position = carousel.getByRole('status', { name: 'Photo position' });
+  const progressFill = carousel.locator('.photo-progress-fill');
+  const progressRatio = () =>
+    progressFill.evaluate((element) => {
+      const trackWidth = element.parentElement?.getBoundingClientRect().width;
+      return trackWidth
+        ? element.getBoundingClientRect().width / trackWidth
+        : Number.NaN;
+    });
 
   await carousel.scrollIntoViewIfNeeded();
   await scroller.scrollIntoViewIfNeeded();
+  await expect(position).toHaveText('1 of 13');
+  await expect.poll(progressRatio).toBeCloseTo(1 / 13, 2);
   const swipe = await swipeScroller(page, scroller);
   expect(swipe.after - swipe.before).toBeGreaterThan(
     (await scroller.evaluate((element) => element.clientWidth)) / 2,
   );
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
-  await expect(
-    carousel.getByRole('button', {
-      name: `Show photo 2: ${secondGalleryPhoto.caption}`,
-    }),
-  ).toHaveAttribute('aria-current', 'true');
+  await expect(position).toHaveText('2 of 13');
   await expect(controls).toHaveCSS('pointer-events', 'none');
-  await expect
-    .poll(() =>
-      dots.evaluateAll((elements) =>
-        elements.map((element) =>
-          Math.round(element.getBoundingClientRect().width),
-        ),
-      ),
-    )
-    .toEqual(expectedDotWidths());
-  await expect
-    .poll(() =>
-      dots.evaluateAll((elements) =>
-        elements.map((element) => {
-          const styles = getComputedStyle(element);
-          const markerStyles = getComputedStyle(element, '::before');
-          const rootStyles = getComputedStyle(document.documentElement);
-          const ariaCurrent = element.getAttribute('aria-current');
-          const expectedInactiveMarkerBackground = rootStyles
-            .getPropertyValue('--photo-dot-bg')
-            .trim();
-
-          return {
-            ariaCurrent,
-            hasTransparentButtonBackground:
-              styles.backgroundColor === 'rgba(0, 0, 0, 0)',
-            inactiveMarkerUsesExpectedBackground:
-              ariaCurrent === 'true' ||
-              markerStyles.backgroundColor === expectedInactiveMarkerBackground,
-            markerHeight: markerStyles.height,
-            markerRadius: markerStyles.borderTopLeftRadius,
-            markerTransform: markerStyles.transform,
-            markerWidth: markerStyles.width,
-          };
-        }),
-      ),
-    )
-    .toEqual(
-      Array.from({ length: 13 }, (_, index) => (index === 1 ? 32 : 12)).map(
-        (width, index) => ({
-          ariaCurrent: index === 1 ? 'true' : 'false',
-          hasTransparentButtonBackground: true,
-          inactiveMarkerUsesExpectedBackground: true,
-          markerHeight: '12px',
-          markerRadius: '999px',
-          markerTransform: 'none',
-          markerWidth: `${width}px`,
-        }),
-      ),
-    );
+  await expect.poll(progressRatio).toBeCloseTo(2 / 13, 2);
 
   await carousel
     .getByRole('button', { name: 'Show next photo' })
     .click({ force: true });
   await expect(activeCaption).toHaveText(thirdGalleryPhoto.caption);
-  await expect
-    .poll(() =>
-      dots.evaluateAll((elements) =>
-        elements.map((element) =>
-          Math.round(element.getBoundingClientRect().width),
+  await expect(position).toHaveText('3 of 13');
+  await expect.poll(progressRatio).toBeCloseTo(3 / 13, 2);
+});
+
+test('photo carousel keeps its caption and pagination contained', async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 1024, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+
+    const carousel = page.getByLabel('Matt and Alison photos');
+    const caption = carousel.locator('.photo-caption-row p');
+    const captionRow = carousel.locator('.photo-caption-row');
+    const pagination = carousel.locator('.photo-pagination');
+    await carousel.scrollIntoViewIfNeeded();
+
+    const [captionBox, captionRowBox, paginationBox, overflow] =
+      await Promise.all([
+        caption.boundingBox(),
+        captionRow.boundingBox(),
+        pagination.boundingBox(),
+        page.evaluate(
+          () =>
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
         ),
-      ),
-    )
-    .toEqual(expectedDotWidths());
+      ]);
+
+    expect(captionBox).not.toBeNull();
+    expect(captionRowBox).not.toBeNull();
+    expect(paginationBox).not.toBeNull();
+    expect(captionBox!.width).toBeCloseTo(captionRowBox!.width, 0);
+    expect(paginationBox!.width).toBeLessThanOrEqual(captionRowBox!.width);
+    expect(overflow).toBe(0);
+  }
 });
 
 test('photo carousel updates caption once during button navigation', async ({
