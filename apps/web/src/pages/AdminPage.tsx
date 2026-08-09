@@ -354,12 +354,6 @@ export function AdminHouseholdsTable({
                 {row.original.household.phone}
               </a>
             )}
-            {(row.original.household.phone ||
-              row.original.household.smsConsent) && (
-              <small>
-                {smsPreferenceLabel(row.original.household)}
-              </small>
-            )}
           </div>
         ),
       },
@@ -420,10 +414,7 @@ export function AdminHouseholdsTable({
           return (
             <HouseholdCardActions
               household={record.household}
-              canNotify={
-                Boolean(record.household.email) ||
-                hasRecordedSmsConsent(record.household)
-              }
+              canNotify={Boolean(record.household.email)}
               canEmailInvitation={
                 Boolean(record.household.email) &&
                 !isHouseholdArchived(record.household)
@@ -1365,16 +1356,11 @@ export function AdminPage() {
 
       setSendingNotification(true);
       const payload: SendHouseholdNotificationInput =
-        notificationForm.channel === 'email'
-          ? {
-              channel: 'email',
-              subject: notificationForm.subject,
-              message: notificationForm.message,
-            }
-          : {
-              channel: 'sms',
-              message: notificationForm.message,
-            };
+        {
+          channel: 'email',
+          subject: notificationForm.subject,
+          message: notificationForm.message,
+        };
       const response = await sendHouseholdNotification(
         session.accessToken,
         notificationHousehold.householdId,
@@ -2006,21 +1992,12 @@ export function AdminPage() {
                             <a href={`tel:${record.household.phone}`}>{record.household.phone}</a>
                           </span>
                         )}
-                        {(record.household.phone || record.household.smsConsent) && (
-                          <span>
-                            <MessageSquare aria-hidden="true" />
-                            {smsPreferenceLabel(record.household)}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="toolbar-actions">
                       <HouseholdCardActions
                         household={record.household}
-                        canNotify={
-                          Boolean(record.household.email) ||
-                          hasRecordedSmsConsent(record.household)
-                        }
+                        canNotify={Boolean(record.household.email)}
                         canEmailInvitation={Boolean(record.household.email) && !isHouseholdArchived(record.household)}
                         onNotify={() => openNotificationModal(record.household)}
                         onEmailInvitation={() => void handleEmailInvitation(record)}
@@ -2591,35 +2568,11 @@ function toHouseholdFormState(household: Household): HouseholdFormState {
 function defaultNotificationFormState(
   household: Household,
 ): HouseholdNotificationFormState {
-  const channel =
-    household.email || !hasRecordedSmsConsent(household) ? 'email' : 'sms';
-
   return {
-    channel,
+    channel: 'email',
     subject: `Wedding update for ${household.displayName}`,
     message: '',
   };
-}
-
-function hasRecordedSmsConsent(household: Household): boolean {
-  return Boolean(
-    household.phone &&
-      household.smsConsent?.status === 'opted_in' &&
-      household.smsConsent.phone === household.phone,
-  );
-}
-
-function smsPreferenceLabel(household: Household): string {
-  if (hasRecordedSmsConsent(household)) {
-    return `SMS active for ${household.smsConsent?.phone}`;
-  }
-  if (household.smsConsent?.status === 'pending_confirmation') {
-    return `SMS confirmation pending for ${household.smsConsent.phone}`;
-  }
-  if (household.smsConsent?.status === 'opted_out') {
-    return 'SMS opted out';
-  }
-  return 'SMS consent not recorded';
 }
 
 function inviteStatusLabel(household: Household): string {
@@ -2915,7 +2868,7 @@ function HouseholdForm({
         />
       </label>
       <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-        Use a US 10-digit number or E.164 format such as +14805550100 for SMS.
+        Use a US 10-digit number or E.164 format such as +14805550100.
       </p>
       <label>
         Max plus-ones
@@ -3107,66 +3060,35 @@ export function HouseholdNotificationForm({
   onSubmit: (event: FormEvent) => Promise<void>;
   onCancel: () => void;
 }) {
-  const canEmail = Boolean(household.email);
-  const canSms = hasRecordedSmsConsent(household);
-
   return (
     <form className="modal-form" onSubmit={onSubmit}>
       <p className="form-message">
-        Send a direct update to this household by email or SMS.
+        Send a direct update to this household by email.
       </p>
       <div className="confirmation-row">
         <div>
           <strong>{household.displayName}</strong>
-          <p className="form-message">
-            {form.channel === 'email'
-              ? household.email ?? 'No contact email on file.'
-              : household.phone ?? 'No mobile number on file.'}
-          </p>
+          <p className="form-message">{household.email ?? 'No contact email on file.'}</p>
         </div>
       </div>
-      {!canSms && household.phone && (
-        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-          SMS delivery stays disabled until this household opts in through the
-          standalone text preferences page.
-        </p>
-      )}
       <label>
-        Delivery channel
-        <select
-          aria-label="Delivery channel"
-          value={form.channel}
+        Subject
+        <input
+          aria-label="Notification subject"
+          value={form.subject}
           onChange={(event) =>
             setForm((current) => ({
               ...current,
-              channel: event.target.value as 'email' | 'sms',
+              subject: event.target.value,
             }))
           }
-        >
-          {canEmail && <option value="email">Email</option>}
-          {canSms && <option value="sms">SMS</option>}
-        </select>
+        />
       </label>
-      {form.channel === 'email' && (
-        <label>
-          Subject
-          <input
-            aria-label="Notification subject"
-            value={form.subject}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                subject: event.target.value,
-              }))
-            }
-          />
-        </label>
-      )}
       <label>
         Message
         <textarea
           aria-label="Notification message"
-          rows={form.channel === 'email' ? 8 : 5}
+          rows={8}
           value={form.message}
           onChange={(event) =>
             setForm((current) => ({
@@ -3176,12 +3098,6 @@ export function HouseholdNotificationForm({
           }
         />
       </label>
-      {form.channel === 'sms' && (
-        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-          SMS is delivered through Twilio, requires recorded consent, and
-          includes HELP and STOP instructions automatically.
-        </p>
-      )}
       <div className="toolbar-actions">
         <button type="submit" disabled={sending}>
           <Send aria-hidden="true" />

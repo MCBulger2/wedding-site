@@ -38,6 +38,32 @@ function householdItem(householdId: string, overrides: Partial<Household> = {}) 
   };
 }
 
+function plusOneOnlyRsvp(householdId: string) {
+  return {
+  members: [
+    {
+      memberId: `${householdId}-member`,
+      attending: true,
+      mealChoice: 'buffet',
+      dietaryNotes: '',
+    },
+  ],
+  plusOnes: [
+    {
+      sponsorMemberId: `${householdId}-member`,
+      firstName: 'Plus',
+      lastName: 'Example',
+      mealChoice: 'fish',
+      dietaryNotes: '',
+    },
+  ],
+  notes: '',
+  accessibilityNotes: '',
+  submittedAt: '2026-07-04T12:00:00.000Z',
+  updatedAt: '2026-07-04T12:00:00.000Z',
+  } satisfies Parameters<InMemoryWeddingRepository['saveRsvpUpdate']>[1];
+}
+
 function mockRepositorySend(repository: DynamoWeddingRepository) {
   return vi.spyOn(
     (repository as unknown as { client: { send: (...args: unknown[]) => Promise<unknown> } }).client,
@@ -140,6 +166,93 @@ describe('Dynamo household scan pagination', () => {
       ExclusiveStartKey: cursor,
     });
   });
+
+  it('returns only invited households with an exact last-name match across paginated scans', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    const send = mockRepositorySend(repository)
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        Items: [
+          householdItem('h1', {
+            members: [
+              {
+                id: 'h1-member',
+                firstName: 'Guest',
+                lastName: 'Example',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+          householdItem('h3', {
+            members: [
+              {
+                id: 'h3-member',
+                firstName: 'Guest',
+                lastName: 'Examples',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+        ],
+        LastEvaluatedKey: cursor,
+      })
+      .mockResolvedValueOnce({
+        Items: [
+          householdItem('h4', {
+            members: [
+              {
+                id: 'h4-member',
+                firstName: 'Guest',
+                lastName: 'Different',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+          householdItem('h2', {
+            members: [
+              {
+                id: 'h2-member',
+                firstName: 'Guest',
+                lastName: 'example',
+                canBringPlusOne: false,
+              },
+            ],
+          }),
+        ],
+      });
+
+    const h4 = householdItem('h4', {
+      members: [
+        {
+          id: 'h4-member',
+          firstName: 'Guest',
+          lastName: 'Different',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household;
+    await repository.saveRsvpUpdate(h4, plusOneOnlyRsvp('h4'));
+    const households = await repository.listHouseholdsByLastName('  EXAMPLE  ');
+
+    expect(households.map((household) => household.householdId)).toEqual(['h1', 'h2']);
+    expect(send).toHaveBeenCalledTimes(3);
+    expect((send.mock.calls[0][0] as CommandWithInput).input).toMatchObject({
+      Item: expect.objectContaining({ rsvp: plusOneOnlyRsvp('h4') }),
+    });
+    expect((send.mock.calls[1][0] as CommandWithInput).input).toMatchObject({
+      FilterExpression: 'entityType = :entityType',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+      },
+    });
+    expect((send.mock.calls[2][0] as CommandWithInput).input).toMatchObject({
+      FilterExpression: 'entityType = :entityType',
+      ExpressionAttributeValues: {
+        ':entityType': 'Household',
+      },
+      ExclusiveStartKey: cursor,
+    });
+  });
 });
 
 describe('Recovery rate limit persistence', () => {
@@ -225,6 +338,90 @@ describe('Recovery rate limit persistence', () => {
       },
       ReturnValues: 'ALL_NEW',
     });
+  });
+});
+
+describe('exact last-name household lookup', () => {
+  it('matches only invited members and ignores plus-ones in memory', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('h1', {
+      members: [
+        {
+          id: 'h1-member',
+          firstName: 'Guest',
+          lastName: 'Example',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household);
+    await repository.saveHousehold(householdItem('h2', {
+      members: [
+        {
+          id: 'h2-member',
+          firstName: 'Guest',
+          lastName: 'example',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household);
+    const h3 = householdItem('h3', {
+      members: [
+        {
+          id: 'h3-member',
+          firstName: 'Guest',
+          lastName: 'Examples',
+          canBringPlusOne: false,
+        },
+      ],
+    }) as Household;
+    await repository.saveHousehold(h3);
+    await repository.saveRsvpUpdate(h3, plusOneOnlyRsvp('h3'));
+
+    const matches = await repository.listHouseholdsByLastName('  EXAMPLE  ');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['h1', 'h2']);
+  });
+
+  it('excludes archived member surnames while matching active members in memory', async () => {
+    const repository = new InMemoryWeddingRepository();
+    await repository.saveHousehold(householdItem('archived-member', {
+      members: [
+        { id: 'archived-member-1', firstName: 'Former', lastName: 'Example', canBringPlusOne: false, archivedAt: '2026-08-08T12:00:00.000Z' },
+        { id: 'archived-member-2', firstName: 'Active', lastName: 'Different', canBringPlusOne: false },
+      ],
+    }) as Household);
+    await repository.saveHousehold(householdItem('active-member', {
+      members: [
+        { id: 'active-member-1', firstName: 'Current', lastName: 'Example', canBringPlusOne: false },
+      ],
+    }) as Household);
+
+    const matches = await repository.listHouseholdsByLastName('example');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['active-member']);
+  });
+
+  it('excludes archived member surnames while matching active members in DynamoDB', async () => {
+    const repository = new DynamoWeddingRepository('wedding-table');
+    mockRepositorySend(repository).mockResolvedValueOnce({
+      Items: [
+        householdItem('archived-member', {
+          members: [
+            { id: 'archived-member-1', firstName: 'Former', lastName: 'Example', canBringPlusOne: false, archivedAt: '2026-08-08T12:00:00.000Z' },
+            { id: 'archived-member-2', firstName: 'Active', lastName: 'Different', canBringPlusOne: false },
+          ],
+        }),
+        householdItem('active-member', {
+          members: [
+            { id: 'active-member-1', firstName: 'Current', lastName: 'Example', canBringPlusOne: false },
+          ],
+        }),
+      ],
+    });
+
+    const matches = await repository.listHouseholdsByLastName('example');
+
+    expect(matches.map((household) => household.householdId)).toEqual(['active-member']);
   });
 });
 

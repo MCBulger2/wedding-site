@@ -11,6 +11,8 @@ import {
   InvitationDetailsSchema,
   PublicSmsSubscriptionRequestSchema,
   PublicSmsSubscriptionResponseSchema,
+  RsvpSearchRequestSchema,
+  RsvpSearchResponseSchema,
   SMS_CONSENT_TEXT_VERSION,
   RsvpRecoveryAcceptedResponseSchema,
   RsvpRecoveryRequestSchema,
@@ -231,6 +233,58 @@ describe('RsvpRecovery schemas', () => {
         smsConsentAccepted: true,
       }),
     ).toEqual({ contact: '(480) 555-0100' });
+  });
+});
+
+describe('RsvpSearch schemas', () => {
+  it('trims search names and accepts valid HTTPS RSVP URLs in results', () => {
+    expect(
+      RsvpSearchRequestSchema.parse({ lastName: '  Example  ' }),
+    ).toEqual({
+      lastName: 'Example',
+    });
+
+    expect(
+      RsvpSearchResponseSchema.parse({
+        results: [
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+          },
+        ],
+        tooManyMatches: false,
+      }),
+    ).toEqual({
+      results: [
+        {
+          displayName: 'The Example Household',
+          rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+        },
+      ],
+      tooManyMatches: false,
+    });
+  });
+
+  it.each([
+    { lastName: ' ' },
+    { lastName: 'a'.repeat(81) },
+  ])('rejects blank or overlong last names', (request) => {
+    expect(RsvpSearchRequestSchema.safeParse(request).success).toBe(false);
+  });
+
+  it('rejects extra fields in search results', () => {
+    expect(
+      RsvpSearchResponseSchema.safeParse({
+        results: [
+          {
+            displayName: 'The Example Household',
+            rsvpUrl: 'https://matt-alison.com/rsvp/A2B3C4D5E6',
+            householdId: 'h1',
+          },
+        ],
+        tooManyMatches: false,
+      }).success,
+    ).toBe(false);
   });
 });
 

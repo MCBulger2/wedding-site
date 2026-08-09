@@ -35,6 +35,8 @@ export interface StructuredLogEntry {
   sentCount?: number;
   skippedCount?: number;
   failedCount?: number;
+  resultCount?: number;
+  tooManyMatches?: boolean;
   bucketName?: string;
   objectKey?: string;
   messageId?: string;
@@ -74,6 +76,8 @@ const allowedKeys = new Set<keyof StructuredLogEntry>([
   'sentCount',
   'skippedCount',
   'failedCount',
+  'resultCount',
+  'tooManyMatches',
   'bucketName',
   'objectKey',
   'messageId',
