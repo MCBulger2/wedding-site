@@ -5,9 +5,8 @@
 ## Public pages
 
 - [Wedding details](https://matt-alison.com/): Date, venue, schedule, travel guidance, and other public wedding information.
-- [Our story](https://matt-alison.com/our-story): How Matt and Alison met and their story together.
+- [Our story](https://matt-alison.com/our-story): How Matt and Alison met, their life together, their proposal, and a guide to favorite Phoenix-area places.
 - [Registry](https://matt-alison.com/registry): Current registry and gift information.
-- [SMS updates](https://matt-alison.com/sms-updates): Voluntary enrollment for wedding logistics and schedule text updates.
 - [Terms](https://matt-alison.com/terms): Terms for the website and SMS updates.
 - [Privacy](https://matt-alison.com/privacy): Privacy information for the website and SMS updates.
 
