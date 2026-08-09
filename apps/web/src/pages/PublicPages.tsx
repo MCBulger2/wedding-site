@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import { ResponsiveImage } from '../components/ResponsiveImage.js';
+import { getNativeMapUrl } from '../nativeMapUrl.js';
 import { siteContent } from '../siteContent.js';
 import styles from './PublicPages.module.css';
 
@@ -26,7 +27,10 @@ export function HomePage() {
     const ics = generateIcs(siteContent.weddingEvent);
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, []);
-  const venueMapHref = getNativeMapUrl();
+  const venueMapHref = getNativeMapUrl({
+    googleMapsUrl: siteContent.venueMapUrl,
+    appleMapsUrl: siteContent.venueAppleMapsUrl,
+  });
   const publicHotels = siteContent.hotels.filter(
     (hotel) => hotel.publiclyShareable,
   );
@@ -265,23 +269,6 @@ export function HomePage() {
   );
 }
 
-function getNativeMapUrl(): string {
-  if (typeof navigator === 'undefined') {
-    return siteContent.venueMapUrl;
-  }
-
-  const platform = navigator.platform.toLowerCase();
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isAppleDevice =
-    /mac|iphone|ipad|ipod/.test(platform) ||
-    /iphone|ipad|ipod/.test(userAgent) ||
-    (platform === 'macintel' && navigator.maxTouchPoints > 1);
-
-  return isAppleDevice
-    ? siteContent.venueAppleMapsUrl
-    : siteContent.venueMapUrl;
-}
-
 export function RegistryPage() {
   const { registry } = siteContent;
   const hasRegistryLinks = registry.links.length > 0;
@@ -358,8 +345,6 @@ export function RegistryPage() {
 
 export function OurStoryPage() {
   const { ourStory } = siteContent;
-  const [meetSection, proposalSection, loveSection, futureSection] =
-    ourStory.sections;
 
   return (
     <main className={scoped(styles, 'our-story-page')}>
@@ -382,58 +367,15 @@ export function OurStoryPage() {
         </figure>
       </section>
 
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-meet'),
-        )}
-      >
-        {meetSection?.image && (
-          <figure className={scoped(styles, 'story-thumbnail')}>
-            <ResponsiveImage
-              src={meetSection.image.src}
-              alt={meetSection.image.alt}
-              decoding="async"
-              sizes="(min-width: 760px) 180px, 100vw"
-              objectPosition={meetSection.image.objectPosition}
-            />
-          </figure>
-        )}
-        <StoryText title={meetSection?.title} body={meetSection?.body} />
-      </section>
-
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-proposal'),
-        )}
-      >
-        <StoryText
-          title={proposalSection?.title}
-          body={proposalSection?.body}
+      {ourStory.chapters.map((chapter, index) => (
+        <StoryChapterSection
+          chapter={chapter}
+          key={chapter.id}
+          reverse={index % 2 === 1}
         />
-        {proposalSection?.image && (
-          <figure className={scoped(styles, 'story-landscape')}>
-            <ResponsiveImage
-              src={proposalSection.image.src}
-              alt={proposalSection.image.alt}
-              decoding="async"
-              sizes="(min-width: 900px) 44vw, 100vw"
-              objectPosition={proposalSection.image.objectPosition}
-            />
-          </figure>
-        )}
-      </section>
+      ))}
 
-      <section
-        className={cx(
-          scoped(styles, 'story-section'),
-          scoped(styles, 'story-section-duo'),
-        )}
-      >
-        <StoryText title={loveSection?.title} body={loveSection?.body} />
-        <StoryText title={futureSection?.title} body={futureSection?.body} />
-      </section>
+      <PhoenixGuideSection guide={ourStory.phoenixGuide} />
 
       <section
         className={scoped(styles, 'story-cta-band')}
@@ -449,6 +391,106 @@ export function OurStoryPage() {
         </a>
       </section>
     </main>
+  );
+}
+
+function PhoenixGuideSection({
+  guide,
+}: {
+  guide: typeof siteContent.ourStory.phoenixGuide;
+}) {
+  return (
+    <section
+      className={scoped(styles, 'phoenix-guide')}
+      aria-labelledby="phoenix-guide-heading"
+    >
+      <div className={scoped(styles, 'phoenix-guide-heading')}>
+        <p className="eyebrow">While you're here</p>
+        <h2 id="phoenix-guide-heading">{guide.title}</h2>
+        <p>{guide.intro}</p>
+      </div>
+      <div className={scoped(styles, 'phoenix-guide-groups')}>
+        {guide.groups.map((group) => (
+          <section
+            className={scoped(styles, `phoenix-guide-group-${group.id}`)}
+            key={group.id}
+            aria-labelledby={`phoenix-guide-${group.id}`}
+          >
+            <h3 id={`phoenix-guide-${group.id}`}>{group.title}</h3>
+            <div className={scoped(styles, 'phoenix-recommendations')}>
+              {group.recommendations.map((recommendation) => (
+                <article
+                  className={scoped(styles, 'phoenix-recommendation')}
+                  key={recommendation.id}
+                >
+                  <h4>{recommendation.title}</h4>
+                  <p>{recommendation.description}</p>
+                  <div className={scoped(styles, 'phoenix-map-links')}>
+                    {recommendation.destinations.map((destination) => (
+                      <a
+                        aria-label={`${recommendation.actionLabel}: ${destination.label}`}
+                        href={getNativeMapUrl(destination)}
+                        key={destination.label}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <MapPin aria-hidden="true" />
+                        {destination.label}
+                      </a>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <p className={scoped(styles, 'phoenix-hiking-note')}>
+        {guide.hikingNote}
+      </p>
+    </section>
+  );
+}
+
+function StoryChapterSection({
+  chapter,
+  reverse,
+}: {
+  chapter: (typeof siteContent.ourStory.chapters)[number];
+  reverse: boolean;
+}) {
+  return (
+    <section
+      className={cx(
+        scoped(styles, 'story-chapter'),
+        reverse && scoped(styles, 'story-chapter-reverse'),
+        scoped(styles, `story-chapter-${chapter.id}`),
+      )}
+      aria-labelledby={`story-${chapter.id}`}
+    >
+      <div className={scoped(styles, 'story-chapter-media')}>
+        {chapter.images.map((image) => (
+          <figure
+            className={scoped(styles, 'story-chapter-image')}
+            key={image.src}
+          >
+            <ResponsiveImage
+              alt={image.alt}
+              decoding="async"
+              objectPosition={image.objectPosition}
+              sizes="(min-width: 900px) 48vw, 100vw"
+              src={image.src}
+            />
+          </figure>
+        ))}
+      </div>
+      <div className={scoped(styles, 'story-copy-block')}>
+        <h2 id={`story-${chapter.id}`}>{chapter.title}</h2>
+        {chapter.paragraphs.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -493,19 +535,6 @@ export function TermsPage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function StoryText({ title, body }: { title?: string; body?: string }) {
-  if (!title || !body) {
-    return null;
-  }
-
-  return (
-    <article className={scoped(styles, 'story-copy-block')}>
-      <h2>{title}</h2>
-      <p>{body}</p>
-    </article>
   );
 }
 
