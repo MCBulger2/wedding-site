@@ -484,7 +484,7 @@ export const siteContent = {
     'We are getting married in Mesa, Arizona, and would love to celebrate with you. Invitations include a private RSVP link for each household.',
   schedule: [
     { time: '4:00 PM', detail: 'Guest arrival at Superstition Manor' },
-    { time: '4:30 PM', detail: 'Ceremony at the North Garden' },
+    { time: '4:30 PM', detail: 'Ceremony at the North Villa' },
     { time: '5:00 PM', detail: 'Cocktail hour on the terrace' },
     { time: '6:00 PM', detail: 'Dinner and reception' },
     { time: '10:30 PM', detail: 'Send-off' },

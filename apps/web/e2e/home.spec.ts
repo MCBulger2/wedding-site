@@ -61,8 +61,8 @@ const secondGalleryPhoto = {
 };
 
 const thirdGalleryPhoto = {
-  alt: 'Alison & Matt, shortly after the proposal',
-  caption: 'Alison & Matt after the proposal',
+  alt: 'Alison and Matt smiling together outdoors',
+  caption: 'A garden smile',
 };
 
 async function expectResponsiveImageDelivery(
@@ -171,7 +171,11 @@ async function showHouseholdDetails(
   }
 }
 
-async function swipeScroller(page: Page, scroller: Locator) {
+async function swipeScroller(
+  page: Page,
+  scroller: Locator,
+  direction: 'left' | 'right' = 'left',
+) {
   const box = await scroller.boundingBox();
   if (!box) {
     throw new Error('Photo carousel scroller is not visible');
@@ -181,8 +185,10 @@ async function swipeScroller(page: Page, scroller: Locator) {
     (element) => element.scrollLeft,
   );
   const session = await page.context().newCDPSession(page);
-  const startX = box.x + box.width * 0.75;
-  const endX = box.x + box.width * 0.15;
+  const startX =
+    direction === 'left' ? box.x + box.width * 0.75 : box.x + box.width * 0.15;
+  const endX =
+    direction === 'left' ? box.x + box.width * 0.15 : box.x + box.width * 0.75;
   const y = box.y + box.height / 2;
   const touchPoint = (x: number) => ({
     force: 1,
@@ -514,7 +520,7 @@ test('homepage details render on mobile', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByLabel('Wedding highlights').getByText('January 18, 2027'),
+    page.getByLabel('Wedding highlights').getByText('January 17, 2027'),
   ).toBeVisible();
   await expect(
     page.getByRole('img', {
@@ -641,7 +647,7 @@ test('our story page renders editorial sections, Phoenix favorites, and calls to
     );
     await expect(carousel).toHaveCount(1);
     await expect(carousel.locator('.photo-frame-shell')).toBeVisible();
-    await expect(carousel.locator('.photo-slide')).toHaveCount(slideCount);
+    await expect(carousel.locator('.photo-slide')).toHaveCount(slideCount + 2);
     await expect(
       carousel.getByRole('button', { name: 'Show next photo' }),
     ).toBeVisible();
@@ -1045,7 +1051,7 @@ test('photo carousel responds to native horizontal scroll snapping', async ({
     .toBe('auto');
 
   await scroller.evaluate((element) => {
-    element.scrollLeft = element.clientWidth;
+    element.scrollLeft = element.clientWidth * 2;
     element.dispatchEvent(new Event('scroll', { bubbles: true }));
   });
 
@@ -1063,34 +1069,219 @@ test('photo carousel keeps mobile swipe path native and controls stable', async 
   const controls = carousel.locator('.photo-controls');
   const activeCaption = carousel.locator('.photo-caption-row strong');
   const position = carousel.getByRole('status', { name: 'Photo position' });
-  const progressFill = carousel.locator('.photo-progress-fill');
-  const progressRatio = () =>
-    progressFill.evaluate((element) => {
-      const trackWidth = element.parentElement?.getBoundingClientRect().width;
-      return trackWidth
-        ? element.getBoundingClientRect().width / trackWidth
-        : Number.NaN;
-    });
+  const progressSegments = carousel.locator('.photo-progress-segment');
+  const photoCount = await carousel.locator('.photo-progress-segment').count();
 
   await carousel.scrollIntoViewIfNeeded();
   await scroller.scrollIntoViewIfNeeded();
-  await expect(position).toHaveText('1 of 13');
-  await expect.poll(progressRatio).toBeCloseTo(1 / 13, 2);
+  await expect(position).toHaveText(`1 of ${photoCount}`);
+  await expect(progressSegments).toHaveCount(photoCount);
+  await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
+  await expect(progressSegments.nth(1)).not.toHaveAttribute('data-active');
   const swipe = await swipeScroller(page, scroller);
   expect(swipe.after - swipe.before).toBeGreaterThan(
     (await scroller.evaluate((element) => element.clientWidth)) / 2,
   );
   await expect(activeCaption).toHaveText(secondGalleryPhoto.caption);
-  await expect(position).toHaveText('2 of 13');
+  await expect(position).toHaveText(`2 of ${photoCount}`);
   await expect(controls).toHaveCSS('pointer-events', 'none');
-  await expect.poll(progressRatio).toBeCloseTo(2 / 13, 2);
+  await expect(progressSegments.nth(0)).not.toHaveAttribute('data-active');
+  await expect(progressSegments.nth(1)).toHaveAttribute('data-active', 'true');
+});
+
+test('photo carousel wraps native horizontal scrolling at both ends', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const scroller = carousel.getByTestId('photo-carousel-scroller');
+  const position = carousel.getByRole('status', { name: 'Photo position' });
+  const photoCount = await carousel.locator('.photo-progress-segment').count();
+
+  await carousel.scrollIntoViewIfNeeded();
+  await scroller.scrollIntoViewIfNeeded();
+  await scroller.evaluate((element, count) => {
+    element.style.scrollBehavior = 'auto';
+    element.scrollLeft = element.clientWidth * count;
+    element.style.removeProperty('scroll-behavior');
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }, photoCount);
+  await expect(position).toHaveText(`${photoCount} of ${photoCount}`);
+
+  await swipeScroller(page, scroller);
+  await expect(position).toHaveText(`1 of ${photoCount}`);
+
+  await scroller.evaluate((element) => {
+    element.scrollLeft = 0;
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+  await expect(position).toHaveText(`${photoCount} of ${photoCount}`);
+});
+
+test('photo carousel wraps button navigation through the adjacent duplicate slide', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const scroller = carousel.getByTestId('photo-carousel-scroller');
+  const position = carousel.getByRole('status', { name: 'Photo position' });
+  const progressSegments = carousel.locator('.photo-progress-segment');
+  const photoCount = await carousel.locator('.photo-progress-segment').count();
+
+  await scroller.evaluate((element, count) => {
+    element.style.scrollBehavior = 'auto';
+    element.scrollLeft = element.clientWidth * count;
+    element.style.removeProperty('scroll-behavior');
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }, photoCount);
+  await expect(position).toHaveText(`${photoCount} of ${photoCount}`);
+
+  await carousel.evaluate((element) => {
+    const activeIndexes: number[] = [];
+    const segments = Array.from(
+      element.querySelectorAll('.photo-progress-segment'),
+    );
+    new MutationObserver(() => {
+      const activeIndex = segments.findIndex(
+        (segment) => segment.getAttribute('data-active') === 'true',
+      );
+      if (activeIndex >= 0) activeIndexes.push(activeIndex);
+    }).observe(element, { attributes: true, subtree: true });
+    Object.assign(element, { carouselActiveIndexes: activeIndexes });
+  });
 
   await carousel
     .getByRole('button', { name: 'Show next photo' })
     .click({ force: true });
-  await expect(activeCaption).toHaveText(thirdGalleryPhoto.caption);
-  await expect(position).toHaveText('3 of 13');
-  await expect.poll(progressRatio).toBeCloseTo(3 / 13, 2);
+  await page.waitForTimeout(100);
+  expect(
+    await scroller.evaluate((element) => element.scrollLeft),
+  ).toBeGreaterThan(
+    (await scroller.evaluate((element) => element.clientWidth)) * photoCount,
+  );
+  await scroller.evaluate((element, count) => {
+    element.scrollLeft = element.clientWidth * (count + 1);
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }, photoCount);
+  await page.waitForTimeout(20);
+  await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
+  await expect(progressSegments.nth(photoCount - 1)).not.toHaveAttribute(
+    'data-active',
+  );
+  await expect(position).toHaveText(`1 of ${photoCount}`);
+  await expect
+    .poll(() =>
+      scroller.evaluate((element) =>
+        Math.round(element.scrollLeft / element.clientWidth),
+      ),
+    )
+    .toBe(1);
+  expect(
+    await carousel.evaluate(
+      (element) =>
+        (element as HTMLElement & { carouselActiveIndexes: number[] })
+          .carouselActiveIndexes,
+    ),
+  ).not.toContain(photoCount - 1);
+
+  await carousel
+    .getByRole('button', { name: 'Show previous photo' })
+    .click({ force: true });
+  await page.waitForTimeout(100);
+  expect(await scroller.evaluate((element) => element.scrollLeft)).toBeLessThan(
+    await scroller.evaluate((element) => element.clientWidth),
+  );
+  await expect(position).toHaveText(`${photoCount} of ${photoCount}`);
+  await expect
+    .poll(() =>
+      scroller.evaluate((element) =>
+        Math.round(element.scrollLeft / element.clientWidth),
+      ),
+    )
+    .toBe(photoCount);
+});
+
+test('photo carousel marks the active photo with a discrete progress segment', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  const carousel = page.getByLabel('Matt and Alison photos');
+  const progressSegments = carousel.locator('.photo-progress-segment');
+  const photoCount = await carousel.locator('.photo-progress-segment').count();
+
+  await expect(progressSegments).toHaveCount(photoCount);
+  await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
+  await expect(progressSegments.nth(1)).not.toHaveAttribute('data-active');
+  for (let index = 0; index < 4; index += 1) {
+    await carousel
+      .getByRole('button', { name: 'Show next photo' })
+      .click({ force: true });
+  }
+  await expect(progressSegments.nth(0)).not.toHaveAttribute('data-active');
+  await expect(progressSegments.nth(4)).toHaveAttribute('data-active', 'true');
+
+  const scroller = carousel.getByTestId('photo-carousel-scroller');
+  await scroller.evaluate((element, count) => {
+    element.style.scrollBehavior = 'auto';
+    element.scrollLeft = element.clientWidth * count;
+    element.style.removeProperty('scroll-behavior');
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }, photoCount);
+  await expect(
+    carousel.getByRole('status', { name: 'Photo position' }),
+  ).toHaveText(`${photoCount} of ${photoCount}`);
+  await expect(progressSegments.nth(4)).not.toHaveAttribute('data-active');
+  await expect(progressSegments.nth(photoCount - 1)).toHaveAttribute(
+    'data-active',
+    'true',
+  );
+});
+
+test('story carousels retain one progress segment per photo', async ({ page }) => {
+  await page.goto('/our-story');
+
+  const carousel = page.getByLabel('It started at ASU photos');
+  const progressSegments = carousel.locator('.photo-progress-segment');
+  const scroller = carousel.getByTestId('photo-carousel-scroller');
+
+  await expect(progressSegments).toHaveCount(4);
+  await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
+  await scroller.evaluate((element) => {
+    element.scrollLeft = element.clientWidth * 4;
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+  await expect(
+    carousel.getByRole('status', { name: 'Photo position' }),
+  ).toHaveText('4 of 4');
+  await expect(progressSegments.nth(0)).not.toHaveAttribute('data-active');
+  await expect(progressSegments.nth(3)).toHaveAttribute('data-active', 'true');
+});
+
+test('portrait carousel photos fill the frame on small screens', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/our-story');
+
+  const carousel = page.getByLabel('It started at ASU photos');
+  const frame = carousel.locator('.photo-frame-shell');
+  const image = carousel.getByAltText(
+    'Alison and Matt dancing together outside an ASU building',
+  );
+
+  await image.scrollIntoViewIfNeeded();
+  const [frameBox, imageBox] = await Promise.all([
+    frame.boundingBox(),
+    image.boundingBox(),
+  ]);
+
+  expect(frameBox).not.toBeNull();
+  expect(imageBox).not.toBeNull();
+  expect(imageBox!.width).toBeCloseTo(frameBox!.width - 2, 0);
 });
 
 test('photo carousel keeps its caption and pagination contained', async ({
@@ -1273,6 +1464,33 @@ test('rsvp entry keeps footer pinned to the viewport bottom on tall screens', as
   expect(footerBounds!.y + footerBounds!.height).toBeGreaterThanOrEqual(
     viewport!.height - pixelTolerance,
   );
+});
+
+test('small-screen RSVP opens at the top with the invitation code in view', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/rsvp');
+
+  const headerBounds = await page.getByRole('banner').boundingBox();
+  const headingBounds = await page
+    .getByRole('heading', { name: 'Enter your invitation code' })
+    .boundingBox();
+  const inputBounds = await page.getByLabel('Invitation code').boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(headerBounds).not.toBeNull();
+  expect(headingBounds).not.toBeNull();
+  expect(inputBounds).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(headingBounds!.y).toBeGreaterThanOrEqual(
+    headerBounds!.y + headerBounds!.height,
+  );
+  expect(inputBounds!.y + inputBounds!.height).toBeLessThanOrEqual(
+    viewport!.height,
+  );
+  await expect(page.getByLabel('Invitation code')).toBeVisible();
 });
 
 test('mobile footer links stay aligned across public, RSVP, and admin routes', async ({

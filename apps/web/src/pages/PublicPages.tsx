@@ -12,7 +12,7 @@ import {
   KeyRound,
   MapPin,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import { ResponsiveImage } from '../components/ResponsiveImage.js';
 import { getNativeMapUrl } from '../nativeMapUrl.js';
@@ -22,6 +22,7 @@ import styles from './PublicPages.module.css';
 const PHOTO_WHEEL_SCROLL_THRESHOLD = 90;
 const PHOTO_WHEEL_NAVIGATION_INTERVAL_MS = 450;
 const PHOTO_CONTROLS_FOCUS_DURATION_MS = 500;
+const PHOTO_SCROLL_SETTLE_DELAY_MS = 120;
 
 export function HomePage() {
   const calendarHref = useMemo(() => {
@@ -620,21 +621,42 @@ function PhotoCarousel({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | undefined>(undefined);
+  const scrollSettleTimerRef = useRef<number | undefined>(undefined);
   const programmaticScrollTargetRef = useRef<number | undefined>(undefined);
   const wheelScrollRef = useRef({ deltaX: 0, lastNavigationAt: 0 });
   const activePhoto = photos[activeIndex];
-  const photoProgress = ((activeIndex + 1) / photos.length) * 100;
+  const carouselPhotos = hasMultiplePhotos
+    ? [photos[photos.length - 1], ...photos, photos[0]]
+    : photos;
+
+  const resetToSlide = (slideIndex: number) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    scroller.style.scrollBehavior = 'auto';
+    scroller.scrollLeft = scroller.clientWidth * slideIndex;
+    window.requestAnimationFrame(() =>
+      scroller.style.removeProperty('scroll-behavior'),
+    );
+  };
+
+  useLayoutEffect(() => {
+    if (hasMultiplePhotos) resetToSlide(1);
+  }, [hasMultiplePhotos, photos.length]);
 
   useEffect(
     () => () => {
       if (scrollFrameRef.current !== undefined) {
         window.cancelAnimationFrame(scrollFrameRef.current);
       }
+      if (scrollSettleTimerRef.current !== undefined) {
+        window.clearTimeout(scrollSettleTimerRef.current);
+      }
     },
     [],
   );
 
-  const syncActivePhoto = () => {
+  const syncActivePhoto = (settled = false) => {
     const scroller = scrollerRef.current;
     if (!scroller) {
       return;
@@ -645,14 +667,31 @@ function PhotoCarousel({
       return;
     }
 
+    const slideIndex = Math.round(scroller.scrollLeft / slideWidth);
+    const isBoundaryClone =
+      hasMultiplePhotos && (slideIndex === 0 || slideIndex === photos.length + 1);
+    if (isBoundaryClone) {
+      if (!settled) return;
+
+      if (slideIndex === 0) {
+        setActiveIndex(photos.length - 1);
+        resetToSlide(photos.length);
+      } else {
+        setActiveIndex(0);
+        resetToSlide(1);
+      }
+      return;
+    }
+
     const nextIndex = Math.min(
       photos.length - 1,
-      Math.max(0, Math.round(scroller.scrollLeft / slideWidth)),
+      Math.max(0, hasMultiplePhotos ? slideIndex - 1 : slideIndex),
     );
     const programmaticScrollTarget = programmaticScrollTargetRef.current;
     if (
       programmaticScrollTarget !== undefined &&
-      nextIndex !== programmaticScrollTarget
+      slideIndex !== programmaticScrollTarget &&
+      !settled
     ) {
       return;
     }
@@ -668,14 +707,36 @@ function PhotoCarousel({
       scrollFrameRef.current = undefined;
       syncActivePhoto();
     });
+    if (scrollSettleTimerRef.current !== undefined) {
+      window.clearTimeout(scrollSettleTimerRef.current);
+    }
+    scrollSettleTimerRef.current = window.setTimeout(() => {
+      scrollSettleTimerRef.current = undefined;
+      syncActivePhoto(true);
+    }, PHOTO_SCROLL_SETTLE_DELAY_MS);
+  };
+
+  const handlePhotoScrollEnd = () => {
+    if (scrollSettleTimerRef.current !== undefined) {
+      window.clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = undefined;
+    }
+    syncActivePhoto(true);
   };
 
   const showPhoto = (index: number) => {
     const nextIndex = (index + photos.length) % photos.length;
-    const slide = trackRef.current?.children.item(nextIndex) as
+    const targetSlideIndex = hasMultiplePhotos
+      ? index < 0
+        ? 0
+        : index >= photos.length
+          ? photos.length + 1
+          : nextIndex + 1
+      : nextIndex;
+    const slide = trackRef.current?.children.item(targetSlideIndex) as
       HTMLElement | null | undefined;
 
-    programmaticScrollTargetRef.current = nextIndex;
+    programmaticScrollTargetRef.current = targetSlideIndex;
     setActiveIndex(nextIndex);
     slide?.scrollIntoView({
       behavior: 'smooth',
@@ -752,25 +813,35 @@ function PhotoCarousel({
           className={scoped(styles, 'photo-frame')}
           data-testid="photo-carousel-scroller"
           onScroll={handlePhotoScroll}
+          onScrollEnd={handlePhotoScrollEnd}
         >
           <div ref={trackRef} className={scoped(styles, 'photo-track')}>
-            {photos.map((photo, index) => (
-              <figure
-                className={scoped(styles, 'photo-slide')}
-                aria-hidden={index === activeIndex ? 'false' : 'true'}
-                key={`${photo.src}-${photo.caption ?? photo.alt}`}
-              >
-                <ResponsiveImage
-                  src={photo.src}
-                  alt={photo.alt}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  sizes="(min-width: 980px) 58vw, 100vw"
-                  objectPosition={photo.objectPosition}
-                  style={{ objectFit: photo.objectFit ?? 'cover' }}
-                />
-              </figure>
-            ))}
+            {carouselPhotos.map((photo, index) => {
+              const photoIndex = hasMultiplePhotos
+                ? (index - 1 + photos.length) % photos.length
+                : index;
+              const isDuplicate =
+                hasMultiplePhotos &&
+                (index === 0 || index === carouselPhotos.length - 1);
+
+              return (
+                <figure
+                  className={scoped(styles, 'photo-slide')}
+                  aria-hidden={isDuplicate || photoIndex !== activeIndex ? 'true' : 'false'}
+                  key={`${index}-${photo.src}-${photo.caption ?? photo.alt}`}
+                >
+                  <ResponsiveImage
+                    src={photo.src}
+                    alt={photo.alt}
+                    loading={photoIndex === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    sizes="(min-width: 980px) 58vw, 100vw"
+                    objectPosition={photo.objectPosition}
+                    style={{ objectFit: photo.objectFit ?? 'cover' }}
+                  />
+                </figure>
+              );
+            })}
           </div>
         </div>
         {hasMultiplePhotos && (
@@ -820,10 +891,13 @@ function PhotoCarousel({
                 className={scoped(styles, 'photo-progress')}
                 aria-hidden="true"
               >
-                <div
-                  className={scoped(styles, 'photo-progress-fill')}
-                  style={{ width: `${photoProgress}%` }}
-                />
+                {photos.map((photo, index) => (
+                  <span
+                    className={scoped(styles, 'photo-progress-segment')}
+                    data-active={index === activeIndex ? 'true' : undefined}
+                    key={photo.src}
+                  />
+                ))}
               </div>
             </div>
           )}
