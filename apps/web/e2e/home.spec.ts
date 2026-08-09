@@ -1372,15 +1372,37 @@ test('privacy and terms pages render public compliance content', async ({
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
   await expect(
     page.getByText(
-      'All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties.',
+      'We do not sell guest information, and we keep invitation links and household details private to the invited household.',
     ),
   ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Matt & Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /Twilio|text messaging|text messages|Reply HELP for help|STOP to opt out/i,
+    ),
+  ).toHaveCount(0);
 
   await page.goto('/terms');
   await expect(page.getByRole('heading', { name: 'Terms' })).toBeVisible();
   await expect(
-    page.getByText('Reply HELP for help or STOP to opt out.'),
+    page.getByText(
+      'This website and its private RSVP flow are provided for invited guests to review wedding details and submit or update responses.',
+    ),
   ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Matt & Alison Wedding is operated by sole proprietor Matthew Bulger. Contact: contact@matt-alison.com.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /Twilio|text messaging|text messages|Reply HELP for help|STOP to opt out/i,
+    ),
+  ).toHaveCount(0);
 });
 
 
