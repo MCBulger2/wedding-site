@@ -23,7 +23,6 @@ const outputRoot = path.join(webRoot, outputDir);
 const metadataPath = path.join(webRoot, metadataOutput);
 const backgroundCssPath = path.join(webRoot, backgroundCssOutput);
 const cacheManifestPath = path.join(outputRoot, '.responsive-image-cache.json');
-const repoRoot = path.resolve(webRoot, '..', '..');
 const generationStartedAt = Date.now();
 const variantConcurrency =
   parsePositiveInt(process.env.RESPONSIVE_IMAGE_VARIANT_CONCURRENCY) ??
@@ -81,7 +80,9 @@ const generatedFiles = [];
 for (const image of responsiveImages) {
   const sourcePath = path.join(sourceRoot, image.source);
   const baseName = path.basename(image.source, path.extname(image.source));
-  const metadata = await sharp(sourcePath).metadata();
+  const sourceBuffer = await fs.readFile(sourcePath);
+  const sourceImage = sharp(sourceBuffer);
+  const metadata = await sourceImage.metadata();
 
   if (!metadata.width || !metadata.height) {
     throw new Error(`Could not read dimensions for ${image.source}`);
@@ -105,7 +106,8 @@ for (const image of responsiveImages) {
       async (width) => {
         const outputFileName = `${baseName}-${width}.${format.extension}`;
         const outputPath = path.join(outputRoot, outputFileName);
-        const pipeline = sharp(sourcePath)
+        const pipeline = sourceImage
+          .clone()
           .rotate()
           .resize({ width, withoutEnlargement: true });
 

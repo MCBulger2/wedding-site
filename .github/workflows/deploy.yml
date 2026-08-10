@@ -121,6 +121,8 @@ jobs:
     needs: resolve-deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
     steps:
       - uses: actions/checkout@v7
         with:
@@ -188,6 +190,7 @@ jobs:
     env:
       APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
       API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
       AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
@@ -257,6 +260,7 @@ jobs:
     env:
       APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
       API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
       AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
