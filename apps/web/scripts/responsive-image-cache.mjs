@@ -17,6 +17,7 @@ export async function computeResponsiveImageInputHash({
       hash,
       label: `source:${normalizeRelativePath(sourceFile)}`,
       filePath: path.join(sourceRoot, sourceFile),
+      hashMode: 'metadata',
     });
   }
 
@@ -27,6 +28,7 @@ export async function computeResponsiveImageInputHash({
       hash,
       label: `extra:${extraFile.label}`,
       filePath: extraFile.filePath,
+      hashMode: 'content',
     });
   }
 
@@ -120,10 +122,17 @@ export async function writeResponsiveImageCacheManifest({
   );
 }
 
-async function updateHashWithFile({ hash, label, filePath }) {
+async function updateHashWithFile({ hash, label, filePath, hashMode }) {
   hash.update(label);
   hash.update('\0');
-  hash.update(await fs.readFile(filePath));
+
+  if (hashMode === 'metadata') {
+    const stat = await fs.stat(filePath);
+    hash.update(`${stat.size}:${Math.trunc(stat.mtimeMs)}`);
+  } else {
+    hash.update(await fs.readFile(filePath));
+  }
+
   hash.update('\0');
 }
 
