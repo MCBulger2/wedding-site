@@ -89,8 +89,13 @@ for (const image of responsiveImages) {
 
   const generatedFormats = [];
   for (const format of formats) {
+    const targetWidths = selectTargetWidths({
+      widths,
+      formatExtension: format.extension,
+      backgroundWidths: image.backgroundWidths,
+    });
     const variants = [];
-    for (const width of widths) {
+    for (const width of targetWidths) {
       const outputFileName = `${baseName}-${width}.${format.extension}`;
       const outputPath = path.join(outputRoot, outputFileName);
       const pipeline = sharp(sourcePath)
@@ -185,6 +190,20 @@ function findNearestVariant(variants, width) {
     variants.find((variant) => variant.width >= width) ??
     variants[variants.length - 1]
   );
+}
+
+function selectTargetWidths({ widths, formatExtension, backgroundWidths }) {
+  if (formatExtension !== 'jpg') {
+    return widths;
+  }
+
+  const targetWidths = new Set([Math.max(...widths)]);
+  if (backgroundWidths) {
+    targetWidths.add(backgroundWidths.oneX);
+    targetWidths.add(backgroundWidths.twoX);
+  }
+
+  return widths.filter((width) => targetWidths.has(width));
 }
 
 function buildMetadata(entries) {
