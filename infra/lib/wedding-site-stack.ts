@@ -1038,12 +1038,17 @@ export class WeddingSiteStack extends Stack {
     }
 
     new s3deploy.BucketDeployment(this, 'FrontendDeployment', {
-      sources: [s3deploy.Source.asset(path.join(repoRoot, 'apps/web/dist'))],
+      sources: [
+        s3deploy.Source.asset(path.join(repoRoot, 'apps/web/dist'), {
+          exclude: ['**/*.map'],
+        }),
+      ],
       destinationBucket: siteBucket,
       distribution,
       // Invalidate only SPA shell entry points; hashed assets roll forward by URL.
       distributionPaths: ['/', '/index.html', '/site.webmanifest', '/robots.txt'],
-      prune: true,
+      // Keep production clean; staging favors iteration speed.
+      prune: props.envName === 'production',
     });
 
     if (props.apiDomainName && hostedZone) {

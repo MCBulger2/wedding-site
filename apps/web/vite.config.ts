@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
     build: {
       cssMinify: 'esbuild',
       minify: 'esbuild',
-      sourcemap: 'hidden',
+      sourcemap: false,
     },
     resolve: {
       alias: {
