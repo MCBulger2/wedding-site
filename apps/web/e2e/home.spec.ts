@@ -1210,16 +1210,22 @@ test('photo carousel marks the active photo with a discrete progress segment', a
   await page.goto('/');
 
   const carousel = page.getByLabel('Matt and Alison photos');
+  const position = carousel.getByRole('status', { name: 'Photo position' });
   const progressSegments = carousel.locator('.photo-progress-segment');
   const photoCount = await carousel.locator('.photo-progress-segment').count();
 
   await expect(progressSegments).toHaveCount(photoCount);
   await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
   await expect(progressSegments.nth(1)).not.toHaveAttribute('data-active');
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 1; index <= 4; index += 1) {
     await carousel
       .getByRole('button', { name: 'Show next photo' })
-      .click({ force: true });
+      .click();
+    await expect(position).toHaveText(`${index + 1} of ${photoCount}`);
+    await expect(progressSegments.nth(index)).toHaveAttribute(
+      'data-active',
+      'true',
+    );
   }
   await expect(progressSegments.nth(0)).not.toHaveAttribute('data-active');
   await expect(progressSegments.nth(4)).toHaveAttribute('data-active', 'true');
@@ -1232,7 +1238,7 @@ test('photo carousel marks the active photo with a discrete progress segment', a
     element.dispatchEvent(new Event('scroll', { bubbles: true }));
   }, photoCount);
   await expect(
-    carousel.getByRole('status', { name: 'Photo position' }),
+    position,
   ).toHaveText(`${photoCount} of ${photoCount}`);
   await expect(progressSegments.nth(4)).not.toHaveAttribute('data-active');
   await expect(progressSegments.nth(photoCount - 1)).toHaveAttribute(

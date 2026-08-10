@@ -143,7 +143,11 @@ for (const image of responsiveImages) {
     key: image.key,
     width: fallback.width,
     height: fallback.height,
-    fallback,
+    fallback: {
+      src: fallback.src,
+      width: fallback.width,
+      height: fallback.height,
+    },
     sources: generatedFormats
       .filter((format) => format.extension !== 'jpg')
       .map((format) => ({
