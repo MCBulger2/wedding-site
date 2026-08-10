@@ -421,6 +421,24 @@ describe('WeddingSiteStack infrastructure', () => {
     });
   });
 
+  it('does not block production deployments on stale asset cleanup or invalidation completion', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    const frontendDeployment = templateResourcesOfType(
+      template,
+      'Custom::CDKBucketDeployment',
+    )[0];
+
+    expect(frontendDeployment.Properties?.Prune).toBe(false);
+    expect(frontendDeployment.Properties?.WaitForDistributionInvalidation).toBe(false);
+  });
+
   it('creates nested auth domains after the frontend alias record exists', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },

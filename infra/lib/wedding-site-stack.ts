@@ -1047,8 +1047,8 @@ export class WeddingSiteStack extends Stack {
       distribution,
       // Invalidate only SPA shell entry points; hashed assets roll forward by URL.
       distributionPaths: ['/', '/index.html', '/site.webmanifest', '/robots.txt'],
-      // Keep production clean; staging favors iteration speed.
-      prune: props.envName === 'production',
+      prune: false,
+      waitForDistributionInvalidation: false,
     });
 
     if (props.apiDomainName && hostedZone) {
