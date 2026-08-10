@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -22,7 +23,10 @@ const outputRoot = path.join(webRoot, outputDir);
 const metadataPath = path.join(webRoot, metadataOutput);
 const backgroundCssPath = path.join(webRoot, backgroundCssOutput);
 const cacheManifestPath = path.join(outputRoot, '.responsive-image-cache.json');
-const repoRoot = path.resolve(webRoot, '..', '..');
+const generationStartedAt = Date.now();
+const variantConcurrency =
+  parsePositiveInt(process.env.RESPONSIVE_IMAGE_VARIANT_CONCURRENCY) ??
+  Math.max(2, Math.min(8, Math.floor((os.availableParallelism?.() ?? 4) / 2)));
 
 const inputHash = await computeResponsiveImageInputHash({
   sourceRoot,
@@ -45,8 +49,8 @@ const inputHash = await computeResponsiveImageInputHash({
       ),
     },
     {
-      label: 'package-lock.json',
-      filePath: path.join(repoRoot, 'package-lock.json'),
+      label: 'apps/web/package.json',
+      filePath: path.join(webRoot, 'package.json'),
     },
   ],
 });
@@ -76,7 +80,9 @@ const generatedFiles = [];
 for (const image of responsiveImages) {
   const sourcePath = path.join(sourceRoot, image.source);
   const baseName = path.basename(image.source, path.extname(image.source));
-  const metadata = await sharp(sourcePath).metadata();
+  const sourceBuffer = await fs.readFile(sourcePath);
+  const sourceImage = sharp(sourceBuffer);
+  const metadata = await sourceImage.metadata();
 
   if (!metadata.width || !metadata.height) {
     throw new Error(`Could not read dimensions for ${image.source}`);
@@ -94,34 +100,36 @@ for (const image of responsiveImages) {
       formatExtension: format.extension,
       backgroundWidths: image.backgroundWidths,
     });
-    const variants = [];
-    for (const width of targetWidths) {
-      const outputFileName = `${baseName}-${width}.${format.extension}`;
-      const outputPath = path.join(outputRoot, outputFileName);
-      const pipeline = sharp(sourcePath)
-        .rotate()
-        .resize({ width, withoutEnlargement: true });
+    const variants = await runWithConcurrencyLimit(
+      targetWidths,
+      variantConcurrency,
+      async (width) => {
+        const outputFileName = `${baseName}-${width}.${format.extension}`;
+        const outputPath = path.join(outputRoot, outputFileName);
+        const pipeline = sourceImage
+          .clone()
+          .rotate()
+          .resize({ width, withoutEnlargement: true });
 
-      if (format.extension === 'avif') {
-        await pipeline.avif({ quality: format.quality }).toFile(outputPath);
-      } else if (format.extension === 'webp') {
-        await pipeline.webp({ quality: format.quality }).toFile(outputPath);
-      } else {
-        await pipeline
-          .jpeg({ quality: format.quality, mozjpeg: true })
-          .toFile(outputPath);
-      }
-      generatedFiles.push(outputFileName);
+        if (format.extension === 'avif') {
+          await pipeline.avif({ quality: format.quality }).toFile(outputPath);
+        } else if (format.extension === 'webp') {
+          await pipeline.webp({ quality: format.quality }).toFile(outputPath);
+        } else {
+          await pipeline
+            .jpeg({ quality: format.quality, mozjpeg: true })
+            .toFile(outputPath);
+        }
 
-      const outputMetadata = await sharp(outputPath).metadata();
-      variants.push({
-        src: `/images/${outputFileName}`,
-        width: outputMetadata.width ?? width,
-        height:
-          outputMetadata.height ??
-          Math.round((width * metadata.height) / metadata.width),
-      });
-    }
+        return {
+          src: `/images/${outputFileName}`,
+          width,
+          height: Math.round((width * metadata.height) / metadata.width),
+          outputFileName,
+        };
+      },
+    );
+    generatedFiles.push(...variants.map((variant) => variant.outputFileName));
     generatedFormats.push({ ...format, variants });
   }
 
@@ -135,7 +143,11 @@ for (const image of responsiveImages) {
     key: image.key,
     width: fallback.width,
     height: fallback.height,
-    fallback,
+    fallback: {
+      src: fallback.src,
+      width: fallback.width,
+      height: fallback.height,
+    },
     sources: generatedFormats
       .filter((format) => format.extension !== 'jpg')
       .map((format) => ({
@@ -165,8 +177,43 @@ await writeResponsiveImageCacheManifest({
 });
 
 console.log(
-  `Generated ${manifestEntries.length} responsive image manifests in ${outputDir}`,
+  `Generated ${manifestEntries.length} responsive image manifests in ${outputDir} (${generatedFiles.length} variants in ${Math.round((Date.now() - generationStartedAt) / 1000)}s using concurrency ${variantConcurrency})`,
 );
+
+function parsePositiveInt(value) {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+async function runWithConcurrencyLimit(items, limit, worker) {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array(items.length);
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await worker(items[index], index);
+      }
+    }),
+  );
+
+  return results;
+}
 
 function buildBackgroundDeclaration(image, generatedFormats) {
   const candidates = [];

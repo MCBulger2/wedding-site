@@ -15,6 +15,8 @@ jobs:
   ci-verify:
     name: ci-verify
     runs-on: ubuntu-latest
+    env:
+      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -28,7 +30,7 @@ jobs:
           path: |
             apps/web/public/images
             apps/web/src/generated
-          key: ${{ runner.os }}-responsive-images-v2-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'package-lock.json') }}
+          key: ${{ runner.os }}-responsive-images-v3-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'apps/web/package.json') }}
       - run: npm run images:generate -w apps/web
       - run: npm run lint
       - run: npm run typecheck
