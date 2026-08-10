@@ -121,8 +121,6 @@ jobs:
     needs: resolve-deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
     steps:
       - uses: actions/checkout@v7
         with:
@@ -132,14 +130,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - name: Cache responsive images
-        uses: actions/cache@v6
-        with:
-          path: |
-            apps/web/public/images
-            apps/web/src/generated
-          key: ${{ runner.os }}-responsive-images-v3-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'apps/web/package.json') }}
-      - run: npm run images:generate -w apps/web
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:ci
@@ -190,7 +180,6 @@ jobs:
     env:
       APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
       API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
       AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
@@ -218,13 +207,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - name: Cache responsive images
-        uses: actions/cache@v6
-        with:
-          path: |
-            apps/web/public/images
-            apps/web/src/generated
-          key: ${{ runner.os }}-responsive-images-v3-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'apps/web/package.json') }}
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -260,7 +242,6 @@ jobs:
     env:
       APP_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-      RESPONSIVE_IMAGE_VARIANT_CONCURRENCY: 4
       API_DOMAIN_NAME: ${{ vars.API_DOMAIN_NAME }}
       AUTH_DOMAIN_NAME: ${{ vars.AUTH_DOMAIN_NAME }}
       FRONTEND_DOMAIN_NAME: ${{ vars.FRONTEND_DOMAIN_NAME }}
@@ -288,13 +269,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - name: Cache responsive images
-        uses: actions/cache@v6
-        with:
-          path: |
-            apps/web/public/images
-            apps/web/src/generated
-          key: ${{ runner.os }}-responsive-images-v3-${{ hashFiles('apps/web/image-sources/**', 'apps/web/scripts/generate-responsive-images.mjs', 'apps/web/scripts/responsive-image-cache.mjs', 'apps/web/scripts/responsive-image-config.mjs', 'apps/web/package.json') }}
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
