@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run images:check && npm run images:generate && tsc -p tsconfig.json && vite build",
+    "build": "npm run images:check && tsc -p tsconfig.json && vite build",
     "dev": "vite",
     "images:check": "node scripts/check-responsive-images-untracked.mjs",
     "images:generate": "node scripts/generate-responsive-images.mjs",
