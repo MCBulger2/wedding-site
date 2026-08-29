@@ -1028,6 +1028,11 @@ export class WeddingSiteStack extends Stack {
       { path: '/api/admin/rsvps/export', method: apigwv2.HttpMethod.GET },
       { path: '/api/admin/invitations/export', method: apigwv2.HttpMethod.GET },
       { path: '/api/admin/invitations/labels', method: apigwv2.HttpMethod.GET },
+      { path: '/api/admin/addresses/labels', method: apigwv2.HttpMethod.GET },
+      {
+        path: '/api/admin/return-addresses/labels',
+        method: apigwv2.HttpMethod.GET,
+      },
       { path: '/api/admin/invitations/email', method: apigwv2.HttpMethod.POST },
     ]) {
       api.addRoutes({

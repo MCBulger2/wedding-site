@@ -113,7 +113,15 @@ const weddingEvent: CalendarEvent = {
   description: 'Ceremony, dinner, and reception for Matt and Alison.',
 };
 
-const hotels: HotelBlock[] = [];
+const hotels: HotelBlock[] = [
+  {
+    name: 'Residence Inn by Marriott Phoenix Mesa East',
+    address: '10243 East Hampton Avenue, Mesa, AZ 85209',
+    bookingUrl:
+      'https://app.marriott.com/resview2?id=1786641196087&key=GRP&app=resvlink',
+    publiclyShareable: true,
+  },
+];
 
 const googleMapsSearch = (query: string) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
