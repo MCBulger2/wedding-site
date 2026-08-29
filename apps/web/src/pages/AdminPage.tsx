@@ -1,4 +1,4 @@
-import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
+import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type MemberRsvp, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
@@ -369,6 +369,34 @@ export function AdminHouseholdsTable({
           >
             {row.original.household.rsvpStatus.replace('_', ' ')}
           </span>
+        ),
+      },
+      {
+        id: 'wedding',
+        header: 'Wedding',
+        cell: ({ row }) => (
+          <MemberResponseList
+            record={row.original}
+            response={(member) =>
+              member ? summarizeMemberRsvp(member.attending) : 'Not answered'
+            }
+          />
+        ),
+      },
+      {
+        id: 'rehearsalDinner',
+        header: 'Rehearsal dinner',
+        cell: ({ row }) => (
+          <MemberResponseList
+            record={row.original}
+            response={(member, householdMember) =>
+              !householdMember.rehearsalDinnerInvited
+                ? 'Not invited'
+                : member?.rehearsalDinnerAttending === undefined
+                  ? 'Not answered'
+                  : summarizeMemberRsvp(member.rehearsalDinnerAttending)
+            }
+          />
         ),
       },
       {
@@ -954,6 +982,8 @@ export function AdminPage() {
     'all' | Household['rsvpStatus']
   >('all');
   const [showArchived, setShowArchived] = useState(false);
+  const [showRehearsalDinnerInvitees, setShowRehearsalDinnerInvitees] =
+    useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<HouseholdFormState>(emptyHouseholdForm());
   const [invitationDetails, setInvitationDetails] = useState<
@@ -1536,7 +1566,10 @@ export function AdminPage() {
         .join(' ')
         .toLowerCase()
         .includes(search.trim().toLowerCase());
-    return matchesArchived && matchesStatus && matchesSearch;
+    const matchesRehearsalDinner =
+      !showRehearsalDinnerInvitees ||
+      record.household.members.some((member) => member.rehearsalDinnerInvited);
+    return matchesArchived && matchesStatus && matchesSearch && matchesRehearsalDinner;
   });
 
   const totals = visibleHouseholds.reduce(
@@ -1871,6 +1904,15 @@ export function AdminPage() {
                 <option value="partial">Partial</option>
                 <option value="declined">Declined</option>
               </select>
+            </label>
+            <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
+              <input
+                aria-label="Show rehearsal dinner invitees"
+                type="checkbox"
+                checked={showRehearsalDinnerInvitees}
+                onChange={(event) => setShowRehearsalDinnerInvitees(event.target.checked)}
+              />
+              Show rehearsal dinner invitees
             </label>
             <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
               <input
@@ -2325,9 +2367,11 @@ export function AdminPage() {
                         <div key={member.id} className={scoped(styles, 'member-row')}>
                           <strong>{formatMemberName(member)}</strong>
                           <span>
-                            {memberRsvp
-                              ? summarizeMemberRsvp(memberRsvp.attending)
-                              : 'Awaiting RSVP'}
+                            Wedding: {memberRsvp ? summarizeMemberRsvp(memberRsvp.attending) : 'Not answered'} · Dinner: {!member.rehearsalDinnerInvited
+                              ? 'Not invited'
+                              : memberRsvp?.rehearsalDinnerAttending === undefined
+                                ? 'Not answered'
+                                : summarizeMemberRsvp(memberRsvp.rehearsalDinnerAttending)}
                           </span>
                         </div>
                       );
@@ -2677,6 +2721,24 @@ function formatMemberName(member: {
 
 function summarizeMemberRsvp(attending: boolean): string {
   return attending ? 'Attending' : 'Declined';
+}
+
+function MemberResponseList({
+  record,
+  response,
+}: {
+  record: AdminHouseholdRecord;
+  response: (member: MemberRsvp | undefined, householdMember: Household['members'][number]) => string;
+}) {
+  return (
+    <div className={scoped(styles, 'table-count-cell')}>
+      {record.household.members.map((householdMember) => (
+        <span key={householdMember.id}>
+          {formatMemberName(householdMember)}: {response(record.rsvp?.members.find((member) => member.memberId === householdMember.id), householdMember)}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 async function openQrCodeModalForInvite(

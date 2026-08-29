@@ -180,4 +180,35 @@ describe('AdminPage admin notifications', () => {
       ),
     );
   });
+
+  it('filters households with rehearsal dinner invitees and shows both member responses', async () => {
+    const invitedRecord: AdminHouseholdRecord = {
+      ...householdRecord,
+      household: {
+        ...householdRecord.household,
+        householdId: 'household-2',
+        displayName: 'Dinner Family',
+        members: [{ ...householdRecord.household.members[0], rehearsalDinnerInvited: true }],
+      },
+      rsvp: {
+        members: [{ memberId: 'member-1', attending: true, rehearsalDinnerAttending: false, mealChoice: 'buffet', dietaryNotes: '' }],
+        plusOnes: [], notes: '', accessibilityNotes: '',
+        submittedAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    };
+    fetchAdminAuthConfig.mockResolvedValue({ userPoolId: 'pool', userPoolClientId: 'client', userPoolDomain: 'https://auth.example.com', redirectUri: 'http://localhost/admin', logoutUri: 'http://localhost/' });
+    completeAdminLogin.mockResolvedValue(null);
+    loadAdminSession.mockReturnValue({ accessToken: 'admin-token', idToken: 'id-token', expiresAt: Date.now() + 60_000 });
+    fetchHouseholds.mockResolvedValue({ households: [householdRecord, invitedRecord] });
+
+    render(<AdminPage />);
+
+    await screen.findAllByText('Dinner Family');
+    expect(screen.getByRole('columnheader', { name: 'Wedding' })).not.toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Rehearsal dinner' })).not.toBeNull();
+    expect(screen.getAllByText(/Not invited/)).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText('Show rehearsal dinner invitees'));
+    expect(screen.queryByText('The Example Family')).toBeNull();
+    expect(screen.getAllByText('Dinner Family')).toHaveLength(2);
+  });
 });

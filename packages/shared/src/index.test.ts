@@ -69,6 +69,25 @@ describe('Public SMS subscription schemas', () => {
 });
 
 describe('RsvpUpdateSchema', () => {
+  it('preserves an optional rehearsal dinner response for legacy RSVPs', () => {
+    const result = RsvpUpdateSchema.safeParse({
+      members: [
+        {
+          memberId: 'm1',
+          attending: true,
+          mealChoice: 'buffet',
+          rehearsalDinnerAttending: true,
+        },
+      ],
+      plusOnes: [],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.members[0].rehearsalDinnerAttending).toBe(true);
+    }
+  });
+
   it('requires attending guests to have an active meal status', () => {
     const result = RsvpUpdateSchema.safeParse({
       members: [{ memberId: 'm1', attending: true, mealChoice: 'none' }],
