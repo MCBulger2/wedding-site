@@ -64,8 +64,12 @@ describe('HouseholdCardActions', () => {
       ctrlKey: false,
     });
     expect(screen.getByRole('menu')).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: /email invitation/i })).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: /view invitation/i })).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: /email invitation/i }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: /view invitation/i }),
+    ).not.toBeNull();
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
@@ -137,7 +141,8 @@ describe('App routes', () => {
     ['wheel input', () => window.dispatchEvent(new WheelEvent('wheel'))],
     [
       'navigation key input',
-      () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown' })),
+      () =>
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown' })),
     ],
   ])('cancels delayed hash correction after %s', (_label, signalIntent) => {
     vi.useFakeTimers();
@@ -196,10 +201,14 @@ describe('App routes', () => {
     );
 
     expect(
-      screen.getByRole('link', { name: 'Our Story' }).getAttribute('aria-current'),
+      screen
+        .getByRole('link', { name: 'Our Story' })
+        .getAttribute('aria-current'),
     ).toBe('page');
     expect(
-      screen.getByRole('link', { name: 'Registry' }).getAttribute('aria-current'),
+      screen
+        .getByRole('link', { name: 'Registry' })
+        .getAttribute('aria-current'),
     ).toBeNull();
   });
 
@@ -212,9 +221,7 @@ describe('App routes', () => {
       </ThemeProvider>,
     );
 
-    expect(
-      screen.getByRole('heading', { name: 'Terms' }),
-    ).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Terms' })).not.toBeNull();
     expect(document.body.textContent).not.toMatch(/sms|text updates|Twilio/i);
   });
 
@@ -227,11 +234,11 @@ describe('App routes', () => {
       </ThemeProvider>,
     );
 
+    expect(screen.getByRole('heading', { name: 'Privacy' })).not.toBeNull();
     expect(
-      screen.getByRole('heading', { name: 'Privacy' }),
-    ).not.toBeNull();
-    expect(
-      screen.getByText(/exact-last-name search can return a household RSVP URL/i),
+      screen.getByText(
+        /exact-last-name search can return a household RSVP URL/i,
+      ),
     ).not.toBeNull();
     expect(
       screen.getByText(/URL contains the bearer credential and grants access/i),
@@ -264,7 +271,9 @@ describe('App routes', () => {
   it('replaces legacy routes without obsolete content flashing', async () => {
     const replace = vi.fn();
     render(<LegacyRedirect path="/" replace={replace} />);
-    expect(document.body.textContent).not.toMatch(/proof|example|does not enroll/i);
+    expect(document.body.textContent).not.toMatch(
+      /proof|example|does not enroll/i,
+    );
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
   });
 });
@@ -332,7 +341,15 @@ describe('AdminBulkActionsMenu', () => {
     expect(
       screen.getByRole('menuitem', { name: 'Export QR labels' }),
     ).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Export RSVP CSV' })).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: 'Export address labels' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: 'Export return address labels' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('menuitem', { name: 'Export RSVP CSV' }),
+    ).not.toBeNull();
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Export RSVP CSV' }));
     expect(onExportRsvps).toHaveBeenCalledTimes(1);
@@ -341,7 +358,10 @@ describe('AdminBulkActionsMenu', () => {
 
 describe('AdminPage loading states', () => {
   it('uses a silent loading fallback while admin auth initializes', () => {
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    );
 
     const { container } = render(<AdminPage />);
 
@@ -418,11 +438,19 @@ describe('AdminHouseholdsTable', () => {
       />,
     );
 
-    expect(screen.getByRole('columnheader', { name: 'Household' })).not.toBeNull();
-    expect(screen.getByRole('columnheader', { name: 'Contact' })).not.toBeNull();
+    expect(
+      screen.getByRole('columnheader', { name: 'Household' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('columnheader', { name: 'Contact' }),
+    ).not.toBeNull();
     expect(screen.getByRole('columnheader', { name: 'RSVP' })).not.toBeNull();
-    expect(screen.getByRole('columnheader', { name: 'Invitation' })).not.toBeNull();
-    expect(screen.getByRole('cell', { name: /The Example Family/ })).not.toBeNull();
+    expect(
+      screen.getByRole('columnheader', { name: 'Invitation' }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('cell', { name: /The Example Family/ }),
+    ).not.toBeNull();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Show The Example Family details' }),
