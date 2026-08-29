@@ -60,7 +60,7 @@ The public `POST /api/rsvp/search` route trims and lowercases the submitted term
 
 The current website recovery experience is email-only: the RSVP page exposes an email address field and sends `POST /api/rsvp/recovery`. It does not expose phone or SMS recovery controls. The backend retains a generic accepted response and the existing KMS-backed link recovery so that guest existence is not disclosed.
 
-The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
+The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. `rehearsalDinnerInvited` remains the per-member invitation flag; invited members submit an optional legacy-compatible `rehearsalDinnerAttending` response, which is required for new or revised RSVPs and may be true only when the member attends the wedding. The RSVP event details show the Saturday-before rehearsal and dinner note only to households with an invitee. The admin household table can filter households with at least one invitee and shows each member's wedding and dinner response. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
 
 ### Dormant SMS/Twilio backend
 

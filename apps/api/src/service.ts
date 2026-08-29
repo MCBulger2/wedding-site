@@ -1698,6 +1698,24 @@ export class WeddingService {
       }
     }
 
+    for (const member of rsvp.members) {
+      const householdMember = activeMembers.find(
+        (entry) => entry.id === member.memberId,
+      );
+      if (!householdMember?.rehearsalDinnerInvited) {
+        if (member.rehearsalDinnerAttending !== undefined) {
+          throw new PublicError('Rehearsal dinner attendance is not available', 422);
+        }
+        continue;
+      }
+      if (member.rehearsalDinnerAttending && !member.attending) {
+        throw new PublicError('Rehearsal dinner attendees must attend the wedding', 422);
+      }
+      if (member.attending && member.rehearsalDinnerAttending === undefined) {
+        throw new PublicError('Rehearsal dinner attendance is required', 422);
+      }
+    }
+
     const plusOneAllowedMemberIds = new Set(
       activeMembers
         .filter((member) => member.canBringPlusOne)

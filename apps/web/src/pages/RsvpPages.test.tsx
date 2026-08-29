@@ -648,6 +648,34 @@ describe('RsvpPage', () => {
     });
   });
 
+  it('shows rehearsal details and RSVP only for invited wedding attendees', async () => {
+    const dinnerHousehold = {
+      ...household,
+      members: [
+        { ...household.members[0], rehearsalDinnerInvited: true },
+        household.members[1],
+      ],
+    };
+    fetchRsvp.mockResolvedValue({ household: dinnerHousehold });
+    saveRsvp.mockResolvedValue({ household: dinnerHousehold, rsvp: savedRsvp });
+
+    render(<RsvpPage inviteCode="invite-code-123" />);
+
+    await screen.findByRole('heading', { name: 'The Example Household' });
+    expect(screen.getByText(/Saturday before the wedding/i)).not.toBeNull();
+    expect(screen.getByRole('group', { name: 'Sam Example rehearsal dinner attendance' })).not.toBeNull();
+    expect(screen.queryByRole('group', { name: 'Taylor Example rehearsal dinner attendance' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sam Example rehearsal dinner attending' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sam Example not attending' }));
+    expect(screen.queryByRole('group', { name: 'Sam Example rehearsal dinner attendance' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save RSVP' }));
+
+    await waitFor(() => expect(saveRsvp).toHaveBeenCalled());
+    expect(saveRsvp.mock.calls[0][1].members[0].rehearsalDinnerAttending).toBeUndefined();
+  });
+
   it('uses silent visual feedback while saving the RSVP', async () => {
     fetchRsvp.mockResolvedValue({ household });
     saveRsvp.mockReturnValue(new Promise(() => {}));

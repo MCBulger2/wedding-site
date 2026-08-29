@@ -466,12 +466,14 @@ function createInitialRecords(): AdminHouseholdRecord[] {
           {
             memberId: 'h1-1',
             attending: true,
+            rehearsalDinnerAttending: true,
             mealChoice: 'buffet',
             dietaryNotes: '',
           },
           {
             memberId: 'h1-2',
             attending: false,
+            rehearsalDinnerAttending: false,
             mealChoice: 'none',
             dietaryNotes: '',
           },
