@@ -77,6 +77,10 @@ export function rsvpsToCsv(rows: Array<{ household: Household; rsvp?: StoredRsvp
     'accessibilityNotes',
     'submittedAt',
     'updatedAt',
+    'rehearsalDinnerInvited',
+    'rehearsalDinnerAttending',
+    'plusOneInvited',
+    'plusOneAttending',
   ];
 
   const output = rows.flatMap(({ household, rsvp }) => {
@@ -99,6 +103,10 @@ export function rsvpsToCsv(rows: Array<{ household: Household; rsvp?: StoredRsvp
         rsvp?.accessibilityNotes ?? '',
         rsvp?.submittedAt ?? '',
         rsvp?.updatedAt ?? '',
+        member.rehearsalDinnerInvited ?? false,
+        memberRsvp?.rehearsalDinnerAttending ?? '',
+        household.maxPlusOnes,
+        rsvp?.plusOnes.length ?? 0,
       ];
     });
 
@@ -120,6 +128,10 @@ export function rsvpsToCsv(rows: Array<{ household: Household; rsvp?: StoredRsvp
         rsvp.accessibilityNotes,
         rsvp.submittedAt,
         rsvp.updatedAt,
+        '',
+        '',
+        household.maxPlusOnes,
+        rsvp.plusOnes.length,
       ]) ?? [];
 
     return [...memberRows, ...plusOneRows];
@@ -130,6 +142,7 @@ export function rsvpsToCsv(rows: Array<{ household: Household; rsvp?: StoredRsvp
 
 export interface InvitationExportRow {
   household: Household;
+  rsvp?: StoredRsvp;
   rsvpUrl: string;
   qrCodeDataUrl: string;
 }
@@ -152,9 +165,23 @@ export function invitationExportToCsv(rows: InvitationExportRow[]): string {
     'inviteSentAt',
     'rsvpUrl',
     'qrCodeDataUrl',
+    'rehearsalDinnerInviteeNames',
+    'rehearsalDinnerInviteeCount',
+    'weddingResponses',
+    'rehearsalDinnerResponses',
+    'plusOneInvitedCount',
+    'plusOneAttendingCount',
   ];
 
-  const output = rows.map(({ household, rsvpUrl, qrCodeDataUrl }) => [
+  const output = rows.map(({ household, rsvp, rsvpUrl, qrCodeDataUrl }) => {
+    const dinnerInvitees = household.members.filter(
+      (member) => member.rehearsalDinnerInvited,
+    );
+    const responseFor = (memberId: string) =>
+      rsvp?.members.find((member) => member.memberId === memberId);
+    const memberName = (member: Household['members'][number]) =>
+      `${member.firstName} ${member.lastName}`;
+    return [
     household.householdId,
     household.displayName,
     household.email ?? '',
@@ -171,7 +198,24 @@ export function invitationExportToCsv(rows: InvitationExportRow[]): string {
     household.inviteSentAt ?? '',
     rsvpUrl,
     qrCodeDataUrl,
-  ]);
+    dinnerInvitees.map(memberName).join('; '),
+    dinnerInvitees.length,
+    household.members
+      .map((member) => {
+        const response = responseFor(member.id);
+        return `${memberName(member)}: ${response ? (response.attending ? 'Attending' : 'Declined') : 'Not answered'}`;
+      })
+      .join('; '),
+    dinnerInvitees
+      .map((member) => {
+        const response = responseFor(member.id);
+        return `${memberName(member)}: ${response?.rehearsalDinnerAttending === undefined ? 'Not answered' : response.rehearsalDinnerAttending ? 'Attending' : 'Declined'}`;
+      })
+      .join('; '),
+    household.maxPlusOnes,
+    rsvp?.plusOnes.length ?? 0,
+  ];
+  });
 
   return [headers, ...output].map((row) => row.map(escapeCsv).join(',')).join('\n');
 }

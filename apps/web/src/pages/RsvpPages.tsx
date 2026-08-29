@@ -773,69 +773,112 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                           : 'Guest')}
                     </span>
                   </div>
-                  <div
-                    className={scoped(styles, 'segmented-control')}
-                    role="group"
-                    aria-label={`${fullName} attendance`}
-                  >
-                    <button
-                      type="button"
-                      className={cx(
-                        scoped(styles, 'rsvp-segment'),
-                        memberRsvp.attending && scoped(styles, 'is-selected'),
-                      )}
-                      aria-pressed={memberRsvp.attending}
-                      aria-label={`${fullName} attending`}
-                      onClick={() =>
-                        updateMember(member.id, {
-                          attending: true,
-                          mealChoice:
-                            memberRsvp.mealChoice === 'none'
-                              ? 'buffet'
-                              : memberRsvp.mealChoice,
-                        })
-                      }
-                    >
-                      <Check aria-hidden="true" />
-                      Attending
-                    </button>
-                    <button
-                      type="button"
-                      className={cx(
-                        scoped(styles, 'rsvp-segment'),
-                        !memberRsvp.attending && scoped(styles, 'is-selected'),
-                      )}
-                      aria-pressed={!memberRsvp.attending}
-                      aria-label={`${fullName} not attending`}
-                      onClick={() =>
-                        updateMember(member.id, {
-                          attending: false,
-                          mealChoice: 'none',
-                        })
-                      }
-                    >
-                      Not attending
-                    </button>
+                  <div className={scoped(styles, 'guest-response-controls')}>
+                    <div className={scoped(styles, 'guest-response-selector')}>
+                      <span className={scoped(styles, 'guest-response-selector-label')}>
+                        Wedding
+                      </span>
+                      <div
+                        className={scoped(styles, 'segmented-control')}
+                        role="group"
+                        aria-label={`${fullName} attendance`}
+                      >
+                        <button
+                          type="button"
+                          className={cx(
+                            scoped(styles, 'rsvp-segment'),
+                            memberRsvp.attending && scoped(styles, 'is-selected'),
+                          )}
+                          aria-pressed={memberRsvp.attending}
+                          aria-label={`${fullName} attending`}
+                          onClick={() =>
+                            updateMember(member.id, {
+                              attending: true,
+                              mealChoice:
+                                memberRsvp.mealChoice === 'none'
+                                  ? 'buffet'
+                                  : memberRsvp.mealChoice,
+                            })
+                          }
+                        >
+                          <Check aria-hidden="true" />
+                          Attending
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(
+                            scoped(styles, 'rsvp-segment'),
+                            !memberRsvp.attending && scoped(styles, 'is-selected'),
+                          )}
+                          aria-pressed={!memberRsvp.attending}
+                          aria-label={`${fullName} not attending`}
+                          onClick={() =>
+                            updateMember(member.id, {
+                              attending: false,
+                              mealChoice: 'none',
+                            })
+                          }
+                        >
+                          Not attending
+                        </button>
+                      </div>
+                    </div>
+                    {memberRsvp.attending && member.rehearsalDinnerInvited && (
+                      <div className={scoped(styles, 'guest-response-selector')}>
+                        <span className={scoped(styles, 'guest-response-selector-label')}>
+                          Rehearsal Dinner
+                        </span>
+                        <div
+                          className={scoped(styles, 'segmented-control')}
+                          role="group"
+                          aria-label={`${fullName} rehearsal dinner attendance`}
+                        >
+                          <button
+                            type="button"
+                            className={cx(
+                              scoped(styles, 'rsvp-segment'),
+                              memberRsvp.rehearsalDinnerAttending === true &&
+                                scoped(styles, 'is-selected'),
+                            )}
+                            aria-pressed={memberRsvp.rehearsalDinnerAttending === true}
+                            aria-label={`${fullName} rehearsal dinner attending`}
+                            onClick={() =>
+                              updateMember(member.id, {
+                                rehearsalDinnerAttending: true,
+                              })
+                            }
+                          >
+                            <Check aria-hidden="true" />
+                            Attending
+                          </button>
+                          <button
+                            type="button"
+                            className={cx(
+                              scoped(styles, 'rsvp-segment'),
+                              memberRsvp.rehearsalDinnerAttending === false &&
+                                scoped(styles, 'is-selected'),
+                            )}
+                            aria-pressed={memberRsvp.rehearsalDinnerAttending === false}
+                            aria-label={`${fullName} rehearsal dinner not attending`}
+                            onClick={() =>
+                              updateMember(member.id, {
+                                rehearsalDinnerAttending: false,
+                              })
+                            }
+                          >
+                            Not attending
+                          </button>
+                        </div>
+                        <FieldError
+                          path={`members.${memberIndex}.rehearsalDinnerAttending`}
+                          errors={fieldErrors}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className={scoped(styles, 'guest-response-detail')}>
                     {memberRsvp.attending ? (
                       <>
-                        {member.rehearsalDinnerInvited && (
-                          <>
-                          <div className={scoped(styles, 'segmented-control')} role="group" aria-label={`${fullName} rehearsal dinner attendance`}>
-                            <button type="button" className={cx(scoped(styles, 'rsvp-segment'), memberRsvp.rehearsalDinnerAttending === true && scoped(styles, 'is-selected'))} aria-pressed={memberRsvp.rehearsalDinnerAttending === true} aria-label={`${fullName} rehearsal dinner attending`} onClick={() => updateMember(member.id, { rehearsalDinnerAttending: true })}>
-                              <Check aria-hidden="true" /> Rehearsal dinner: attending
-                            </button>
-                            <button type="button" className={cx(scoped(styles, 'rsvp-segment'), memberRsvp.rehearsalDinnerAttending === false && scoped(styles, 'is-selected'))} aria-pressed={memberRsvp.rehearsalDinnerAttending === false} aria-label={`${fullName} rehearsal dinner not attending`} onClick={() => updateMember(member.id, { rehearsalDinnerAttending: false })}>
-                              Not attending rehearsal dinner
-                            </button>
-                          </div>
-                          <FieldError
-                            path={`members.${memberIndex}.rehearsalDinnerAttending`}
-                            errors={fieldErrors}
-                          />
-                          </>
-                        )}
                       <label
                         className={
                           fieldError(`members.${memberIndex}.dietaryNotes`)
