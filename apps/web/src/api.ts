@@ -101,7 +101,8 @@ export class ApiError extends Error {
   }
 }
 
-const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) ?? '/api';
+const apiBaseUrl =
+  normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) ?? '/api';
 
 export async function fetchRsvp(inviteCode: string): Promise<RsvpResponse> {
   if (localRsvpMockEnabled) {
@@ -111,7 +112,10 @@ export async function fetchRsvp(inviteCode: string): Promise<RsvpResponse> {
   return request<RsvpResponse>(`/rsvp/${encodeURIComponent(inviteCode)}`);
 }
 
-export async function saveRsvp(inviteCode: string, payload: RsvpPayload): Promise<RsvpResponse> {
+export async function saveRsvp(
+  inviteCode: string,
+  payload: RsvpPayload,
+): Promise<RsvpResponse> {
   if (localRsvpMockEnabled) {
     return mockSaveRsvp(inviteCode, payload);
   }
@@ -170,7 +174,9 @@ export async function fetchAdminAuthConfig(): Promise<AdminAuthConfigResponse> {
   return request<AdminAuthConfigResponse>('/admin/auth/config');
 }
 
-export async function fetchHouseholds(adminToken: string): Promise<AdminHouseholdsResponse> {
+export async function fetchHouseholds(
+  adminToken: string,
+): Promise<AdminHouseholdsResponse> {
   if (localAdminMockEnabled) {
     return mockFetchHouseholds();
   }
@@ -204,11 +210,14 @@ export async function updateHousehold(
     return mockUpdateHousehold(householdId, payload);
   }
 
-  return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}`, {
-    method: 'PUT',
-    headers: authHeaders(adminToken),
-    body: JSON.stringify(payload),
-  });
+  return request<CreateHouseholdResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}`,
+    {
+      method: 'PUT',
+      headers: authHeaders(adminToken),
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function archiveHousehold(
@@ -219,10 +228,13 @@ export async function archiveHousehold(
     return mockArchiveHousehold(householdId);
   }
 
-  return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}`, {
-    method: 'DELETE',
-    headers: authHeaders(adminToken),
-  });
+  return request<CreateHouseholdResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}`,
+    {
+      method: 'DELETE',
+      headers: authHeaders(adminToken),
+    },
+  );
 }
 
 export async function updateHouseholdMember(
@@ -272,11 +284,14 @@ export async function updateInviteLifecycleStatus(
     return mockUpdateInviteLifecycleStatus(householdId, status);
   }
 
-  return request<CreateHouseholdResponse>(`/admin/households/${encodeURIComponent(householdId)}/invite-lifecycle`, {
-    method: 'PUT',
-    headers: authHeaders(adminToken),
-    body: JSON.stringify({ status }),
-  });
+  return request<CreateHouseholdResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}/invite-lifecycle`,
+    {
+      method: 'PUT',
+      headers: authHeaders(adminToken),
+      body: JSON.stringify({ status }),
+    },
+  );
 }
 
 export async function rotateInviteCode(
@@ -288,11 +303,14 @@ export async function rotateInviteCode(
     return mockRotateInviteCode(householdId);
   }
 
-  return request<RotateInviteCodeResponse>(`/admin/households/${encodeURIComponent(householdId)}/invite-code`, {
-    method: 'POST',
-    headers: authHeaders(adminToken),
-    body: JSON.stringify({ confirmRotation }),
-  });
+  return request<RotateInviteCodeResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}/invite-code`,
+    {
+      method: 'POST',
+      headers: authHeaders(adminToken),
+      body: JSON.stringify({ confirmRotation }),
+    },
+  );
 }
 
 export async function revealInvitation(
@@ -303,9 +321,12 @@ export async function revealInvitation(
     return mockRevealInvitation(householdId);
   }
 
-  return request<RevealInvitationResponse>(`/admin/households/${encodeURIComponent(householdId)}/invitation`, {
-    headers: authHeaders(adminToken),
-  });
+  return request<RevealInvitationResponse>(
+    `/admin/households/${encodeURIComponent(householdId)}/invitation`,
+    {
+      headers: authHeaders(adminToken),
+    },
+  );
 }
 
 export async function emailHouseholdInvitation(
@@ -326,7 +347,9 @@ export async function emailHouseholdInvitation(
   );
 }
 
-export async function emailInvitations(adminToken: string): Promise<BulkEmailInvitationsResponse> {
+export async function emailInvitations(
+  adminToken: string,
+): Promise<BulkEmailInvitationsResponse> {
   if (localAdminMockEnabled) {
     return mockEmailInvitations();
   }
@@ -365,7 +388,9 @@ export async function downloadRsvpsCsv(adminToken: string): Promise<Blob> {
   return downloadCsv('/admin/rsvps/export', adminToken);
 }
 
-export async function downloadInvitationsCsv(adminToken: string): Promise<Blob> {
+export async function downloadInvitationsCsv(
+  adminToken: string,
+): Promise<Blob> {
   if (localAdminMockEnabled) {
     return mockDownloadInvitationsCsv();
   }
@@ -373,8 +398,22 @@ export async function downloadInvitationsCsv(adminToken: string): Promise<Blob> 
   return downloadCsv('/admin/invitations/export', adminToken);
 }
 
-export async function downloadInvitationLabelsPdf(adminToken: string): Promise<Blob> {
+export async function downloadInvitationLabelsPdf(
+  adminToken: string,
+): Promise<Blob> {
   return downloadFile('/admin/invitations/labels', adminToken);
+}
+
+export async function downloadAddressLabelsPdf(
+  adminToken: string,
+): Promise<Blob> {
+  return downloadFile('/admin/addresses/labels', adminToken);
+}
+
+export async function downloadReturnAddressLabelsPdf(
+  adminToken: string,
+): Promise<Blob> {
+  return downloadFile('/admin/return-addresses/labels', adminToken);
 }
 
 async function downloadCsv(path: string, adminToken: string): Promise<Blob> {
@@ -406,12 +445,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
 
-  const body = response.headers.get('content-type')?.includes('application/json')
+  const body = response.headers
+    .get('content-type')
+    ?.includes('application/json')
     ? await response.json()
     : undefined;
 
   if (!response.ok) {
-    throw new ApiError(body?.message ?? 'Request failed', response.status, normalizeDetails(body?.details));
+    throw new ApiError(
+      body?.message ?? 'Request failed',
+      response.status,
+      normalizeDetails(body?.details),
+    );
   }
 
   return body as T;
@@ -423,11 +468,17 @@ async function createApiError(response: Response): Promise<ApiError> {
   }
 
   const body = await response.json();
-  return new ApiError(body?.message ?? 'Request failed', response.status, normalizeDetails(body?.details));
+  return new ApiError(
+    body?.message ?? 'Request failed',
+    response.status,
+    normalizeDetails(body?.details),
+  );
 }
 
 function normalizeDetails(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((detail): detail is string => typeof detail === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((detail): detail is string => typeof detail === 'string')
+    : [];
 }
 
 function normalizeApiBaseUrl(value: string | undefined): string | undefined {

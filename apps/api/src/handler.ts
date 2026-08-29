@@ -1,5 +1,11 @@
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import type { APIGatewayProxyHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager';
+import type {
+  APIGatewayProxyHandlerV2,
+  APIGatewayProxyResultV2,
+} from 'aws-lambda';
 import { DynamoWeddingRepository } from './repository.js';
 import {
   createHouseholdMessengerFromEnvironment,
@@ -70,8 +76,10 @@ export async function handleRequest(
     | 'archiveHousehold'
     | 'createHousehold'
     | 'createPublicSmsSubscription'
+    | 'exportAddressLabels'
     | 'exportInvitations'
     | 'exportInvitationLabels'
+    | 'exportReturnAddressLabels'
     | 'exportRsvps'
     | 'getRsvp'
     | 'importHouseholds'
@@ -131,7 +139,9 @@ export async function handleRequest(
       );
     }
 
-    const smsPreferencesMatch = path.match(/^\/rsvp\/([^/]+)\/sms-preferences$/);
+    const smsPreferencesMatch = path.match(
+      /^\/rsvp\/([^/]+)\/sms-preferences$/,
+    );
     if (method === 'PUT' && smsPreferencesMatch) {
       return completeRequest(
         json(
@@ -157,11 +167,13 @@ export async function handleRequest(
         );
       }
 
-      return completeRequest(json({
-        clientId,
-        userPoolDomain,
-        scopes: ['openid', 'email', 'profile'],
-      }));
+      return completeRequest(
+        json({
+          clientId,
+          userPoolDomain,
+          scopes: ['openid', 'email', 'profile'],
+        }),
+      );
     }
 
     if (method === 'PUT' && path.startsWith('/rsvp/')) {
@@ -182,31 +194,48 @@ export async function handleRequest(
     }
 
     if (method === 'GET' && path === '/admin/households') {
-      return completeRequest(json({ households: await service.listHouseholds() }));
+      return completeRequest(
+        json({ households: await service.listHouseholds() }),
+      );
     }
 
     if (method === 'POST' && path === '/admin/households') {
-      return completeRequest(json({ household: await service.createHousehold(body) }, 201));
+      return completeRequest(
+        json({ household: await service.createHousehold(body) }, 201),
+      );
     }
 
     if (method === 'POST' && path === '/admin/households/import') {
-      return completeRequest(json(await service.importHouseholds(String(body?.csv ?? ''))));
+      return completeRequest(
+        json(await service.importHouseholds(String(body?.csv ?? ''))),
+      );
     }
 
     const householdMatch = path.match(/^\/admin\/households\/([^/]+)$/);
     if (method === 'PUT' && householdMatch) {
       return completeRequest(
-        json({ household: await service.updateHousehold(decodeURIComponent(householdMatch[1]), body) }),
+        json({
+          household: await service.updateHousehold(
+            decodeURIComponent(householdMatch[1]),
+            body,
+          ),
+        }),
       );
     }
 
     if (method === 'DELETE' && householdMatch) {
       return completeRequest(
-        json({ household: await service.archiveHousehold(decodeURIComponent(householdMatch[1])) }),
+        json({
+          household: await service.archiveHousehold(
+            decodeURIComponent(householdMatch[1]),
+          ),
+        }),
       );
     }
 
-    const memberMatch = path.match(/^\/admin\/households\/([^/]+)\/members\/([^/]+)$/);
+    const memberMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/members\/([^/]+)$/,
+    );
     if (method === 'PUT' && memberMatch) {
       return completeRequest(
         json({
@@ -230,27 +259,39 @@ export async function handleRequest(
       );
     }
 
-    const inviteLifecycleMatch = path.match(/^\/admin\/households\/([^/]+)\/invite-lifecycle$/);
+    const inviteLifecycleMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/invite-lifecycle$/,
+    );
     if (method === 'PUT' && inviteLifecycleMatch) {
       return completeRequest(
         json({
-          household: await service.updateInviteLifecycle(decodeURIComponent(inviteLifecycleMatch[1]), body),
+          household: await service.updateInviteLifecycle(
+            decodeURIComponent(inviteLifecycleMatch[1]),
+            body,
+          ),
         }),
       );
     }
 
-    const inviteCodeMatch = path.match(/^\/admin\/households\/([^/]+)\/invite-code$/);
+    const inviteCodeMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/invite-code$/,
+    );
     if (method === 'POST' && inviteCodeMatch) {
       return completeRequest(
         json(
-          await service.rotateInviteCode(decodeURIComponent(inviteCodeMatch[1]), {
-            confirmRotation: body?.confirmRotation === true,
-          }),
+          await service.rotateInviteCode(
+            decodeURIComponent(inviteCodeMatch[1]),
+            {
+              confirmRotation: body?.confirmRotation === true,
+            },
+          ),
         ),
       );
     }
 
-    const invitationMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation$/);
+    const invitationMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/invitation$/,
+    );
     if (method === 'GET' && invitationMatch) {
       return completeRequest(
         json(
@@ -262,7 +303,9 @@ export async function handleRequest(
       );
     }
 
-    const invitationEmailMatch = path.match(/^\/admin\/households\/([^/]+)\/invitation-email$/);
+    const invitationEmailMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/invitation-email$/,
+    );
     if (method === 'POST' && invitationEmailMatch) {
       return completeRequest(
         json(
@@ -274,7 +317,9 @@ export async function handleRequest(
       );
     }
 
-    const householdNotificationMatch = path.match(/^\/admin\/households\/([^/]+)\/notifications$/);
+    const householdNotificationMatch = path.match(
+      /^\/admin\/households\/([^/]+)\/notifications$/,
+    );
     if (method === 'POST' && householdNotificationMatch) {
       return completeRequest(
         json(
@@ -287,7 +332,9 @@ export async function handleRequest(
     }
 
     if (method === 'POST' && path === '/admin/invitations/email') {
-      return completeRequest(json(await service.sendInvitationEmails(frontendBaseUrl())));
+      return completeRequest(
+        json(await service.sendInvitationEmails(frontendBaseUrl())),
+      );
     }
 
     if (method === 'GET' && path === '/admin/rsvps/export') {
@@ -318,12 +365,31 @@ export async function handleRequest(
         statusCode: 200,
         headers: {
           'content-type': 'application/pdf',
-          'content-disposition': 'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
+          'content-disposition':
+            'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
           'cache-control': 'no-store',
         },
         isBase64Encoded: true,
         body: pdf.toString('base64'),
       });
+    }
+
+    if (method === 'GET' && path === '/admin/addresses/labels') {
+      return completeRequest(
+        pdfDownload(
+          await service.exportAddressLabels(),
+          'address-labels-avery-5160.pdf',
+        ),
+      );
+    }
+
+    if (method === 'GET' && path === '/admin/return-addresses/labels') {
+      return completeRequest(
+        pdfDownload(
+          await service.exportReturnAddressLabels(),
+          'return-address-labels-avery-5160.pdf',
+        ),
+      );
     }
 
     return completeRequest(json({ message: 'Not found' }, 404));
@@ -358,8 +424,11 @@ export async function handleRequest(
     return json({ message: 'Something went wrong' }, 500);
   }
 
-  function completeRequest(response: APIGatewayProxyResultV2): APIGatewayProxyResultV2 {
-    const statusCode = typeof response === 'string' ? 200 : (response.statusCode ?? 200);
+  function completeRequest(
+    response: APIGatewayProxyResultV2,
+  ): APIGatewayProxyResultV2 {
+    const statusCode =
+      typeof response === 'string' ? 200 : (response.statusCode ?? 200);
     logStructured({
       level: 'info',
       event: 'api.request.completed',
@@ -400,6 +469,19 @@ function json(
   };
 }
 
+function pdfDownload(pdf: Buffer, filename: string): APIGatewayProxyResultV2 {
+  return {
+    statusCode: 200,
+    headers: {
+      'content-type': 'application/pdf',
+      'content-disposition': `attachment; filename="${filename}"`,
+      'cache-control': 'no-store',
+    },
+    isBase64Encoded: true,
+    body: pdf.toString('base64'),
+  };
+}
+
 async function createService(): Promise<WeddingService> {
   const tableName = process.env.TABLE_NAME;
   if (!tableName) {
@@ -431,7 +513,9 @@ async function getInviteCodePepper(): Promise<string> {
     throw new Error('INVITE_CODE_PEPPER_SECRET_ARN is required');
   }
 
-  const result = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+  const result = await secrets.send(
+    new GetSecretValueCommand({ SecretId: secretId }),
+  );
   if (!result.SecretString) {
     throw new Error('Invite code pepper secret is empty');
   }
@@ -444,7 +528,9 @@ function normalizePath(rawPath: string): string {
   return rawPath.startsWith('/api/') ? rawPath.slice('/api'.length) : rawPath;
 }
 
-function firstPopulatedValue(...values: Array<string | undefined>): string | undefined {
+function firstPopulatedValue(
+  ...values: Array<string | undefined>
+): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean);
 }
 
@@ -538,6 +624,14 @@ function resolveRouteName(method: string, path: string): string {
     return 'GET /admin/invitations/labels';
   }
 
+  if (method === 'GET' && path === '/admin/addresses/labels') {
+    return 'GET /admin/addresses/labels';
+  }
+
+  if (method === 'GET' && path === '/admin/return-addresses/labels') {
+    return 'GET /admin/return-addresses/labels';
+  }
+
   if (method === 'PUT' && /^\/admin\/households\/[^/]+$/.test(path)) {
     return 'PUT /admin/households/{householdId}';
   }
@@ -546,31 +640,52 @@ function resolveRouteName(method: string, path: string): string {
     return 'DELETE /admin/households/{householdId}';
   }
 
-  if (method === 'PUT' && /^\/admin\/households\/[^/]+\/members\/[^/]+$/.test(path)) {
+  if (
+    method === 'PUT' &&
+    /^\/admin\/households\/[^/]+\/members\/[^/]+$/.test(path)
+  ) {
     return 'PUT /admin/households/{householdId}/members/{memberId}';
   }
 
-  if (method === 'DELETE' && /^\/admin\/households\/[^/]+\/members\/[^/]+$/.test(path)) {
+  if (
+    method === 'DELETE' &&
+    /^\/admin\/households\/[^/]+\/members\/[^/]+$/.test(path)
+  ) {
     return 'DELETE /admin/households/{householdId}/members/{memberId}';
   }
 
-  if (method === 'PUT' && /^\/admin\/households\/[^/]+\/invite-lifecycle$/.test(path)) {
+  if (
+    method === 'PUT' &&
+    /^\/admin\/households\/[^/]+\/invite-lifecycle$/.test(path)
+  ) {
     return 'PUT /admin/households/{householdId}/invite-lifecycle';
   }
 
-  if (method === 'POST' && /^\/admin\/households\/[^/]+\/invite-code$/.test(path)) {
+  if (
+    method === 'POST' &&
+    /^\/admin\/households\/[^/]+\/invite-code$/.test(path)
+  ) {
     return 'POST /admin/households/{householdId}/invite-code';
   }
 
-  if (method === 'GET' && /^\/admin\/households\/[^/]+\/invitation$/.test(path)) {
+  if (
+    method === 'GET' &&
+    /^\/admin\/households\/[^/]+\/invitation$/.test(path)
+  ) {
     return 'GET /admin/households/{householdId}/invitation';
   }
 
-  if (method === 'POST' && /^\/admin\/households\/[^/]+\/invitation-email$/.test(path)) {
+  if (
+    method === 'POST' &&
+    /^\/admin\/households\/[^/]+\/invitation-email$/.test(path)
+  ) {
     return 'POST /admin/households/{householdId}/invitation-email';
   }
 
-  if (method === 'POST' && /^\/admin\/households\/[^/]+\/notifications$/.test(path)) {
+  if (
+    method === 'POST' &&
+    /^\/admin\/households\/[^/]+\/notifications$/.test(path)
+  ) {
     return 'POST /admin/households/{householdId}/notifications';
   }
 

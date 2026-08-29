@@ -1218,9 +1218,7 @@ test('photo carousel marks the active photo with a discrete progress segment', a
   await expect(progressSegments.nth(0)).toHaveAttribute('data-active', 'true');
   await expect(progressSegments.nth(1)).not.toHaveAttribute('data-active');
   for (let index = 1; index <= 4; index += 1) {
-    await carousel
-      .getByRole('button', { name: 'Show next photo' })
-      .click();
+    await carousel.getByRole('button', { name: 'Show next photo' }).click();
     await expect(position).toHaveText(`${index + 1} of ${photoCount}`);
     await expect(progressSegments.nth(index)).toHaveAttribute(
       'data-active',
@@ -1237,9 +1235,7 @@ test('photo carousel marks the active photo with a discrete progress segment', a
     element.style.removeProperty('scroll-behavior');
     element.dispatchEvent(new Event('scroll', { bubbles: true }));
   }, photoCount);
-  await expect(
-    position,
-  ).toHaveText(`${photoCount} of ${photoCount}`);
+  await expect(position).toHaveText(`${photoCount} of ${photoCount}`);
   await expect(progressSegments.nth(4)).not.toHaveAttribute('data-active');
   await expect(progressSegments.nth(photoCount - 1)).toHaveAttribute(
     'data-active',
@@ -1247,7 +1243,9 @@ test('photo carousel marks the active photo with a discrete progress segment', a
   );
 });
 
-test('story carousels retain one progress segment per photo', async ({ page }) => {
+test('story carousels retain one progress segment per photo', async ({
+  page,
+}) => {
   await page.goto('/our-story');
 
   const carousel = page.getByLabel('It started at ASU photos');
@@ -1988,6 +1986,8 @@ test('admin notification route is reachable, can create households, and shows RS
     deliveredTo: string;
   }> = [];
   let labelExportRequests = 0;
+  let addressLabelExportRequests = 0;
+  let returnAddressLabelExportRequests = 0;
   let households: Array<{
     household: Record<string, unknown>;
     attendance: Record<string, number>;
@@ -2377,6 +2377,24 @@ test('admin notification route is reachable, can create households, and shows RS
     });
   });
 
+  await page.route('**/api/admin/addresses/labels', async (route) => {
+    addressLabelExportRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-address-labels',
+    });
+  });
+
+  await page.route('**/api/admin/return-addresses/labels', async (route) => {
+    returnAddressLabelExportRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-return-address-labels',
+    });
+  });
+
   await page.route('**/api/admin/invitations/email', async (route) => {
     const results = households.map((record) => {
       if (!record.household.email) {
@@ -2528,6 +2546,30 @@ test('admin notification route is reachable, can create households, and shows RS
     ),
   ).toBeVisible();
   expect(labelExportRequests).toBe(1);
+
+  await clickBulkAction(page, 'Export address labels');
+  await page
+    .getByRole('dialog', { name: 'Confirm address label export' })
+    .getByRole('button', { name: 'Export address labels' })
+    .click();
+  await expect(
+    page.getByText(
+      'Exported mailing address labels for Avery 5160 label sheets.',
+    ),
+  ).toBeVisible();
+  expect(addressLabelExportRequests).toBe(1);
+
+  await clickBulkAction(page, 'Export return address labels');
+  await page
+    .getByRole('dialog', { name: 'Confirm return address label export' })
+    .getByRole('button', { name: 'Export return address labels' })
+    .click();
+  await expect(
+    page.getByText(
+      'Exported return address labels for Avery 5160 label sheets.',
+    ),
+  ).toBeVisible();
+  expect(returnAddressLabelExportRequests).toBe(1);
 
   await clickHouseholdAction(exampleRow, 'View invitation');
   const exampleContent = await getVisibleHouseholdContent(page, exampleRow);

@@ -306,9 +306,7 @@ describe('handleRequest', () => {
     const response = await handleRequest(
       service,
       createEvent('/api/rsvp/A2B3C4D5E6', 'PUT', {
-        members: [
-          { memberId: 'h1-1', attending: true, mealChoice: 'buffet' },
-        ],
+        members: [{ memberId: 'h1-1', attending: true, mealChoice: 'buffet' }],
         plusOnes: [],
         smsPhone: '(480) 555-0100',
         smsConsentAccepted: true,
@@ -351,7 +349,14 @@ describe('handleRequest', () => {
         consentedAt: '2026-07-03T20:00:00.000Z',
         consentTextVersion: 'twilio-tollfree-v1' as const,
       },
-      members: [{ id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: false }],
+      members: [
+        {
+          id: 'h1-1',
+          firstName: 'Sam',
+          lastName: 'Example',
+          canBringPlusOne: false,
+        },
+      ],
       maxPlusOnes: 0,
       rsvpStatus: 'not_started' as const,
       inviteLifecycleStatus: 'generated' as const,
@@ -442,12 +447,17 @@ describe('handleRequest', () => {
 
     const response = await handleRequest(
       service,
-      createEvent('/api/rsvp/recovery', 'POST', { contact: 'nomatch@example.com' }),
+      createEvent('/api/rsvp/recovery', 'POST', {
+        contact: 'nomatch@example.com',
+      }),
     );
 
     const httpResponse = response as Exclude<typeof response, string>;
     expect(httpResponse.statusCode).toBe(202);
-    expect(JSON.parse(httpResponse.body as string)).toHaveProperty('accepted', true);
+    expect(JSON.parse(httpResponse.body as string)).toHaveProperty(
+      'accepted',
+      true,
+    );
   });
 
   it('uses the configured frontend URL instead of the request origin for invitation exports', async () => {
@@ -462,7 +472,9 @@ describe('handleRequest', () => {
     const httpResponse = response as Exclude<typeof response, string>;
     expect(httpResponse.statusCode).toBe(200);
     expect(httpResponse.body).toBe('csv-content');
-    expect(exportInvitations).toHaveBeenCalledWith('https://frontend.example.com');
+    expect(exportInvitations).toHaveBeenCalledWith(
+      'https://frontend.example.com',
+    );
   });
 
   it('fails closed for invitation exports when the canonical frontend URL is missing', async () => {
@@ -537,7 +549,9 @@ describe('handleRequest', () => {
   });
 
   it('returns invitation QR labels as a base64 PDF download', async () => {
-    const exportInvitationLabels = vi.fn(async () => Buffer.from('%PDF-labels'));
+    const exportInvitationLabels = vi.fn(async () =>
+      Buffer.from('%PDF-labels'),
+    );
     const service = createServiceDouble({ exportInvitationLabels });
 
     const response = await handleRequest(
@@ -550,12 +564,48 @@ describe('handleRequest', () => {
     expect(httpResponse.isBase64Encoded).toBe(true);
     expect(httpResponse.headers).toMatchObject({
       'content-type': 'application/pdf',
-      'content-disposition': 'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
+      'content-disposition':
+        'attachment; filename="invitation-qr-labels-avery-5160.pdf"',
       'cache-control': 'no-store',
     });
-    expect(Buffer.from(httpResponse.body as string, 'base64').toString('utf8')).toBe('%PDF-labels');
-    expect(exportInvitationLabels).toHaveBeenCalledWith('https://frontend.example.com');
+    expect(
+      Buffer.from(httpResponse.body as string, 'base64').toString('utf8'),
+    ).toBe('%PDF-labels');
+    expect(exportInvitationLabels).toHaveBeenCalledWith(
+      'https://frontend.example.com',
+    );
   });
+
+  it.each([
+    [
+      '/api/admin/addresses/labels',
+      'address-labels-avery-5160.pdf',
+      'exportAddressLabels',
+    ],
+    [
+      '/api/admin/return-addresses/labels',
+      'return-address-labels-avery-5160.pdf',
+      'exportReturnAddressLabels',
+    ],
+  ] as const)(
+    'returns %s as a base64 PDF download',
+    async (path, filename, method) => {
+      const exportPdf = vi.fn(async () => Buffer.from('%PDF-labels'));
+      const service = createServiceDouble({ [method]: exportPdf });
+
+      const response = await handleRequest(service, createEvent(path, 'GET'));
+
+      const httpResponse = response as Exclude<typeof response, string>;
+      expect(httpResponse.statusCode).toBe(200);
+      expect(httpResponse.isBase64Encoded).toBe(true);
+      expect(httpResponse.headers).toMatchObject({
+        'content-type': 'application/pdf',
+        'content-disposition': `attachment; filename="${filename}"`,
+        'cache-control': 'no-store',
+      });
+      expect(exportPdf).toHaveBeenCalledOnce();
+    },
+  );
 });
 
 function createEvent(
@@ -606,6 +656,8 @@ function createServiceDouble(
     createHousehold: notUsed,
     createPublicSmsSubscription: notUsed,
     exportInvitationLabels: notUsed,
+    exportAddressLabels: notUsed,
+    exportReturnAddressLabels: notUsed,
     exportInvitations: notUsed,
     exportRsvps: notUsed,
     getRsvp: notUsed,
@@ -645,6 +697,8 @@ function createMessengerDouble(
   };
 }
 
-function parseConsoleJson(spy: ReturnType<typeof vi.spyOn>): Array<Record<string, unknown>> {
+function parseConsoleJson(
+  spy: ReturnType<typeof vi.spyOn>,
+): Array<Record<string, unknown>> {
   return spy.mock.calls.map((call: unknown[]) => JSON.parse(call[0] as string));
 }

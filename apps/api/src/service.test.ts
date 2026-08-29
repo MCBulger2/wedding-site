@@ -482,7 +482,7 @@ describe('WeddingService', () => {
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
-  it('exports invitation QR labels with the household name, invite code, and website URL', async () => {
+  it('exports invitation QR labels with the household name and invite code only', async () => {
     const { service, repository } = await createSeededService();
 
     const pdf = await service.exportInvitationLabels(
@@ -495,14 +495,53 @@ describe('WeddingService', () => {
     expect(pdfText).toContain('Household');
     expect(pdfText).toContain(`Code: ${inviteCode}`);
     expect(pdfText).not.toContain('Website:');
-    expect(pdfText).toContain('https://wedding.example.com');
+    expect(pdfText).not.toContain('https://wedding.example.com');
     expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
       'exported',
     );
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
   });
 
-  it('prioritizes household and invitation-code text without a website caption in QR labels', async () => {
+  it('exports mailing address labels without changing invitation status', async () => {
+    const { service, repository } = await createSeededService({
+      inviteLifecycleStatus: 'not_generated',
+      mailingAddress: {
+        line1: '123 Main St',
+        line2: 'Unit 4',
+        city: 'Phoenix',
+        state: 'AZ',
+        postalCode: '85001',
+        country: 'USA',
+      },
+    });
+
+    const pdfText = (await service.exportAddressLabels()).toString('utf8');
+
+    expect(pdfText).toContain('The Example Household');
+    expect(pdfText).toContain('123 Main St');
+    expect(pdfText).toContain('Unit 4');
+    expect(pdfText).toContain('Phoenix, AZ 85001');
+    expect((await repository.getHousehold('h1'))?.inviteLifecycleStatus).toBe(
+      'not_generated',
+    );
+  });
+
+  it('exports a full page of return address labels', async () => {
+    const { service } = await createSeededService();
+
+    const pdfText = (await service.exportReturnAddressLabels()).toString(
+      'utf8',
+    );
+
+    expect(pdfText.match(/\(Matt Bulger & Alison Hansen\) Tj/g)).toHaveLength(
+      30,
+    );
+    expect(pdfText).toContain('15600 N Frank Lloyd Wright Blvd');
+    expect(pdfText).toContain('Apt 1054');
+    expect(pdfText).toContain('Scottsdale, AZ 85260');
+  });
+
+  it('prioritizes household and invitation-code text in QR labels', async () => {
     const { service } = await createSeededService();
 
     const pdf = await service.exportInvitationLabels(
@@ -511,9 +550,7 @@ describe('WeddingService', () => {
     const pdfText = pdf.toString('utf8');
 
     expect(pdfText).not.toContain('Website:');
-    expect(
-      pdfText.match(/\(https:\/\/wedding\.example\.com\) Tj/g),
-    ).toHaveLength(1);
+    expect(pdfText).not.toContain('https://wedding.example.com');
     expect(pdfText).toContain('/F2 10 Tf');
     expect(pdfText).toContain('/F1 9 Tf');
   });
@@ -532,7 +569,7 @@ describe('WeddingService', () => {
     expect(pdfText).toContain('Long Example...');
     expect(pdfText).toContain('/F2 10 Tf');
     expect(pdfText).toContain('/F1 9 Tf');
-    expect(pdfText).toContain('/F1 4.5 Tf');
+    expect(pdfText).not.toContain('/F1 4.5 Tf');
   });
 
   it('fits wide-glyph household names and ellipsizes text beyond two QR-label lines', async () => {
@@ -1737,14 +1774,9 @@ describe('WeddingService', () => {
     });
 
     it('rejects RSVP search when an unexpected secret-read or protector failure occurs', async () => {
-      const { service } = await createSeededService(
-        {},
-        undefined,
-        undefined,
-        {
-          repository: new SecretReadFailingRepository(),
-        },
-      );
+      const { service } = await createSeededService({}, undefined, undefined, {
+        repository: new SecretReadFailingRepository(),
+      });
 
       await expect(
         service.searchRsvps(
@@ -2347,7 +2379,8 @@ function parseConsoleJson(
 
 async function saveSearchableHousehold(
   repository: InMemoryWeddingRepository,
-  overrides: Partial<Household> & Pick<Household, 'householdId' | 'displayName'>,
+  overrides: Partial<Household> &
+    Pick<Household, 'householdId' | 'displayName'>,
   inviteCode: string,
   options: {
     saveRecoverableInviteCode?: boolean;
@@ -2360,16 +2393,14 @@ async function saveSearchableHousehold(
     email: overrides.email,
     phone: overrides.phone,
     mailingAddress: overrides.mailingAddress,
-    members:
-      overrides.members ??
-      [
-        {
-          id: `${overrides.householdId}-1`,
-          firstName: 'Guest',
-          lastName: 'Example',
-          canBringPlusOne: false,
-        },
-      ],
+    members: overrides.members ?? [
+      {
+        id: `${overrides.householdId}-1`,
+        firstName: 'Guest',
+        lastName: 'Example',
+        canBringPlusOne: false,
+      },
+    ],
     maxPlusOnes: overrides.maxPlusOnes ?? 0,
     rsvpStatus: overrides.rsvpStatus ?? 'not_started',
     inviteLifecycleStatus: overrides.inviteLifecycleStatus ?? 'generated',
