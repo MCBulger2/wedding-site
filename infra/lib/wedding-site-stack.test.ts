@@ -612,6 +612,26 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(JSON.stringify(template)).not.toContain('sns:Publish');
   });
 
+  it('allocates API handler capacity for QR-label exports', () => {
+    const template = Template.fromJSON(
+      synthStackTemplate({
+        env: { account: '123456789012', region: 'us-west-1' },
+        envName: 'staging',
+        allowedOrigins: [],
+        notificationRecipientEmails: [],
+        enablePasskeys: false,
+      }),
+    );
+
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 512,
+      Timeout: 30,
+      Environment: {
+        Variables: Match.objectLike({ TABLE_NAME: Match.anyValue() }),
+      },
+    });
+  });
+
   it('imports the shared hosted-zone SES identity outside production', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
