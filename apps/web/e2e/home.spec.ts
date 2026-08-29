@@ -453,10 +453,14 @@ test('homepage renders wedding announcement and details', async ({ page }) => {
     page.getByRole('heading', { name: 'Where to stay' }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      'We’re still finalizing our hotel block—check back soon for updates. We’ll share the details here as soon as they’re ready.',
-    ),
+    page.getByRole('heading', {
+      name: 'Residence Inn by Marriott Phoenix Mesa East',
+    }),
   ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Book hotel' })).toHaveAttribute(
+    'href',
+    'https://app.marriott.com/resview2?id=1786641196087&key=GRP&app=resvlink',
+  );
   await expect(
     page.getByRole('heading', { name: 'Wedding Registry' }),
   ).toBeVisible();
