@@ -786,6 +786,23 @@ describe('WeddingSiteStack infrastructure', () => {
     expect(stage?.DependsOn).toEqual(expect.arrayContaining(routeLogicalIds));
   });
 
+  it('creates authenticated routes for both address label exports', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'staging',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+
+    const routeKeys = templateResourceEntries(template)
+      .filter(([, resource]) => resource.Type === 'AWS::ApiGatewayV2::Route')
+      .map(([, resource]) => resource.Properties?.RouteKey);
+
+    expect(routeKeys).toContain('GET /api/admin/addresses/labels');
+    expect(routeKeys).toContain('GET /api/admin/return-addresses/labels');
+  });
+
   it('creates a one-month API access log group with safe stage access logs', () => {
     const template = synthStackTemplate({
       env: { account: '123456789012', region: 'us-west-1' },
