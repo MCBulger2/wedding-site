@@ -525,7 +525,8 @@ export function AdminHouseholdsTable({
           <div className={scoped(styles, 'table-count-cell')}>
             <span>{row.original.attendance.attendingGuests} attending</span>
             <span>{row.original.attendance.pendingGuests} pending</span>
-            <span>{row.original.attendance.plusOneGuests} plus-ones</span>
+            <span>{row.original.household.maxPlusOnes} plus-one invitations</span>
+            <span>{row.original.attendance.plusOneGuests} plus-one attendees</span>
           </div>
         ),
       },
@@ -1088,6 +1089,7 @@ export function AdminPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [showRehearsalDinnerInvitees, setShowRehearsalDinnerInvitees] =
     useState(false);
+  const [showPlusOneInvitations, setShowPlusOneInvitations] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<HouseholdFormState>(emptyHouseholdForm());
   const [invitationDetails, setInvitationDetails] = useState<
@@ -1689,7 +1691,9 @@ export function AdminPage() {
     const matchesRehearsalDinner =
       !showRehearsalDinnerInvitees ||
       record.household.members.some((member) => member.rehearsalDinnerInvited);
-    return matchesArchived && matchesStatus && matchesSearch && matchesRehearsalDinner;
+    const matchesPlusOnes =
+      !showPlusOneInvitations || record.household.maxPlusOnes > 0;
+    return matchesArchived && matchesStatus && matchesSearch && matchesRehearsalDinner && matchesPlusOnes;
   });
 
   const totals = visibleHouseholds.reduce(
@@ -1697,10 +1701,23 @@ export function AdminPage() {
       summary.households += 1;
       summary.invitedGuests += record.attendance.invitedGuests;
       summary.attendingGuests += record.attendance.attendingGuests;
+      summary.rehearsalDinnerAttendingGuests +=
+        record.rsvp?.members.filter((member) => member.rehearsalDinnerAttending)
+          .length ?? 0;
+      summary.plusOneInvitations += record.household.maxPlusOnes;
+      summary.plusOneAttendees += record.attendance.plusOneGuests;
       summary.pendingGuests += record.attendance.pendingGuests;
       return summary;
     },
-    { households: 0, invitedGuests: 0, attendingGuests: 0, pendingGuests: 0 },
+    {
+      households: 0,
+      invitedGuests: 0,
+      attendingGuests: 0,
+      rehearsalDinnerAttendingGuests: 0,
+      plusOneInvitations: 0,
+      plusOneAttendees: 0,
+      pendingGuests: 0,
+    },
   );
   const loadedHouseholdCount = households.length;
   const householdsWithEmailCount = households.filter(
@@ -1997,6 +2014,7 @@ export function AdminPage() {
                 <SkeletonStat />
                 <SkeletonStat />
                 <SkeletonStat />
+                <SkeletonStat />
               </>
             ) : (
               <>
@@ -2010,7 +2028,19 @@ export function AdminPage() {
                 </article>
                 <article>
                   <strong>{totals.attendingGuests}</strong>
-                  <span>Attending</span>
+                  <span>Wedding attendees</span>
+                </article>
+                <article>
+                  <strong>{totals.rehearsalDinnerAttendingGuests}</strong>
+                  <span>Rehearsal dinner attendees</span>
+                </article>
+                <article>
+                  <strong>{totals.plusOneInvitations}</strong>
+                  <span>Plus-one invitations</span>
+                </article>
+                <article>
+                  <strong>{totals.plusOneAttendees}</strong>
+                  <span>Plus-one attendees</span>
                 </article>
                 <article>
                   <strong>{totals.pendingGuests}</strong>
@@ -2054,6 +2084,15 @@ export function AdminPage() {
                 onChange={(event) => setShowRehearsalDinnerInvitees(event.target.checked)}
               />
               Show rehearsal dinner invitees
+            </label>
+            <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
+              <input
+                aria-label="Show plus-one invitations"
+                type="checkbox"
+                checked={showPlusOneInvitations}
+                onChange={(event) => setShowPlusOneInvitations(event.target.checked)}
+              />
+              Show plus-one invitations
             </label>
             <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
               <input
@@ -2548,7 +2587,10 @@ export function AdminPage() {
                         <b>{record.attendance.pendingGuests}</b> pending
                       </span>
                       <span>
-                        <b>{record.attendance.plusOneGuests}</b> plus-ones
+                        <b>{record.household.maxPlusOnes}</b> plus-one invitations
+                      </span>
+                      <span>
+                        <b>{record.attendance.plusOneGuests}</b> plus-one attendees
                       </span>
                     </div>
 

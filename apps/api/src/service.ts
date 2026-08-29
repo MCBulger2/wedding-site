@@ -1285,6 +1285,7 @@ export class WeddingService {
     const csvRows = await Promise.all(
       rows.map(async ({ household, rsvpUrl }) => ({
         household,
+        rsvp: await this.getStoredRsvp(household.householdId),
         rsvpUrl,
         qrCodeDataUrl: rsvpUrl
           ? await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 })

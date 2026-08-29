@@ -663,6 +663,8 @@ describe('RsvpPage', () => {
 
     await screen.findByRole('heading', { name: 'The Example Household' });
     expect(screen.getByText(/Saturday before the wedding/i)).not.toBeNull();
+    expect(screen.getAllByText('Wedding')).toHaveLength(2);
+    expect(screen.getByText('Rehearsal Dinner')).not.toBeNull();
     expect(screen.getByRole('group', { name: 'Sam Example rehearsal dinner attendance' })).not.toBeNull();
     expect(screen.queryByRole('group', { name: 'Taylor Example rehearsal dinner attendance' })).toBeNull();
 

@@ -282,11 +282,40 @@ export async function mockSendHouseholdNotification(
 
 export async function mockDownloadRsvpsCsv(): Promise<Blob> {
   return csvBlob([
-    'householdId,household,status,attending,pending',
-    ...records.map(
-      (record) =>
-        `${record.household.householdId},"${record.household.displayName}",${record.household.rsvpStatus},${record.attendance.attendingGuests},${record.attendance.pendingGuests}`,
-    ),
+    csvLine([
+      'householdId', 'household', 'email', 'phone', 'guestType', 'memberId',
+      'sponsorMemberId', 'firstName', 'lastName', 'attending', 'mealChoice',
+      'dietaryNotes', 'notes', 'accessibilityNotes', 'submittedAt', 'updatedAt',
+      'rehearsalDinnerInvited', 'rehearsalDinnerAttending', 'plusOneInvited',
+      'plusOneAttending',
+    ]),
+    ...records.flatMap((record) => [
+      ...record.household.members.map((member) => {
+        const response = record.rsvp?.members.find((entry) => entry.memberId === member.id);
+        return csvLine([
+          record.household.householdId, record.household.displayName,
+          record.household.email ?? '', record.household.phone ?? '', 'household_member',
+          member.id, '', member.firstName, member.lastName, response?.attending ?? '',
+          response?.mealChoice ?? '', response?.dietaryNotes ?? '', record.rsvp?.notes ?? '',
+          record.rsvp?.accessibilityNotes ?? '', record.rsvp?.submittedAt ?? '',
+          record.rsvp?.updatedAt ?? '', member.rehearsalDinnerInvited ?? false,
+          response?.rehearsalDinnerAttending ?? '', record.household.maxPlusOnes,
+          record.rsvp?.plusOnes.length ?? 0,
+        ]);
+      }),
+      ...(record.rsvp?.plusOnes.map((plusOne, index) =>
+        csvLine([
+          record.household.householdId, record.household.displayName,
+          record.household.email ?? '', record.household.phone ?? '', 'plus_one',
+          `${record.household.householdId}-plus-one-${index + 1}`,
+          plusOne.sponsorMemberId, plusOne.firstName, plusOne.lastName, true,
+          plusOne.mealChoice, plusOne.dietaryNotes ?? '', record.rsvp?.notes ?? '',
+          record.rsvp?.accessibilityNotes ?? '', record.rsvp?.submittedAt ?? '',
+          record.rsvp?.updatedAt ?? '', '', '', record.household.maxPlusOnes,
+          record.rsvp?.plusOnes.length ?? 0,
+        ]),
+      ) ?? []),
+    ]),
   ]);
 }
 
@@ -309,10 +338,41 @@ export async function mockDownloadInvitationsCsv(): Promise<Blob> {
   );
 
   return csvBlob([
-    'householdId,household,rsvpUrl,qrCodeDataUrl',
+    csvLine([
+      'householdId', 'household', 'email', 'phone', 'addressLine1', 'addressLine2',
+      'city', 'state', 'postalCode', 'country', 'inviteLifecycleStatus',
+      'inviteGeneratedAt', 'inviteExportedAt', 'inviteSentAt', 'rsvpUrl',
+      'qrCodeDataUrl', 'rehearsalDinnerInviteeNames', 'rehearsalDinnerInviteeCount',
+      'weddingResponses', 'rehearsalDinnerResponses', 'plusOneInvitedCount',
+      'plusOneAttendingCount',
+    ]),
     ...records.map((record) => {
       const invitation = invitationFor(record.household);
-      return `${record.household.householdId},"${record.household.displayName}",${invitation.rsvpUrl},"data:image/png;base64,mock"`;
+      const dinnerInvitees = record.household.members.filter(
+        (member) => member.rehearsalDinnerInvited,
+      );
+      const responseFor = (memberId: string) =>
+        record.rsvp?.members.find((member) => member.memberId === memberId);
+      const name = (member: Household['members'][number]) =>
+        `${member.firstName} ${member.lastName}`;
+      const response = (member: Household['members'][number], dinner = false) => {
+        const value = responseFor(member.id);
+        const attending = dinner ? value?.rehearsalDinnerAttending : value?.attending;
+        return `${name(member)}: ${attending === undefined ? 'Not answered' : attending ? 'Attending' : 'Declined'}`;
+      };
+      return csvLine([
+        record.household.householdId, record.household.displayName,
+        record.household.email ?? '', record.household.phone ?? '',
+        record.household.mailingAddress?.line1 ?? '', record.household.mailingAddress?.line2 ?? '',
+        record.household.mailingAddress?.city ?? '', record.household.mailingAddress?.state ?? '',
+        record.household.mailingAddress?.postalCode ?? '', record.household.mailingAddress?.country ?? '',
+        record.household.inviteLifecycleStatus, record.household.inviteCodeGeneratedAt ?? '',
+        record.household.inviteExportedAt ?? '', record.household.inviteSentAt ?? '',
+        invitation.rsvpUrl, 'data:image/png;base64,mock', dinnerInvitees.map(name).join('; '),
+        dinnerInvitees.length, record.household.members.map((member) => response(member)).join('; '),
+        dinnerInvitees.map((member) => response(member, true)).join('; '),
+        record.household.maxPlusOnes, record.rsvp?.plusOnes.length ?? 0,
+      ]);
     }),
   ]);
 }
@@ -652,6 +712,15 @@ function csvBlob(lines: string[]): Blob {
   return new Blob([`${lines.join('\n')}\n`], {
     type: 'text/csv; charset=utf-8',
   });
+}
+
+function csvLine(values: unknown[]): string {
+  return values
+    .map((value) => {
+      const text = String(value ?? '');
+      return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    })
+    .join(',');
 }
 
 function cloneRecords(): AdminHouseholdRecord[] {

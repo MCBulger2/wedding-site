@@ -216,9 +216,14 @@ describe('AdminPage admin notifications', () => {
         members: [{ ...householdRecord.household.members[0], rehearsalDinnerInvited: true }],
       },
       rsvp: {
-        members: [{ memberId: 'member-1', attending: true, rehearsalDinnerAttending: false, mealChoice: 'buffet', dietaryNotes: '' }],
+        members: [{ memberId: 'member-1', attending: true, rehearsalDinnerAttending: true, mealChoice: 'buffet', dietaryNotes: '' }],
         plusOnes: [], notes: '', accessibilityNotes: '',
         submittedAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      attendance: {
+        ...householdRecord.attendance,
+        attendingGuests: 1,
+        pendingGuests: 0,
       },
     };
     fetchAdminAuthConfig.mockResolvedValue({ userPoolId: 'pool', userPoolClientId: 'client', userPoolDomain: 'https://auth.example.com', redirectUri: 'http://localhost/admin', logoutUri: 'http://localhost/' });
@@ -235,5 +240,35 @@ describe('AdminPage admin notifications', () => {
     fireEvent.click(screen.getByLabelText('Show rehearsal dinner invitees'));
     expect(screen.queryByText('The Example Family')).toBeNull();
     expect(screen.getAllByText('Dinner Family')).toHaveLength(2);
+    expect(screen.getByText('Wedding attendees').closest('article')?.textContent).toBe('1Wedding attendees');
+    expect(screen.getByText('Rehearsal dinner attendees').closest('article')?.textContent).toBe('1Rehearsal dinner attendees');
+  });
+
+  it('shows and filters plus-one invitations separately from attendees', async () => {
+    const plusOneRecord: AdminHouseholdRecord = {
+      ...householdRecord,
+      household: {
+        ...householdRecord.household,
+        householdId: 'household-plus-one',
+        displayName: 'Plus One Family',
+        maxPlusOnes: 2,
+      },
+      attendance: { ...householdRecord.attendance, invitedGuests: 3, plusOneGuests: 1 },
+    };
+    fetchAdminAuthConfig.mockResolvedValue({ userPoolId: 'pool', userPoolClientId: 'client', userPoolDomain: 'https://auth.example.com', redirectUri: 'http://localhost/admin', logoutUri: 'http://localhost/' });
+    completeAdminLogin.mockResolvedValue(null);
+    loadAdminSession.mockReturnValue({ accessToken: 'admin-token', idToken: 'id-token', expiresAt: Date.now() + 60_000 });
+    fetchHouseholds.mockResolvedValue({ households: [householdRecord, plusOneRecord] });
+
+    render(<AdminPage />);
+
+    await screen.findAllByText('Plus One Family');
+    expect(screen.getByText('Plus-one invitations').closest('article')?.textContent).toBe('2Plus-one invitations');
+    expect(screen.getByText('Plus-one attendees').closest('article')?.textContent).toBe('1Plus-one attendees');
+    expect(screen.getByText('2 plus-one invitations')).not.toBeNull();
+    expect(screen.getByText('1 plus-one attendees')).not.toBeNull();
+    fireEvent.click(screen.getByLabelText('Show plus-one invitations'));
+    expect(screen.queryByText('The Example Family')).toBeNull();
+    expect(screen.getAllByText('Plus One Family')).toHaveLength(2);
   });
 });
