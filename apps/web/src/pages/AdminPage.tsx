@@ -1,11 +1,82 @@
-import { type AdminHouseholdRecord, type CreateHouseholdInput, type Household, type InvitationDetails, type InvitationEmailResult, type MemberRsvp, type SendHouseholdNotificationInput } from '@matt-alison-wedding/shared';
+import {
+  type AdminHouseholdRecord,
+  type CreateHouseholdInput,
+  type Household,
+  type InvitationDetails,
+  type InvitationEmailResult,
+  type MemberRsvp,
+  type SendHouseholdNotificationInput,
+} from '@matt-alison-wedding/shared';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
-import { Archive, CheckSquare, ChevronDown, ChevronRight, Download, Edit3, ExternalLink, Image, KeyRound, Mail, MessageSquare, MoreHorizontal, Phone, Plus, Save, Send, ShieldCheck, Trash2, Users } from 'lucide-react';
-import { Fragment, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { beginAdminLogin, beginAdminLogout, clearAdminSession, completeAdminLogin, getAdminProfileName, loadAdminSession, type AdminAuthConfig, type AdminSession } from '../adminAuth.js';
-import { archiveHousehold, createHousehold, downloadInvitationLabelsPdf, downloadInvitationsCsv, downloadRsvpsCsv, emailHouseholdInvitation, emailInvitations, fetchAdminAuthConfig, fetchHouseholds, removeHouseholdMember, revealInvitation, rotateInviteCode, sendHouseholdNotification, updateHousehold, updateHouseholdMember, updateInviteLifecycleStatus } from '../api.js';
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+} from '@tanstack/react-table';
+import {
+  Archive,
+  CheckSquare,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Edit3,
+  ExternalLink,
+  Image,
+  KeyRound,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  Phone,
+  Plus,
+  Save,
+  Send,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import {
+  Fragment,
+  type Dispatch,
+  type FormEvent,
+  type ReactNode,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  beginAdminLogin,
+  beginAdminLogout,
+  clearAdminSession,
+  completeAdminLogin,
+  getAdminProfileName,
+  loadAdminSession,
+  type AdminAuthConfig,
+  type AdminSession,
+} from '../adminAuth.js';
+import {
+  archiveHousehold,
+  createHousehold,
+  downloadAddressLabelsPdf,
+  downloadInvitationLabelsPdf,
+  downloadInvitationsCsv,
+  downloadReturnAddressLabelsPdf,
+  downloadRsvpsCsv,
+  emailHouseholdInvitation,
+  emailInvitations,
+  fetchAdminAuthConfig,
+  fetchHouseholds,
+  removeHouseholdMember,
+  revealInvitation,
+  rotateInviteCode,
+  sendHouseholdNotification,
+  updateHousehold,
+  updateHouseholdMember,
+  updateInviteLifecycleStatus,
+} from '../api.js';
 import { cx, scoped } from '../classNames.js';
 import {
   LoadingPulse,
@@ -13,7 +84,11 @@ import {
   SkeletonDashboard,
   SkeletonStat,
 } from '../components/LoadingStates.js';
-import { createLocalAdminMockSession, localAdminMockAuthConfig, localAdminMockEnabled } from '../localAdminMock.js';
+import {
+  createLocalAdminMockSession,
+  localAdminMockAuthConfig,
+  localAdminMockEnabled,
+} from '../localAdminMock.js';
 import styles from './AdminPage.module.css';
 
 interface HouseholdFormState {
@@ -175,7 +250,12 @@ interface HouseholdNotificationFormState {
   message: string;
 }
 
-type BulkAdminAction = 'email_invitations' | 'export_invitations' | 'export_labels';
+type BulkAdminAction =
+  | 'email_invitations'
+  | 'export_invitations'
+  | 'export_labels'
+  | 'export_addresses'
+  | 'export_return_addresses';
 
 export function AdminBulkActionsMenu({
   pendingAction,
@@ -237,6 +317,26 @@ export function AdminBulkActionsMenu({
               ? 'Exporting QR labels...'
               : 'Export QR labels'}
           </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            disabled={pendingAction === 'export_addresses'}
+            onClick={() => onSelectAction('export_addresses')}
+          >
+            <Download aria-hidden="true" />
+            {pendingAction === 'export_addresses'
+              ? 'Exporting address labels...'
+              : 'Export address labels'}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className={scoped(styles, 'household-action-menu-item')}
+            disabled={pendingAction === 'export_return_addresses'}
+            onClick={() => onSelectAction('export_return_addresses')}
+          >
+            <Download aria-hidden="true" />
+            {pendingAction === 'export_return_addresses'
+              ? 'Exporting return address labels...'
+              : 'Export return address labels'}
+          </DropdownMenu.Item>
           <DropdownMenu.Separator
             className={scoped(styles, 'household-action-menu-separator')}
           />
@@ -293,7 +393,9 @@ export function AdminHouseholdsTable({
   onCopyInviteLink: (rsvpUrl: string) => void;
   onOpenQrCode: (invite: AdminInvitationDetails) => void;
 }) {
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(
+    () => new Set(),
+  );
   const columns = useMemo<ColumnDef<AdminHouseholdRecord>[]>(
     () => [
       {
@@ -455,7 +557,9 @@ export function AdminHouseholdsTable({
                 );
                 actionHandlers.onEdit(record);
               }}
-              onRotateInviteCode={() => actionHandlers.onRotateInviteCode(record)}
+              onRotateInviteCode={() =>
+                actionHandlers.onRotateInviteCode(record)
+              }
               onManageInvitation={() => {
                 setExpandedRows((current) =>
                   new Set(current).add(record.household.householdId),
@@ -989,9 +1093,8 @@ export function AdminPage() {
   const [invitationDetails, setInvitationDetails] = useState<
     Record<string, AdminInvitationDetails>
   >({});
-  const [expandedInvitationHouseholdId, setExpandedInvitationHouseholdId] = useState<
-    string | undefined
-  >();
+  const [expandedInvitationHouseholdId, setExpandedInvitationHouseholdId] =
+    useState<string | undefined>();
   const [editingHouseholdId, setEditingHouseholdId] = useState<
     string | undefined
   >();
@@ -1237,7 +1340,7 @@ export function AdminPage() {
   };
 
   const handleExport = async (
-    kind: 'rsvps' | 'invitations' | 'labels',
+    kind: 'rsvps' | 'invitations' | 'labels' | 'addresses' | 'return_addresses',
   ): Promise<boolean> => {
     try {
       if (!session) {
@@ -1249,7 +1352,11 @@ export function AdminPage() {
           ? await downloadRsvpsCsv(session.accessToken)
           : kind === 'invitations'
             ? await downloadInvitationsCsv(session.accessToken)
-            : await downloadInvitationLabelsPdf(session.accessToken);
+            : kind === 'labels'
+              ? await downloadInvitationLabelsPdf(session.accessToken)
+              : kind === 'addresses'
+                ? await downloadAddressLabelsPdf(session.accessToken)
+                : await downloadReturnAddressLabelsPdf(session.accessToken);
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -1258,7 +1365,11 @@ export function AdminPage() {
           ? 'rsvps.csv'
           : kind === 'invitations'
             ? 'invitations.csv'
-            : 'invitation-qr-labels-avery-5160.pdf';
+            : kind === 'labels'
+              ? 'invitation-qr-labels-avery-5160.pdf'
+              : kind === 'addresses'
+                ? 'address-labels-avery-5160.pdf'
+                : 'return-address-labels-avery-5160.pdf';
       anchor.click();
       window.URL.revokeObjectURL(url);
       if (kind === 'invitations') {
@@ -1270,6 +1381,14 @@ export function AdminPage() {
         await load();
         setMessage(
           'Exported invitation QR labels. Print the PDF on Avery 5160 label sheets.',
+        );
+      } else if (kind === 'addresses') {
+        setMessage(
+          'Exported mailing address labels for Avery 5160 label sheets.',
+        );
+      } else if (kind === 'return_addresses') {
+        setMessage(
+          'Exported return address labels for Avery 5160 label sheets.',
         );
       }
       return true;
@@ -1338,14 +1457,10 @@ export function AdminPage() {
         setExpandedInvitationHouseholdId(record.household.householdId);
       }
       await load();
-      setMessage(
-        `${response.result.displayName}: ${response.result.message}`,
-      );
+      setMessage(`${response.result.displayName}: ${response.result.message}`);
     } catch (error) {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : 'Unable to email invitation',
+        error instanceof Error ? error.message : 'Unable to email invitation',
       );
     }
   };
@@ -1359,16 +1474,22 @@ export function AdminPage() {
       const response = await emailInvitations(session.accessToken);
       setBulkEmailResults(response.results);
       await load();
-      const sent = response.results.filter((result) => result.status === 'sent').length;
-      const skipped = response.results.filter((result) => result.status === 'skipped').length;
-      const failed = response.results.filter((result) => result.status === 'failed').length;
-      setMessage(`Invitation email summary: ${sent} sent, ${skipped} skipped, ${failed} failed.`);
+      const sent = response.results.filter(
+        (result) => result.status === 'sent',
+      ).length;
+      const skipped = response.results.filter(
+        (result) => result.status === 'skipped',
+      ).length;
+      const failed = response.results.filter(
+        (result) => result.status === 'failed',
+      ).length;
+      setMessage(
+        `Invitation email summary: ${sent} sent, ${skipped} skipped, ${failed} failed.`,
+      );
       return true;
     } catch (error) {
       setMessage(
-        error instanceof Error
-          ? error.message
-          : 'Unable to email invitations',
+        error instanceof Error ? error.message : 'Unable to email invitations',
       );
       return false;
     }
@@ -1385,12 +1506,11 @@ export function AdminPage() {
       }
 
       setSendingNotification(true);
-      const payload: SendHouseholdNotificationInput =
-        {
-          channel: 'email',
-          subject: notificationForm.subject,
-          message: notificationForm.message,
-        };
+      const payload: SendHouseholdNotificationInput = {
+        channel: 'email',
+        subject: notificationForm.subject,
+        message: notificationForm.message,
+      };
       const response = await sendHouseholdNotification(
         session.accessToken,
         notificationHousehold.householdId,
@@ -1610,7 +1730,11 @@ export function AdminPage() {
           ? await handleEmailInvitations()
           : bulkActionToConfirm === 'export_invitations'
             ? await handleExport('invitations')
-            : await handleExport('labels');
+            : bulkActionToConfirm === 'export_labels'
+              ? await handleExport('labels')
+              : bulkActionToConfirm === 'export_addresses'
+                ? await handleExport('addresses')
+                : await handleExport('return_addresses');
       if (succeeded) {
         setBulkActionToConfirm(undefined);
       }
@@ -1653,7 +1777,10 @@ export function AdminPage() {
               Manage RSVPs, households, and invitations.
             </p>
           </div>
-          <section className={scoped(styles, 'admin-login-card')} aria-label="Admin sign in">
+          <section
+            className={scoped(styles, 'admin-login-card')}
+            aria-label="Admin sign in"
+          >
             <div className={scoped(styles, 'admin-login-card-header')}>
               <span className={scoped(styles, 'admin-login-icon')}>
                 <KeyRound aria-hidden="true" />
@@ -1666,7 +1793,10 @@ export function AdminPage() {
             {authConfig ? (
               <button
                 type="button"
-                className={cx('icon-button', scoped(styles, 'admin-login-button'))}
+                className={cx(
+                  'icon-button',
+                  scoped(styles, 'admin-login-button'),
+                )}
                 onClick={() => void beginAdminLogin(authConfig)}
               >
                 <KeyRound aria-hidden="true" />
@@ -1675,7 +1805,10 @@ export function AdminPage() {
             ) : (
               <button
                 type="button"
-                className={cx('secondary-button', scoped(styles, 'admin-login-button'))}
+                className={cx(
+                  'secondary-button',
+                  scoped(styles, 'admin-login-button'),
+                )}
                 disabled
               >
                 <KeyRound aria-hidden="true" />
@@ -1776,7 +1909,10 @@ export function AdminPage() {
             </p>
             {qrCodeStatus === 'loading' && (
               <div
-                className={cx('inline-loading-shell', scoped(styles, 'qr-loading-shell'))}
+                className={cx(
+                  'inline-loading-shell',
+                  scoped(styles, 'qr-loading-shell'),
+                )}
                 aria-live="polite"
               >
                 <LoadingPulse compact />
@@ -1812,7 +1948,10 @@ export function AdminPage() {
           title="Invitation email results"
           onClose={() => setBulkEmailResults(undefined)}
         >
-          <div className={scoped(styles, 'result-list')} aria-label="Invitation email results">
+          <div
+            className={scoped(styles, 'result-list')}
+            aria-label="Invitation email results"
+          >
             {bulkEmailResults.map((result) => (
               <p
                 className={cx(
@@ -1905,7 +2044,9 @@ export function AdminPage() {
                 <option value="declined">Declined</option>
               </select>
             </label>
-            <label className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}>
+            <label
+              className={cx('checkbox-row', scoped(styles, 'filter-toggle'))}
+            >
               <input
                 aria-label="Show rehearsal dinner invitees"
                 type="checkbox"
@@ -1925,10 +2066,16 @@ export function AdminPage() {
             </label>
           </div>
 
-          <div className={scoped(styles, 'results-list')} aria-label="Households">
+          <div
+            className={scoped(styles, 'results-list')}
+            aria-label="Households"
+          >
             {isHouseholdsRefreshing && (
               <div
-                className={cx('inline-loading-shell', scoped(styles, 'dashboard-refresh'))}
+                className={cx(
+                  'inline-loading-shell',
+                  scoped(styles, 'dashboard-refresh'),
+                )}
                 aria-live="polite"
               >
                 <LoadingPulse compact />
@@ -1985,428 +2132,486 @@ export function AdminPage() {
               />
             )}
             <div className={scoped(styles, 'mobile-household-cards')}>
-            {visibleHouseholds.map((record) => {
-              const invitation =
-                invitationDetails[record.household.householdId];
-              const isInvitationExpanded =
-                expandedInvitationHouseholdId === record.household.householdId;
+              {visibleHouseholds.map((record) => {
+                const invitation =
+                  invitationDetails[record.household.householdId];
+                const isInvitationExpanded =
+                  expandedInvitationHouseholdId ===
+                  record.household.householdId;
 
-              return (
-                <article
-                  className={scoped(styles, 'household-card')}
-                  key={record.household.householdId}
-                >
-                  <div className="section-heading">
-                    <div>
-                      <div className={scoped(styles, 'title-row')}>
-                        <h3>{record.household.displayName}</h3>
-                        <span
-                          className={cx(
-                            scoped(styles, 'status-pill'),
-                            scoped(styles, record.household.rsvpStatus),
-                          )}
-                        >
-                          {record.household.rsvpStatus.replace('_', ' ')}
-                        </span>
-                        <span
-                          className={cx(
-                            scoped(styles, 'status-pill'),
-                            scoped(
-                              styles,
-                              `invite-${record.household.inviteLifecycleStatus}`,
-                            ),
-                          )}
-                        >
-                          {inviteStatusLabel(record.household)}
-                        </span>
-                      </div>
-                      <div className={scoped(styles, 'meta-row')}>
-                        <span>
-                          <Users aria-hidden="true" />
-                          {record.household.members.length} household guests
-                        </span>
-                        {record.household.email && (
-                          <span>
-                            <Mail aria-hidden="true" />
-                            <a href={`mailto:${record.household.email}`}>{record.household.email}</a>
-                          </span>
-                        )}
-                        {record.household.phone && (
-                          <span>
-                            <Phone aria-hidden="true" />
-                            <a href={`tel:${record.household.phone}`}>{record.household.phone}</a>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="toolbar-actions">
-                      <HouseholdCardActions
-                        household={record.household}
-                        canNotify={Boolean(record.household.email)}
-                        canEmailInvitation={Boolean(record.household.email) && !isHouseholdArchived(record.household)}
-                        onNotify={() => openNotificationModal(record.household)}
-                        onEmailInvitation={() => void handleEmailInvitation(record)}
-                        onEdit={() => beginEditHousehold(record.household)}
-                        onRotateInviteCode={() =>
-                          void handleRotateInviteCode(record)
-                        }
-                        onManageInvitation={() => void handleManageInvitation(record)}
-                        onMarkSent={() => void markInviteStatus(record, 'sent')}
-                        onMarkExported={() => void markInviteStatus(record, 'exported')}
-                        onArchive={() => void handleArchiveHousehold(record)}
-                      />
-                    </div>
-                  </div>
-                  {invitation && isInvitationExpanded && (
-                    <section
-                      className={scoped(styles, 'invite-preview-card')}
-                      aria-label={`${record.household.displayName} invitation details`}
-                    >
+                return (
+                  <article
+                    className={scoped(styles, 'household-card')}
+                    key={record.household.householdId}
+                  >
+                    <div className="section-heading">
                       <div>
-                        <p className="eyebrow">Invitation ready</p>
-                        <h4>
-                          Share this code, link, or QR with the household.
-                        </h4>
-                        <p className={cx('form-message', scoped(styles, 'compact-message'))}>
-                          Revealed for this admin session only.
-                        </p>
-                      </div>
-                      <div className={scoped(styles, 'invite-code-box')}>
-                        <div className={scoped(styles, 'invite-code-block')}>
-                          <span className={scoped(styles, 'invite-detail-label')}>
-                            Invite code
-                          </span>
-                          <strong>{invitation.inviteCode}</strong>
-                        </div>
-                        <div className={scoped(styles, 'invite-code-block')}>
-                          <span className={scoped(styles, 'invite-detail-label')}>RSVP link</span>
-                          <a
-                            className={scoped(styles, 'invite-link')}
-                            href={invitation.rsvpUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                        <div className={scoped(styles, 'title-row')}>
+                          <h3>{record.household.displayName}</h3>
+                          <span
+                            className={cx(
+                              scoped(styles, 'status-pill'),
+                              scoped(styles, record.household.rsvpStatus),
+                            )}
                           >
-                            {invitation.rsvpUrl}
-                          </a>
+                            {record.household.rsvpStatus.replace('_', ' ')}
+                          </span>
+                          <span
+                            className={cx(
+                              scoped(styles, 'status-pill'),
+                              scoped(
+                                styles,
+                                `invite-${record.household.inviteLifecycleStatus}`,
+                              ),
+                            )}
+                          >
+                            {inviteStatusLabel(record.household)}
+                          </span>
+                        </div>
+                        <div className={scoped(styles, 'meta-row')}>
+                          <span>
+                            <Users aria-hidden="true" />
+                            {record.household.members.length} household guests
+                          </span>
+                          {record.household.email && (
+                            <span>
+                              <Mail aria-hidden="true" />
+                              <a href={`mailto:${record.household.email}`}>
+                                {record.household.email}
+                              </a>
+                            </span>
+                          )}
+                          {record.household.phone && (
+                            <span>
+                              <Phone aria-hidden="true" />
+                              <a href={`tel:${record.household.phone}`}>
+                                {record.household.phone}
+                              </a>
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="toolbar-actions">
-                        <button
-                          type="button"
-                          className="secondary-button button-inline"
-                          onClick={() => void navigator.clipboard.writeText(invitation.inviteCode)}
-                        >
-                          <KeyRound aria-hidden="true" />
-                          Copy code
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button button-inline"
-                          onClick={() => void navigator.clipboard.writeText(invitation.rsvpUrl)}
-                        >
-                          <ExternalLink aria-hidden="true" />
-                          Copy link
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button button-inline"
-                          onClick={() => void openQrCodeModal(invitation)}
-                        >
-                          <Image aria-hidden="true" />
-                          QR code
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button button-inline"
-                          onClick={() => void handleEmailInvitation(record)}
-                          disabled={!record.household.email}
-                        >
-                          <Mail aria-hidden="true" />
-                          {record.household.inviteSentAt ? 'Resend email' : 'Email invitation'}
-                        </button>
-                      </div>
-                    </section>
-                  )}
-
-                  {editingHouseholdId === record.household.householdId && (
-                    <section
-                      className={scoped(styles, 'edit-panel')}
-                      aria-label={`Edit ${record.household.displayName}`}
-                    >
-                      <div className={scoped(styles, 'split-fields')}>
-                        <label>
-                          Display name
-                          <input
-                            aria-label={`${record.household.displayName} edit display name`}
-                            value={editForm.displayName}
-                            onChange={(event) =>
-                              setEditForm({
-                                ...editForm,
-                                displayName: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label>
-                          Contact email
-                          <input
-                            aria-label={`${record.household.displayName} edit contact email`}
-                            type="email"
-                            value={editForm.email}
-                            onChange={(event) =>
-                              setEditForm({
-                                ...editForm,
-                                email: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label>
-                          Mobile phone
-                          <input
-                            aria-label={`${record.household.displayName} edit mobile phone`}
-                            type="tel"
-                            value={editForm.phone}
-                            onChange={(event) =>
-                              setEditForm({
-                                ...editForm,
-                                phone: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-                      <label>
-                        Max plus-ones
-                        <input
-                          aria-label={`${record.household.displayName} edit max plus-ones`}
-                          type="number"
-                          min="0"
-                          max="10"
-                          value={editForm.maxPlusOnes}
-                          onChange={(event) =>
-                            setEditForm({
-                              ...editForm,
-                              maxPlusOnes: event.target.value,
-                            })
+                        <HouseholdCardActions
+                          household={record.household}
+                          canNotify={Boolean(record.household.email)}
+                          canEmailInvitation={
+                            Boolean(record.household.email) &&
+                            !isHouseholdArchived(record.household)
                           }
+                          onNotify={() =>
+                            openNotificationModal(record.household)
+                          }
+                          onEmailInvitation={() =>
+                            void handleEmailInvitation(record)
+                          }
+                          onEdit={() => beginEditHousehold(record.household)}
+                          onRotateInviteCode={() =>
+                            void handleRotateInviteCode(record)
+                          }
+                          onManageInvitation={() =>
+                            void handleManageInvitation(record)
+                          }
+                          onMarkSent={() =>
+                            void markInviteStatus(record, 'sent')
+                          }
+                          onMarkExported={() =>
+                            void markInviteStatus(record, 'exported')
+                          }
+                          onArchive={() => void handleArchiveHousehold(record)}
                         />
-                      </label>
-                      <AddressFields
-                        form={editForm}
-                        onChange={setEditForm}
-                        labelPrefix={`${record.household.displayName} edit`}
-                      />
-                      {editForm.members.map((member, index) => (
-                        <fieldset key={member.id ?? index}>
-                          <legend>
-                            {member.id
-                              ? formatMemberName(member)
-                              : `Member ${index + 1}`}
-                          </legend>
-                          <div className={scoped(styles, 'split-fields')}>
-                            <label>
-                              First name
-                              <input
-                                aria-label={`${formatMemberName(member)} edit first name`}
-                                value={member.firstName}
-                                onChange={(event) =>
-                                  setEditForm({
-                                    ...editForm,
-                                    members: editForm.members.map(
-                                      (entry, entryIndex) =>
-                                        entryIndex === index
-                                          ? {
-                                              ...entry,
-                                              firstName: event.target.value,
-                                            }
-                                          : entry,
-                                    ),
-                                  })
-                                }
-                              />
-                            </label>
-                            <label>
-                              Last name
-                              <input
-                                aria-label={`${formatMemberName(member)} edit last name`}
-                                value={member.lastName}
-                                onChange={(event) =>
-                                  setEditForm({
-                                    ...editForm,
-                                    members: editForm.members.map(
-                                      (entry, entryIndex) =>
-                                        entryIndex === index
-                                          ? {
-                                              ...entry,
-                                              lastName: event.target.value,
-                                            }
-                                          : entry,
-                                    ),
-                                  })
-                                }
-                              />
-                            </label>
+                      </div>
+                    </div>
+                    {invitation && isInvitationExpanded && (
+                      <section
+                        className={scoped(styles, 'invite-preview-card')}
+                        aria-label={`${record.household.displayName} invitation details`}
+                      >
+                        <div>
+                          <p className="eyebrow">Invitation ready</p>
+                          <h4>
+                            Share this code, link, or QR with the household.
+                          </h4>
+                          <p
+                            className={cx(
+                              'form-message',
+                              scoped(styles, 'compact-message'),
+                            )}
+                          >
+                            Revealed for this admin session only.
+                          </p>
+                        </div>
+                        <div className={scoped(styles, 'invite-code-box')}>
+                          <div className={scoped(styles, 'invite-code-block')}>
+                            <span
+                              className={scoped(styles, 'invite-detail-label')}
+                            >
+                              Invite code
+                            </span>
+                            <strong>{invitation.inviteCode}</strong>
                           </div>
-                          <label className="checkbox-row">
+                          <div className={scoped(styles, 'invite-code-block')}>
+                            <span
+                              className={scoped(styles, 'invite-detail-label')}
+                            >
+                              RSVP link
+                            </span>
+                            <a
+                              className={scoped(styles, 'invite-link')}
+                              href={invitation.rsvpUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {invitation.rsvpUrl}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="toolbar-actions">
+                          <button
+                            type="button"
+                            className="secondary-button button-inline"
+                            onClick={() =>
+                              void navigator.clipboard.writeText(
+                                invitation.inviteCode,
+                              )
+                            }
+                          >
+                            <KeyRound aria-hidden="true" />
+                            Copy code
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button button-inline"
+                            onClick={() =>
+                              void navigator.clipboard.writeText(
+                                invitation.rsvpUrl,
+                              )
+                            }
+                          >
+                            <ExternalLink aria-hidden="true" />
+                            Copy link
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button button-inline"
+                            onClick={() => void openQrCodeModal(invitation)}
+                          >
+                            <Image aria-hidden="true" />
+                            QR code
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button button-inline"
+                            onClick={() => void handleEmailInvitation(record)}
+                            disabled={!record.household.email}
+                          >
+                            <Mail aria-hidden="true" />
+                            {record.household.inviteSentAt
+                              ? 'Resend email'
+                              : 'Email invitation'}
+                          </button>
+                        </div>
+                      </section>
+                    )}
+
+                    {editingHouseholdId === record.household.householdId && (
+                      <section
+                        className={scoped(styles, 'edit-panel')}
+                        aria-label={`Edit ${record.household.displayName}`}
+                      >
+                        <div className={scoped(styles, 'split-fields')}>
+                          <label>
+                            Display name
                             <input
-                              aria-label={`${formatMemberName(member)} edit can bring a plus-one`}
-                              type="checkbox"
-                              checked={member.canBringPlusOne}
+                              aria-label={`${record.household.displayName} edit display name`}
+                              value={editForm.displayName}
                               onChange={(event) =>
                                 setEditForm({
                                   ...editForm,
-                                  members: editForm.members.map(
-                                    (entry, entryIndex) =>
-                                      entryIndex === index
-                                        ? {
-                                            ...entry,
-                                            canBringPlusOne:
-                                              event.target.checked,
-                                          }
-                                        : entry,
-                                  ),
+                                  displayName: event.target.value,
                                 })
                               }
                             />
-                            Can bring a plus-one
                           </label>
                           <label>
-                            Wedding-party role
+                            Contact email
                             <input
-                              aria-label={`${formatMemberName(member)} edit wedding-party role`}
-                              value={member.weddingPartyRole}
+                              aria-label={`${record.household.displayName} edit contact email`}
+                              type="email"
+                              value={editForm.email}
                               onChange={(event) =>
                                 setEditForm({
                                   ...editForm,
-                                  members: editForm.members.map(
-                                    (entry, entryIndex) =>
-                                      entryIndex === index
-                                        ? {
-                                            ...entry,
-                                            weddingPartyRole:
-                                              event.target.value,
-                                          }
-                                        : entry,
-                                  ),
+                                  email: event.target.value,
                                 })
                               }
                             />
                           </label>
-                          <label className="checkbox-row">
+                          <label>
+                            Mobile phone
                             <input
-                              aria-label={`${formatMemberName(member)} edit rehearsal dinner invited`}
-                              type="checkbox"
-                              checked={member.rehearsalDinnerInvited}
+                              aria-label={`${record.household.displayName} edit mobile phone`}
+                              type="tel"
+                              value={editForm.phone}
                               onChange={(event) =>
                                 setEditForm({
                                   ...editForm,
-                                  members: editForm.members.map(
-                                    (entry, entryIndex) =>
-                                      entryIndex === index
-                                        ? {
-                                            ...entry,
-                                            rehearsalDinnerInvited:
-                                              event.target.checked,
-                                          }
-                                        : entry,
-                                  ),
+                                  phone: event.target.value,
                                 })
                               }
                             />
-                            Rehearsal dinner invited
                           </label>
-                          {member.id && (
-                            <button
-                              type="button"
-                              className="secondary-button button-inline danger-button"
-                              onClick={() =>
-                                void handleRemoveMember(record, member.id!)
-                              }
-                            >
-                              <Trash2 aria-hidden="true" />
-                              Remove member
-                            </button>
-                          )}
-                        </fieldset>
-                      ))}
-                      <div className="toolbar-actions">
-                        <button
-                          type="button"
-                          className="icon-button"
-                          onClick={() =>
-                            void saveHouseholdEdit(record.household.householdId)
-                          }
-                        >
-                          <Save aria-hidden="true" />
-                          Save changes
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => setEditingHouseholdId(undefined)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </section>
-                  )}
-
-                  <div className={scoped(styles, 'stats-inline')}>
-                    <span><b>{record.attendance.attendingGuests}</b> attending</span>
-                    <span><b>{record.attendance.pendingGuests}</b> pending</span>
-                    <span><b>{record.attendance.plusOneGuests}</b> plus-ones</span>
-                  </div>
-
-                  <div className={scoped(styles, 'member-list')}>
-                    {record.household.members.map((member) => {
-                      const memberRsvp = record.rsvp?.members.find(
-                        (entry) => entry.memberId === member.id,
-                      );
-                      return (
-                        <div key={member.id} className={scoped(styles, 'member-row')}>
-                          <strong>{formatMemberName(member)}</strong>
-                          <span>
-                            Wedding: {memberRsvp ? summarizeMemberRsvp(memberRsvp.attending) : 'Not answered'} · Dinner: {!member.rehearsalDinnerInvited
-                              ? 'Not invited'
-                              : memberRsvp?.rehearsalDinnerAttending === undefined
-                                ? 'Not answered'
-                                : summarizeMemberRsvp(memberRsvp.rehearsalDinnerAttending)}
-                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {record.rsvp?.plusOnes.length ? (
-                    <div className={scoped(styles, 'note-block')}>
-                      <strong>Plus-ones</strong>
-                      <ul className="plain-list compact-list">
-                        {record.rsvp.plusOnes.map((plusOne, index) => (
-                          <li key={`${plusOne.sponsorMemberId}-${index}`}>
-                            {plusOne.firstName} {plusOne.lastName}
-                          </li>
+                        <label>
+                          Max plus-ones
+                          <input
+                            aria-label={`${record.household.displayName} edit max plus-ones`}
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={editForm.maxPlusOnes}
+                            onChange={(event) =>
+                              setEditForm({
+                                ...editForm,
+                                maxPlusOnes: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <AddressFields
+                          form={editForm}
+                          onChange={setEditForm}
+                          labelPrefix={`${record.household.displayName} edit`}
+                        />
+                        {editForm.members.map((member, index) => (
+                          <fieldset key={member.id ?? index}>
+                            <legend>
+                              {member.id
+                                ? formatMemberName(member)
+                                : `Member ${index + 1}`}
+                            </legend>
+                            <div className={scoped(styles, 'split-fields')}>
+                              <label>
+                                First name
+                                <input
+                                  aria-label={`${formatMemberName(member)} edit first name`}
+                                  value={member.firstName}
+                                  onChange={(event) =>
+                                    setEditForm({
+                                      ...editForm,
+                                      members: editForm.members.map(
+                                        (entry, entryIndex) =>
+                                          entryIndex === index
+                                            ? {
+                                                ...entry,
+                                                firstName: event.target.value,
+                                              }
+                                            : entry,
+                                      ),
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Last name
+                                <input
+                                  aria-label={`${formatMemberName(member)} edit last name`}
+                                  value={member.lastName}
+                                  onChange={(event) =>
+                                    setEditForm({
+                                      ...editForm,
+                                      members: editForm.members.map(
+                                        (entry, entryIndex) =>
+                                          entryIndex === index
+                                            ? {
+                                                ...entry,
+                                                lastName: event.target.value,
+                                              }
+                                            : entry,
+                                      ),
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <label className="checkbox-row">
+                              <input
+                                aria-label={`${formatMemberName(member)} edit can bring a plus-one`}
+                                type="checkbox"
+                                checked={member.canBringPlusOne}
+                                onChange={(event) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    members: editForm.members.map(
+                                      (entry, entryIndex) =>
+                                        entryIndex === index
+                                          ? {
+                                              ...entry,
+                                              canBringPlusOne:
+                                                event.target.checked,
+                                            }
+                                          : entry,
+                                    ),
+                                  })
+                                }
+                              />
+                              Can bring a plus-one
+                            </label>
+                            <label>
+                              Wedding-party role
+                              <input
+                                aria-label={`${formatMemberName(member)} edit wedding-party role`}
+                                value={member.weddingPartyRole}
+                                onChange={(event) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    members: editForm.members.map(
+                                      (entry, entryIndex) =>
+                                        entryIndex === index
+                                          ? {
+                                              ...entry,
+                                              weddingPartyRole:
+                                                event.target.value,
+                                            }
+                                          : entry,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="checkbox-row">
+                              <input
+                                aria-label={`${formatMemberName(member)} edit rehearsal dinner invited`}
+                                type="checkbox"
+                                checked={member.rehearsalDinnerInvited}
+                                onChange={(event) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    members: editForm.members.map(
+                                      (entry, entryIndex) =>
+                                        entryIndex === index
+                                          ? {
+                                              ...entry,
+                                              rehearsalDinnerInvited:
+                                                event.target.checked,
+                                            }
+                                          : entry,
+                                    ),
+                                  })
+                                }
+                              />
+                              Rehearsal dinner invited
+                            </label>
+                            {member.id && (
+                              <button
+                                type="button"
+                                className="secondary-button button-inline danger-button"
+                                onClick={() =>
+                                  void handleRemoveMember(record, member.id!)
+                                }
+                              >
+                                <Trash2 aria-hidden="true" />
+                                Remove member
+                              </button>
+                            )}
+                          </fieldset>
                         ))}
-                      </ul>
-                    </div>
-                  ) : null}
+                        <div className="toolbar-actions">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() =>
+                              void saveHouseholdEdit(
+                                record.household.householdId,
+                              )
+                            }
+                          >
+                            <Save aria-hidden="true" />
+                            Save changes
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setEditingHouseholdId(undefined)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </section>
+                    )}
 
-                  {record.rsvp?.notes && (
-                    <div className={scoped(styles, 'note-block')}>
-                      <strong>Notes</strong>
-                      <p>{record.rsvp.notes}</p>
+                    <div className={scoped(styles, 'stats-inline')}>
+                      <span>
+                        <b>{record.attendance.attendingGuests}</b> attending
+                      </span>
+                      <span>
+                        <b>{record.attendance.pendingGuests}</b> pending
+                      </span>
+                      <span>
+                        <b>{record.attendance.plusOneGuests}</b> plus-ones
+                      </span>
                     </div>
-                  )}
 
-                  {record.rsvp?.accessibilityNotes && (
-                    <div className={scoped(styles, 'note-block')}>
-                      <strong>Accessibility</strong>
-                      <p>{record.rsvp.accessibilityNotes}</p>
+                    <div className={scoped(styles, 'member-list')}>
+                      {record.household.members.map((member) => {
+                        const memberRsvp = record.rsvp?.members.find(
+                          (entry) => entry.memberId === member.id,
+                        );
+                        return (
+                          <div
+                            key={member.id}
+                            className={scoped(styles, 'member-row')}
+                          >
+                            <strong>{formatMemberName(member)}</strong>
+                            <span>
+                              Wedding:{' '}
+                              {memberRsvp
+                                ? summarizeMemberRsvp(memberRsvp.attending)
+                                : 'Not answered'}{' '}
+                              · Dinner:{' '}
+                              {!member.rehearsalDinnerInvited
+                                ? 'Not invited'
+                                : memberRsvp?.rehearsalDinnerAttending ===
+                                    undefined
+                                  ? 'Not answered'
+                                  : summarizeMemberRsvp(
+                                      memberRsvp.rehearsalDinnerAttending,
+                                    )}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </article>
-              );
-            })}
+
+                    {record.rsvp?.plusOnes.length ? (
+                      <div className={scoped(styles, 'note-block')}>
+                        <strong>Plus-ones</strong>
+                        <ul className="plain-list compact-list">
+                          {record.rsvp.plusOnes.map((plusOne, index) => (
+                            <li key={`${plusOne.sponsorMemberId}-${index}`}>
+                              {plusOne.firstName} {plusOne.lastName}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {record.rsvp?.notes && (
+                      <div className={scoped(styles, 'note-block')}>
+                        <strong>Notes</strong>
+                        <p>{record.rsvp.notes}</p>
+                      </div>
+                    )}
+
+                    {record.rsvp?.accessibilityNotes && (
+                      <div className={scoped(styles, 'note-block')}>
+                        <strong>Accessibility</strong>
+                        <p>{record.rsvp.accessibilityNotes}</p>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -2691,6 +2896,28 @@ function getBulkActionDetails(
         'Completing this PDF export marks invitation records as exported, which changes the invite lifecycle shown in the dashboard.',
       confirmLabel: 'Export QR labels',
       pendingLabel: 'Exporting QR labels...',
+      icon: Download,
+    },
+    export_addresses: {
+      dialogTitle: 'Confirm address label export',
+      summary: 'Generate mailing address labels for invitation envelopes.',
+      countHeadline: formatCountLabel(loadedHouseholdCount, 'loaded household'),
+      countDetail: scopeNote,
+      sideEffectDetail:
+        'This download does not change invitation lifecycle status.',
+      confirmLabel: 'Export address labels',
+      pendingLabel: 'Exporting address labels...',
+      icon: Download,
+    },
+    export_return_addresses: {
+      dialogTitle: 'Confirm return address label export',
+      summary: 'Generate one full Avery 5160 page of return address labels.',
+      countHeadline: '30 return address labels',
+      countDetail: 'This export always fills one Avery 5160 label sheet.',
+      sideEffectDetail:
+        'This download does not change invitation lifecycle status.',
+      confirmLabel: 'Export return address labels',
+      pendingLabel: 'Exporting return address labels...',
       icon: Download,
     },
   };
@@ -3133,7 +3360,9 @@ export function HouseholdNotificationForm({
       <div className="confirmation-row">
         <div>
           <strong>{household.displayName}</strong>
-          <p className="form-message">{household.email ?? 'No contact email on file.'}</p>
+          <p className="form-message">
+            {household.email ?? 'No contact email on file.'}
+          </p>
         </div>
       </div>
       <label>

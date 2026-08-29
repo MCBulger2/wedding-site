@@ -71,6 +71,12 @@ const AVERY_5160_LABEL = {
   horizontalPitch: 2.75 * POINTS_PER_INCH,
   verticalPitch: 1 * POINTS_PER_INCH,
 };
+const RETURN_ADDRESS_LINES = [
+  'Matt Bulger & Alison Hansen',
+  '15600 N Frank Lloyd Wright Blvd',
+  'Apt 1054',
+  'Scottsdale, AZ 85260',
+];
 const HELVETICA_BOLD_ASCII_WIDTHS = [
   278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278,
   278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584,
@@ -545,7 +551,10 @@ export class WeddingService {
       this.inviteCodePepper,
     );
 
-    const rateLimit = await this.checkRsvpSearchRateLimit(termHash, sourceIpHash);
+    const rateLimit = await this.checkRsvpSearchRateLimit(
+      termHash,
+      sourceIpHash,
+    );
     if (rateLimit.isLimited) {
       logStructured({
         level: 'warn',
@@ -564,7 +573,9 @@ export class WeddingService {
     }
 
     const recoverableMatches: RsvpSearchResponse['results'] = [];
-    const households = (await this.repository.listHouseholdsByLastName(normalizedLastName))
+    const households = (
+      await this.repository.listHouseholdsByLastName(normalizedLastName)
+    )
       .filter(
         (household) =>
           !household.archivedAt &&
@@ -1306,6 +1317,32 @@ export class WeddingService {
     return pdf;
   }
 
+  async exportAddressLabels(): Promise<Buffer> {
+    const labels = (await this.repository.listHouseholds()).flatMap(
+      (household) =>
+        household.mailingAddress
+          ? [
+              [
+                household.displayName,
+                household.mailingAddress.line1,
+                household.mailingAddress.line2,
+                `${household.mailingAddress.city}, ${household.mailingAddress.state} ${household.mailingAddress.postalCode}`,
+              ].filter(Boolean),
+            ]
+          : [],
+    );
+    return createTextLabelsPdf(labels);
+  }
+
+  async exportReturnAddressLabels(): Promise<Buffer> {
+    return createTextLabelsPdf(
+      Array.from(
+        { length: AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows },
+        () => RETURN_ADDRESS_LINES,
+      ),
+    );
+  }
+
   private async ensureRecoverableInvitation(
     household: Household,
     baseUrl: string,
@@ -1609,7 +1646,8 @@ export class WeddingService {
     );
     return {
       isLimited:
-        termAttempts > RSVP_SEARCH_TERM_LIMIT || ipAttempts > RSVP_SEARCH_IP_LIMIT,
+        termAttempts > RSVP_SEARCH_TERM_LIMIT ||
+        ipAttempts > RSVP_SEARCH_IP_LIMIT,
       retryAfterSeconds: Math.max(
         1,
         Math.ceil((windowExpiresAt - Date.now()) / 1000),
@@ -1791,12 +1829,10 @@ function drawInvitationLabel(
     row.inviteCode ? `Code: ${row.inviteCode}` : 'Code unavailable',
     Math.floor(textWidth / 4),
   );
-  const websiteText = truncatePdfTextToWidth(row.websiteUrl, textWidth, 4.5);
   const householdNameY = y + 17;
   const finalHouseholdNameY =
     householdNameY + (householdNameLines.length - 1) * 11;
   const inviteCodeY = finalHouseholdNameY + 12;
-  const websiteUrlY = inviteCodeY + 13;
 
   return [
     drawQrCode(row.rsvpUrl, qrX, qrY, qrSize),
@@ -1818,15 +1854,44 @@ function drawInvitationLabel(
       'F1',
       '0.141 0.196 0.220',
     ),
-    textCommand(
-      websiteText,
-      textX,
-      websiteUrlY,
-      4.5,
-      'F1',
-      '0.322 0.384 0.373',
-    ),
   ].join('\n');
+}
+
+function createTextLabelsPdf(labels: string[][]): Promise<Buffer> {
+  const labelsPerPage = AVERY_5160_LABEL.columns * AVERY_5160_LABEL.rows;
+  return Promise.resolve(
+    buildPdf(
+      Array.from(
+        { length: Math.max(1, Math.ceil(labels.length / labelsPerPage)) },
+        (_, pageIndex) =>
+          labels
+            .slice(pageIndex * labelsPerPage, (pageIndex + 1) * labelsPerPage)
+            .map((lines, index) => drawTextLabel(lines, index))
+            .join('\n'),
+      ),
+    ),
+  );
+}
+
+function drawTextLabel(lines: string[], pageLabelIndex: number): string {
+  const column = pageLabelIndex % AVERY_5160_LABEL.columns;
+  const row = Math.floor(pageLabelIndex / AVERY_5160_LABEL.columns);
+  const x =
+    AVERY_5160_LABEL.marginLeft + column * AVERY_5160_LABEL.horizontalPitch + 8;
+  const y =
+    AVERY_5160_LABEL.marginTop + row * AVERY_5160_LABEL.verticalPitch + 18;
+  return lines
+    .map((line, index) =>
+      textCommand(
+        line,
+        x,
+        y + index * 11,
+        9,
+        index === 0 ? 'F2' : 'F1',
+        '0.141 0.196 0.220',
+      ),
+    )
+    .join('\n');
 }
 
 function drawQrCode(value: string, x: number, y: number, size: number): string {
@@ -1931,23 +1996,6 @@ function truncatePdfText(value: string, maxLength: number): string {
   }
 
   return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function truncatePdfTextToWidth(
-  value: string,
-  maxWidth: number,
-  fontSize: number,
-): string {
-  const normalized = value.replace(/[^\x20-\x7e]/g, '?').trim();
-  if (getHelveticaBoldTextWidth(normalized, fontSize) <= maxWidth) {
-    return normalized;
-  }
-
-  return appendPdfEllipsis(
-    takePdfTextThatFits(normalized, maxWidth, fontSize),
-    maxWidth,
-    fontSize,
-  );
 }
 
 function wrapPdfText(

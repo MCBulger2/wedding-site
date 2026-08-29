@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import type { AdminHouseholdRecord } from '@matt-alison-wedding/shared';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -21,8 +27,10 @@ const {
 vi.mock('../api.js', () => ({
   archiveHousehold: vi.fn(),
   createHousehold: vi.fn(),
+  downloadAddressLabelsPdf: vi.fn(),
   downloadInvitationLabelsPdf: vi.fn(),
   downloadInvitationsCsv: vi.fn(),
+  downloadReturnAddressLabelsPdf: vi.fn(),
   downloadRsvpsCsv: vi.fn(),
   emailHouseholdInvitation: vi.fn(),
   emailInvitations: vi.fn(),
@@ -144,29 +152,46 @@ describe('AdminPage admin notifications', () => {
     expect(document.body.textContent).not.toMatch(/for SMS/i);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
-    fireEvent.pointerDown(screen.getAllByRole('button', { name: 'Actions' })[0], {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.pointerDown(
+      screen.getAllByRole('button', { name: 'Actions' })[0],
+      {
+        button: 0,
+        ctrlKey: false,
+      },
+    );
     fireEvent.click(screen.getByRole('menuitem', { name: 'Notify' }));
 
     const notificationDialog = await screen.findByRole('dialog', {
       name: 'Notify The Example Family',
     });
     expect(screen.queryByLabelText('Delivery channel')).toBeNull();
-    expect(within(notificationDialog).getByText('example@example.com')).not.toBeNull();
     expect(
-      (within(notificationDialog).getByLabelText('Notification subject') as HTMLInputElement).value,
+      within(notificationDialog).getByText('example@example.com'),
+    ).not.toBeNull();
+    expect(
+      (
+        within(notificationDialog).getByLabelText(
+          'Notification subject',
+        ) as HTMLInputElement
+      ).value,
     ).toBe('Wedding update for The Example Family');
     expect(document.body.textContent).not.toMatch(/sms|twilio|help|stop/i);
 
-    fireEvent.change(within(notificationDialog).getByLabelText('Notification subject'), {
-      target: { value: 'Travel update' },
-    });
-    fireEvent.change(within(notificationDialog).getByLabelText('Notification message'), {
-      target: { value: 'The shuttle now departs at 4:15 PM.' },
-    });
-    fireEvent.click(within(notificationDialog).getByRole('button', { name: 'Send update' }));
+    fireEvent.change(
+      within(notificationDialog).getByLabelText('Notification subject'),
+      {
+        target: { value: 'Travel update' },
+      },
+    );
+    fireEvent.change(
+      within(notificationDialog).getByLabelText('Notification message'),
+      {
+        target: { value: 'The shuttle now departs at 4:15 PM.' },
+      },
+    );
+    fireEvent.click(
+      within(notificationDialog).getByRole('button', { name: 'Send update' }),
+    );
 
     await waitFor(() =>
       expect(sendHouseholdNotification).toHaveBeenCalledWith(

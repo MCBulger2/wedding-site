@@ -239,8 +239,9 @@ export class WeddingSiteStack extends Stack {
         INVITE_CODE_KMS_KEY_ID: inviteCodeKey.keyId,
       },
       logGroup: apiHandlerLogGroup,
+      memorySize: 512,
       runtime: lambda.Runtime.NODEJS_24_X,
-      timeout: Duration.seconds(10),
+      timeout: Duration.seconds(30),
     });
 
     table.grantReadWriteData(apiHandler);

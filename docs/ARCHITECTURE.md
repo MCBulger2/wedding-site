@@ -92,7 +92,7 @@ Current admin capabilities include:
 - mark invitation lifecycle status,
 - export RSVP CSV,
 - export invitation CSV,
-- export invitation label PDFs,
+- export QR, mailing-address, and return-address Avery 5160 label PDFs,
 - send single-household invitation emails,
 - send bulk invitation emails,
 - send direct household notifications by email.
@@ -210,6 +210,8 @@ These routes remain implemented for possible future re-enablement but are not li
 - `POST /api/admin/invitations/email`
 - `GET /api/admin/invitations/export`
 - `GET /api/admin/invitations/labels`
+- `GET /api/admin/addresses/labels`
+- `GET /api/admin/return-addresses/labels`
 - `GET /api/admin/rsvps/export`
 
 ## Deployment and Release Model
