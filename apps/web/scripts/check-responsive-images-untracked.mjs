@@ -5,22 +5,18 @@ const generatedPaths = [
   'src/generated/responsiveImageAssets.ts',
   'src/generated/responsiveImageBackgrounds.css',
 ];
-const trackedFiles = execFileSync(
-  'git',
-  ['ls-files', ...generatedPaths],
-  { encoding: 'utf8' },
-)
-  .trim()
-  .split('\n')
-  .filter(Boolean);
 
-if (trackedFiles.length > 0) {
+try {
+  execFileSync('git', ['ls-files', '--error-unmatch', ...generatedPaths], {
+    stdio: 'ignore',
+  });
+} catch {
   console.error(
     [
-      'Generated responsive image outputs must not be committed.',
-      'Run git rm --cached for generated variants and manifests, then let the web build regenerate them.',
+      'Generated responsive image outputs are missing from Git.',
+      'Run npm run images:generate -w apps/web and commit the variants and manifests.',
       '',
-      ...trackedFiles,
+      ...generatedPaths,
     ].join('\n'),
   );
   process.exit(1);
