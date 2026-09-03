@@ -123,6 +123,88 @@ describe('WeddingService', () => {
     expect((await repository.getHousehold('h1'))?.rsvpStatus).toBe('partial');
   });
 
+  it('requires invited members to answer the rehearsal dinner RSVP', async () => {
+    const { service } = await createSeededService({
+      members: [
+        {
+          id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true,
+          rehearsalDinnerInvited: true,
+        },
+        {
+          id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateRsvp(inviteCode, {
+        members: [
+          { memberId: 'h1-1', attending: true, mealChoice: 'chicken' },
+          { memberId: 'h1-2', attending: false, mealChoice: 'none' },
+        ],
+        plusOnes: [],
+      }),
+    ).rejects.toMatchObject({ message: 'Rehearsal dinner attendance is required' });
+  });
+
+  it('allows an invited member declining the wedding to omit dinner attendance', async () => {
+    const { service } = await createSeededService({
+      members: [
+        {
+          id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true,
+          rehearsalDinnerInvited: true,
+        },
+        {
+          id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateRsvp(inviteCode, {
+        members: [
+          { memberId: 'h1-1', attending: false, mealChoice: 'none' },
+          { memberId: 'h1-2', attending: false, mealChoice: 'none' },
+        ],
+        plusOnes: [],
+      }),
+    ).resolves.toHaveProperty('rsvp.members.0.attending', false);
+  });
+
+  it('rejects rehearsal dinner attendance for an uninvited or declined member', async () => {
+    const { service } = await createSeededService({
+      members: [
+        {
+          id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true,
+          rehearsalDinnerInvited: true,
+        },
+        {
+          id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false,
+        },
+      ],
+    });
+
+    await expect(
+      service.updateRsvp(inviteCode, {
+        members: [
+          {
+            memberId: 'h1-1',
+            attending: false,
+            mealChoice: 'none',
+            rehearsalDinnerAttending: true,
+          },
+          {
+            memberId: 'h1-2',
+            attending: true,
+            mealChoice: 'vegetarian',
+            rehearsalDinnerAttending: true,
+          },
+        ],
+        plusOnes: [],
+      }),
+    ).rejects.toBeInstanceOf(PublicError);
+  });
+
   it('does not change SMS preferences when legacy fields are included in an RSVP update', async () => {
     const { service, repository } = await createSeededService();
 
@@ -480,6 +562,53 @@ describe('WeddingService', () => {
       'exported',
     );
     expect(repository.inviteCodeSecrets.get('h1')).toBeTruthy();
+  });
+
+  it('exports RSVP rows with dinner eligibility and plus-one counts', async () => {
+    const { service } = await createSeededService({
+      maxPlusOnes: 2,
+      members: [
+        { id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true, rehearsalDinnerInvited: true },
+        { id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false },
+      ],
+    });
+    await service.updateRsvp(inviteCode, {
+      members: [
+        { memberId: 'h1-1', attending: true, rehearsalDinnerAttending: true, mealChoice: 'chicken' },
+        { memberId: 'h1-2', attending: false, mealChoice: 'none' },
+      ],
+      plusOnes: [{ sponsorMemberId: 'h1-1', firstName: 'Jamie', lastName: 'Guest', mealChoice: 'fish' }],
+    });
+
+    const csv = await service.exportRsvps();
+
+    expect(csv).toContain('rehearsalDinnerInvited,rehearsalDinnerAttending,plusOneInvited,plusOneAttending');
+    expect(csv).toMatch(/Sam,Example,true,chicken,[^\n]*,true,true,2,1/);
+    expect(csv).toMatch(/Jamie,Guest,true,fish,[^\n]*,,,2,1/);
+  });
+
+  it('exports invitation rows with dinner and plus-one RSVP summaries', async () => {
+    const { service } = await createSeededService({
+      maxPlusOnes: 2,
+      members: [
+        { id: 'h1-1', firstName: 'Sam', lastName: 'Example', canBringPlusOne: true, rehearsalDinnerInvited: true },
+        { id: 'h1-2', firstName: 'Taylor', lastName: 'Example', canBringPlusOne: false },
+      ],
+    });
+    await service.updateRsvp(inviteCode, {
+      members: [
+        { memberId: 'h1-1', attending: true, rehearsalDinnerAttending: true, mealChoice: 'chicken' },
+        { memberId: 'h1-2', attending: false, mealChoice: 'none' },
+      ],
+      plusOnes: [{ sponsorMemberId: 'h1-1', firstName: 'Jamie', lastName: 'Guest', mealChoice: 'fish' }],
+    });
+
+    const csv = await service.exportInvitations('https://wedding.example.com');
+
+    expect(csv).toContain('rehearsalDinnerInviteeNames,rehearsalDinnerInviteeCount,weddingResponses,rehearsalDinnerResponses,plusOneInvitedCount,plusOneAttendingCount');
+    expect(csv).toContain('Sam Example,1');
+    expect(csv).toContain('Sam Example: Attending; Taylor Example: Declined');
+    expect(csv).toContain('Sam Example: Attending,2,1');
   });
 
   it('exports invitation QR labels with the household name and invite code only', async () => {

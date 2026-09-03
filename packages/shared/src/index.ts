@@ -141,6 +141,7 @@ export type Household = z.infer<typeof HouseholdSchema>;
 export const MemberRsvpSchema = z.object({
   memberId: z.string().min(1),
   attending: z.boolean(),
+  rehearsalDinnerAttending: z.boolean().optional(),
   mealChoice: MealChoiceSchema,
   dietaryNotes: z.string().trim().max(500).optional().default(''),
 });

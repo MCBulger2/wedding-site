@@ -554,7 +554,15 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
       }
 
       const nextMembers = current.members.map((member) =>
-        member.memberId === memberId ? { ...member, ...updates } : member,
+        member.memberId === memberId
+          ? {
+              ...member,
+              ...updates,
+              ...(updates.attending === false
+                ? { rehearsalDinnerAttending: undefined }
+                : {}),
+            }
+          : member,
       );
       const nextPlusOnes =
         updates.attending === false
@@ -700,6 +708,9 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         householdGuestCount={activeMembers.length}
         maxPlusOnes={household.maxPlusOnes}
         savedRsvp={savedRsvp}
+        showRehearsalDinner={household.members.some(
+          (member) => member.rehearsalDinnerInvited,
+        )}
         showLookupLink
       />
       <RsvpStepIndicator step={step} />
@@ -756,52 +767,112 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                           : 'Guest')}
                     </span>
                   </div>
-                  <div
-                    className={scoped(styles, 'segmented-control')}
-                    role="group"
-                    aria-label={`${fullName} attendance`}
-                  >
-                    <button
-                      type="button"
-                      className={cx(
-                        scoped(styles, 'rsvp-segment'),
-                        memberRsvp.attending && scoped(styles, 'is-selected'),
-                      )}
-                      aria-pressed={memberRsvp.attending}
-                      aria-label={`${fullName} attending`}
-                      onClick={() =>
-                        updateMember(member.id, {
-                          attending: true,
-                          mealChoice:
-                            memberRsvp.mealChoice === 'none'
-                              ? 'buffet'
-                              : memberRsvp.mealChoice,
-                        })
-                      }
-                    >
-                      <Check aria-hidden="true" />
-                      Attending
-                    </button>
-                    <button
-                      type="button"
-                      className={cx(
-                        scoped(styles, 'rsvp-segment'),
-                        !memberRsvp.attending && scoped(styles, 'is-selected'),
-                      )}
-                      aria-pressed={!memberRsvp.attending}
-                      aria-label={`${fullName} not attending`}
-                      onClick={() =>
-                        updateMember(member.id, {
-                          attending: false,
-                          mealChoice: 'none',
-                        })
-                      }
-                    >
-                      Not attending
-                    </button>
+                  <div className={scoped(styles, 'guest-response-controls')}>
+                    <div className={scoped(styles, 'guest-response-selector')}>
+                      <span className={scoped(styles, 'guest-response-selector-label')}>
+                        Wedding
+                      </span>
+                      <div
+                        className={scoped(styles, 'segmented-control')}
+                        role="group"
+                        aria-label={`${fullName} attendance`}
+                      >
+                        <button
+                          type="button"
+                          className={cx(
+                            scoped(styles, 'rsvp-segment'),
+                            memberRsvp.attending && scoped(styles, 'is-selected'),
+                          )}
+                          aria-pressed={memberRsvp.attending}
+                          aria-label={`${fullName} attending`}
+                          onClick={() =>
+                            updateMember(member.id, {
+                              attending: true,
+                              mealChoice:
+                                memberRsvp.mealChoice === 'none'
+                                  ? 'buffet'
+                                  : memberRsvp.mealChoice,
+                            })
+                          }
+                        >
+                          <Check aria-hidden="true" />
+                          Attending
+                        </button>
+                        <button
+                          type="button"
+                          className={cx(
+                            scoped(styles, 'rsvp-segment'),
+                            !memberRsvp.attending && scoped(styles, 'is-selected'),
+                          )}
+                          aria-pressed={!memberRsvp.attending}
+                          aria-label={`${fullName} not attending`}
+                          onClick={() =>
+                            updateMember(member.id, {
+                              attending: false,
+                              mealChoice: 'none',
+                            })
+                          }
+                        >
+                          Not attending
+                        </button>
+                      </div>
+                    </div>
+                    {memberRsvp.attending && member.rehearsalDinnerInvited && (
+                      <div className={scoped(styles, 'guest-response-selector')}>
+                        <span className={scoped(styles, 'guest-response-selector-label')}>
+                          Rehearsal Dinner
+                        </span>
+                        <div
+                          className={scoped(styles, 'segmented-control')}
+                          role="group"
+                          aria-label={`${fullName} rehearsal dinner attendance`}
+                        >
+                          <button
+                            type="button"
+                            className={cx(
+                              scoped(styles, 'rsvp-segment'),
+                              memberRsvp.rehearsalDinnerAttending === true &&
+                                scoped(styles, 'is-selected'),
+                            )}
+                            aria-pressed={memberRsvp.rehearsalDinnerAttending === true}
+                            aria-label={`${fullName} rehearsal dinner attending`}
+                            onClick={() =>
+                              updateMember(member.id, {
+                                rehearsalDinnerAttending: true,
+                              })
+                            }
+                          >
+                            <Check aria-hidden="true" />
+                            Attending
+                          </button>
+                          <button
+                            type="button"
+                            className={cx(
+                              scoped(styles, 'rsvp-segment'),
+                              memberRsvp.rehearsalDinnerAttending === false &&
+                                scoped(styles, 'is-selected'),
+                            )}
+                            aria-pressed={memberRsvp.rehearsalDinnerAttending === false}
+                            aria-label={`${fullName} rehearsal dinner not attending`}
+                            onClick={() =>
+                              updateMember(member.id, {
+                                rehearsalDinnerAttending: false,
+                              })
+                            }
+                          >
+                            Not attending
+                          </button>
+                        </div>
+                        <FieldError
+                          path={`members.${memberIndex}.rehearsalDinnerAttending`}
+                          errors={fieldErrors}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className={scoped(styles, 'guest-response-detail')}>
                     {memberRsvp.attending ? (
+                      <>
                       <label
                         className={
                           fieldError(`members.${memberIndex}.dietaryNotes`)
@@ -841,6 +912,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
                           errors={fieldErrors}
                         />
                       </label>
+                      </>
                     ) : (
                       <p
                         className={cx(
@@ -1233,10 +1305,13 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
         <p className="page-lede">
           Thanks, {household.displayName}. Your response has been saved.
         </p>
-        <RsvpContextPanel
-          calendarHref="/matt-alison-wedding.ics"
-          savedRsvp={savedRsvp}
-        />
+          <RsvpContextPanel
+            calendarHref="/matt-alison-wedding.ics"
+            savedRsvp={savedRsvp}
+            showRehearsalDinner={household.members.some(
+              (member) => member.rehearsalDinnerInvited,
+            )}
+          />
         <div
           className={scoped(styles, 'rsvp-response-summary')}
           aria-label="RSVP response summary"
@@ -1321,12 +1396,14 @@ function RsvpContextPanel({
   householdGuestCount,
   maxPlusOnes,
   savedRsvp,
+  showRehearsalDinner = false,
   showLookupLink = false,
 }: {
   calendarHref: string;
   householdGuestCount?: number;
   maxPlusOnes?: number;
   savedRsvp?: StoredRsvp;
+  showRehearsalDinner?: boolean;
   showLookupLink?: boolean;
 }) {
   const venueMapHref = getNativeMapUrl({
@@ -1382,6 +1459,15 @@ function RsvpContextPanel({
             <small>{siteContent.venueAddress}</small>
           </span>
         </div>
+        {showRehearsalDinner && (
+          <div>
+            <CalendarDays aria-hidden="true" />
+            <span>
+              <strong>Rehearsal and dinner</strong>
+              <small>Saturday before the wedding: rehearsal at the venue in the morning, then dinner that evening. Full details TBD.</small>
+            </span>
+          </div>
+        )}
       </div>
       <div className="toolbar-actions">
         <a
@@ -1431,6 +1517,7 @@ function toEditableRsvp(household: Household, rsvp?: StoredRsvp): RsvpPayload {
     members: household.members.map((member) => ({
       memberId: member.id,
       attending: true,
+      rehearsalDinnerAttending: undefined,
       mealChoice: 'buffet',
       dietaryNotes: '',
     })),
@@ -1554,6 +1641,14 @@ function validateRsvpForm(
       )
       .map((member) => member.id),
   );
+
+  household.members.forEach((member, index) => {
+    const response = form.members.find((entry) => entry.memberId === member.id);
+    if (member.rehearsalDinnerInvited && response?.attending && response.rehearsalDinnerAttending === undefined) {
+      fieldErrors[`members.${index}.rehearsalDinnerAttending`] =
+        'Choose whether this guest will attend the rehearsal dinner.';
+    }
+  });
 
   if (form.plusOnes.length > household.maxPlusOnes) {
     formMessages.push(

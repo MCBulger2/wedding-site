@@ -1285,6 +1285,7 @@ export class WeddingService {
     const csvRows = await Promise.all(
       rows.map(async ({ household, rsvpUrl }) => ({
         household,
+        rsvp: await this.getStoredRsvp(household.householdId),
         rsvpUrl,
         qrCodeDataUrl: rsvpUrl
           ? await QRCode.toDataURL(rsvpUrl, { margin: 1, width: 256 })
@@ -1695,6 +1696,24 @@ export class WeddingService {
     for (const memberId of submittedMemberIds) {
       if (!allowedMemberIds.has(memberId)) {
         throw new PublicError('RSVP includes an unknown household member', 422);
+      }
+    }
+
+    for (const member of rsvp.members) {
+      const householdMember = activeMembers.find(
+        (entry) => entry.id === member.memberId,
+      );
+      if (!householdMember?.rehearsalDinnerInvited) {
+        if (member.rehearsalDinnerAttending !== undefined) {
+          throw new PublicError('Rehearsal dinner attendance is not available', 422);
+        }
+        continue;
+      }
+      if (member.rehearsalDinnerAttending && !member.attending) {
+        throw new PublicError('Rehearsal dinner attendees must attend the wedding', 422);
+      }
+      if (member.attending && member.rehearsalDinnerAttending === undefined) {
+        throw new PublicError('Rehearsal dinner attendance is required', 422);
       }
     }
 

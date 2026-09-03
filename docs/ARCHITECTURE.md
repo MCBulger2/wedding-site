@@ -40,7 +40,7 @@ The system is intentionally serverless, low-ops, and biased toward pay-per-use A
 
 ### Public Site
 
-The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, a hotel-block area with a friendly TBD message until a publicly shareable hotel is available, live registry links, a static story route with responsive personal photography and device-aware Google/Apple map links for Phoenix recommendations, legal pages, and contact information. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
+The public frontend is a Vite SPA served through CloudFront. Current content includes wedding details, schedule, travel guidance, a hotel-block card for Residence Inn by Marriott Phoenix Mesa East with a group booking link, live registry links, a static story route with responsive personal photography and device-aware Google/Apple map links for Phoenix recommendations, legal pages, and contact information. SPA routing is preserved at the CDN layer so direct refreshes still resolve to `index.html`; post-mount hash handling keeps cross-page section links aligned below the sticky header.
 
 The venue map uses an OpenStreetMap embed with its native venue marker, so the marker stays synchronized while guests pan or zoom; the application retains the descriptive frame title and outbound map link.
 
@@ -60,7 +60,7 @@ The public `POST /api/rsvp/search` route trims and lowercases the submitted term
 
 The current website recovery experience is email-only: the RSVP page exposes an email address field and sends `POST /api/rsvp/recovery`. It does not expose phone or SMS recovery controls. The backend retains a generic accepted response and the existing KMS-backed link recovery so that guest existence is not disclosed.
 
-The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
+The shared schemas cover household members, meal choices, plus-one handling, phone input, recovery contact input, standalone SMS preferences, and stored RSVP state. `rehearsalDinnerInvited` remains the per-member invitation flag; invited members submit an optional legacy-compatible `rehearsalDinnerAttending` response, which is required for new or revised RSVPs and may be true only when the member attends the wedding. The RSVP event details show the Saturday-before rehearsal and dinner note only to households with an invitee. The admin household table can filter households with at least one invitee and shows each member's wedding and dinner response. SMS preferences use the existing `household.smsConsent` property with `pending_confirmation`, `opted_in`, and `opted_out` states. Existing `opted_in` records remain valid.
 
 ### Dormant SMS/Twilio backend
 
@@ -90,8 +90,8 @@ Current admin capabilities include:
 - rotate invite codes,
 - reveal invitation details,
 - mark invitation lifecycle status,
-- export RSVP CSV,
-- export invitation CSV,
+- export RSVP CSV with per-member dinner eligibility/attendance and plus-one invitation/attendance counts,
+- export invitation CSV with household dinner and plus-one invitation/attendance summaries,
 - export QR, mailing-address, and return-address Avery 5160 label PDFs,
 - send single-household invitation emails,
 - send bulk invitation emails,
