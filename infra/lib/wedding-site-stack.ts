@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
@@ -1046,13 +1047,31 @@ export class WeddingSiteStack extends Stack {
     new s3deploy.BucketDeployment(this, 'FrontendDeployment', {
       sources: [
         s3deploy.Source.asset(path.join(repoRoot, 'apps/web/dist'), {
-          exclude: ['**/*.map'],
+          exclude: ['**/*.map', 'matt-alison-wedding.ics'],
         }),
       ],
       destinationBucket: siteBucket,
       distribution,
       // Invalidate only SPA shell entry points; hashed assets roll forward by URL.
       distributionPaths: ['/', '/index.html', '/site.webmanifest', '/robots.txt'],
+      prune: false,
+      waitForDistributionInvalidation: false,
+    });
+
+    new s3deploy.BucketDeployment(this, 'CalendarDeployment', {
+      sources: [
+        s3deploy.Source.data(
+          'matt-alison-wedding.ics',
+          fs.readFileSync(
+            path.join(repoRoot, 'apps/web/dist/matt-alison-wedding.ics'),
+            'utf8',
+          ),
+        ),
+      ],
+      destinationBucket: siteBucket,
+      contentType: 'text/calendar; charset=utf-8',
+      distribution,
+      distributionPaths: ['/matt-alison-wedding.ics'],
       prune: false,
       waitForDistributionInvalidation: false,
     });

@@ -545,7 +545,10 @@ test('homepage details render on mobile', async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Add to calendar' }),
-  ).toHaveAttribute('href', /^data:text\/calendar/);
+  ).toHaveAttribute('href', '/matt-alison-wedding.ics');
+  await expect(
+    page.getByRole('link', { name: 'Add to calendar' }),
+  ).not.toHaveAttribute('download');
   await expect(
     page
       .getByRole('navigation', { name: 'Primary navigation' })

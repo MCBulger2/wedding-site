@@ -498,9 +498,11 @@ describe('RsvpPage', () => {
     expect(screen.getByText(/Ceremony at 4:30 PM/i)).not.toBeNull();
     expect(screen.getByText('Superstition Manor')).not.toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
-    expect(
-      screen.getAllByRole('link', { name: /Add to calendar/i }),
-    ).toHaveLength(1);
+    const [calendarLink] = screen.getAllByRole('link', {
+      name: /Add to calendar/i,
+    });
+    expect(calendarLink.getAttribute('href')).toBe('/matt-alison-wedding.ics');
+    expect(calendarLink.getAttribute('download')).toBeNull();
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Taylor Example not attending' }),
@@ -728,9 +730,11 @@ describe('RsvpSuccessPage', () => {
     expect(screen.queryByText('Meal summary')).toBeNull();
     expect(screen.getByLabelText('RSVP details')).not.toBeNull();
     expect(screen.queryByLabelText('Wedding event at a glance')).toBeNull();
-    expect(
-      screen.getAllByRole('link', { name: /Add to calendar/i }),
-    ).toHaveLength(1);
+    const [calendarLink] = screen.getAllByRole('link', {
+      name: /Add to calendar/i,
+    });
+    expect(calendarLink.getAttribute('href')).toBe('/matt-alison-wedding.ics');
+    expect(calendarLink.getAttribute('download')).toBeNull();
     expect(screen.queryByText('Plus-ones (1)')).toBeNull();
     expect(screen.getByRole('link', { name: /Open map/i })).not.toBeNull();
     expect(

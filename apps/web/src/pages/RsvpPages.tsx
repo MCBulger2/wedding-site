@@ -1,7 +1,6 @@
 import {
   GenericRecoverySuccessMessage,
   RsvpUpdateSchema,
-  generateIcs,
   type Household,
   type StoredRsvp,
 } from '@matt-alison-wedding/shared';
@@ -19,7 +18,7 @@ import {
   Send,
   Trash2,
 } from 'lucide-react';
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   fetchRsvp,
@@ -460,11 +459,6 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
   const guestHeadingRef = useRef<HTMLHeadingElement>(null);
   const detailsHeadingRef = useRef<HTMLHeadingElement>(null);
   const pendingStepFocusRef = useRef(false);
-  const calendarHref = useMemo(() => {
-    const ics = generateIcs(siteContent.weddingEvent);
-    return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
-  }, []);
-
   const moveToStep = (nextStep: 'guests' | 'details', focusHeading = true) => {
     pendingStepFocusRef.current = focusHeading;
     setStep(nextStep);
@@ -702,7 +696,7 @@ export function RsvpPage({ inviteCode }: { inviteCode: string }) {
         {household.maxPlusOnes === 1 ? '' : 's'}.
       </p>
       <RsvpContextPanel
-        calendarHref={calendarHref}
+        calendarHref="/matt-alison-wedding.ics"
         householdGuestCount={activeMembers.length}
         maxPlusOnes={household.maxPlusOnes}
         savedRsvp={savedRsvp}
@@ -1151,11 +1145,6 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
     'loading',
   );
   const [message, setMessage] = useState('');
-  const calendarHref = useMemo(() => {
-    const ics = generateIcs(siteContent.weddingEvent);
-    return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
-  }, []);
-
   useEffect(() => {
     fetchRsvp(inviteCode)
       .then((response) => {
@@ -1244,7 +1233,10 @@ export function RsvpSuccessPage({ inviteCode }: { inviteCode: string }) {
         <p className="page-lede">
           Thanks, {household.displayName}. Your response has been saved.
         </p>
-        <RsvpContextPanel calendarHref={calendarHref} savedRsvp={savedRsvp} />
+        <RsvpContextPanel
+          calendarHref="/matt-alison-wedding.ics"
+          savedRsvp={savedRsvp}
+        />
         <div
           className={scoped(styles, 'rsvp-response-summary')}
           aria-label="RSVP response summary"
@@ -1404,7 +1396,6 @@ function RsvpContextPanel({
         <a
           className="secondary-button button-inline"
           href={calendarHref}
-          download="matt-alison-wedding.ics"
         >
           <CalendarDays aria-hidden="true" />
           Add to calendar

@@ -455,8 +455,8 @@ export function generateIcs(event: CalendarEvent): string {
     'BEGIN:VEVENT',
     `UID:${escapeIcsText(parsed.title)}-${formatIcsDate(parsed.start)}@matt-alison-wedding`,
     `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
-    `DTSTART;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.start)}`,
-    `DTEND;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.end)}`,
+    `DTSTART;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.start, parsed.timezone)}`,
+    `DTEND;TZID=${parsed.timezone}:${formatIcsLocalDate(parsed.end, parsed.timezone)}`,
     `SUMMARY:${escapeIcsText(parsed.title)}`,
     `LOCATION:${escapeIcsText(parsed.location)}`,
     `DESCRIPTION:${escapeIcsText(parsed.description)}`,
@@ -471,8 +471,21 @@ function formatIcsDate(value: string): string {
   return value.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-function formatIcsLocalDate(value: string): string {
-  return formatIcsDate(value).replace(/Z$/, '');
+function formatIcsLocalDate(value: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value;
+
+  return `${part('year')}${part('month')}${part('day')}T${part('hour')}${part('minute')}${part('second')}`;
 }
 
 function escapeIcsText(value: string): string {

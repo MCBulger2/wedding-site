@@ -85,6 +85,20 @@ describe('HouseholdCardActions', () => {
 });
 
 describe('App routes', () => {
+  it('links the home calendar action to the static ICS resource', () => {
+    window.history.pushState({}, '', '/');
+
+    render(
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>,
+    );
+
+    const calendarLink = screen.getByRole('link', { name: 'Add to calendar' });
+    expect(calendarLink.getAttribute('href')).toBe('/matt-alison-wedding.ics');
+    expect(calendarLink.getAttribute('download')).toBeNull();
+  });
+
   it('scrolls a hash target into view after the destination route mounts', () => {
     const scrollIntoView = vi.fn();
     Object.defineProperty(Element.prototype, 'scrollIntoView', {

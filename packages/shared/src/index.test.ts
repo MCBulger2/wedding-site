@@ -686,7 +686,18 @@ describe('structured public planning data', () => {
 
     expect(ics).toContain('BEGIN:VCALENDAR');
     expect(ics).toContain('SUMMARY:Matt and Alison Wedding');
-    expect(ics).toContain('DTSTART;TZID=America/Phoenix:20270320T220000');
+    expect(ics).toContain('DTSTART;TZID=America/Phoenix:20270320T150000');
+    expect(ics).toContain('DTEND;TZID=America/Phoenix:20270320T210000');
     expect(ics).toContain('LOCATION:Desert Garden Venue\\, Scottsdale\\, AZ');
+  });
+
+  it('exports the public wedding schedule in the calendar event', () => {
+    const ics = generateIcs(siteContent.weddingEvent);
+
+    expect(ics).toContain('DTSTART;TZID=America/Phoenix:20270117T163000');
+    expect(ics).toContain('DTEND;TZID=America/Phoenix:20270117T223000');
+    expect(ics).toContain(
+      "UID:Matt & Alison's Wedding-20270117T233000Z@matt-alison-wedding",
+    );
   });
 });

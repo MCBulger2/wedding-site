@@ -13,7 +13,9 @@ import {
 
 const webDistPath = path.resolve('apps/web/dist');
 const webDistIndexPath = path.join(webDistPath, 'index.html');
+const webDistCalendarPath = path.join(webDistPath, 'matt-alison-wedding.ics');
 let createdWebDistFixture = false;
+let createdWebDistCalendarFixture = false;
 
 function resourceTagsForEnv(envName: string): Record<string, string> {
   return {
@@ -257,9 +259,16 @@ describe('WeddingSiteStack infrastructure', () => {
       fs.writeFileSync(webDistIndexPath, '<!doctype html><title>test</title>');
       createdWebDistFixture = true;
     }
+    if (!fs.existsSync(webDistCalendarPath)) {
+      fs.writeFileSync(webDistCalendarPath, 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n');
+      createdWebDistCalendarFixture = true;
+    }
   });
 
   afterAll(() => {
+    if (createdWebDistCalendarFixture) {
+      fs.rmSync(webDistCalendarPath, { force: true });
+    }
     if (createdWebDistFixture) {
       fs.rmSync(webDistPath, { recursive: true, force: true });
     }
@@ -437,6 +446,29 @@ describe('WeddingSiteStack infrastructure', () => {
 
     expect(frontendDeployment.Properties?.Prune).toBe(false);
     expect(frontendDeployment.Properties?.WaitForDistributionInvalidation).toBe(false);
+  });
+
+  it('deploys the calendar resource with its calendar content type and invalidates it', () => {
+    const template = synthStackTemplate({
+      env: { account: '123456789012', region: 'us-west-1' },
+      envName: 'production',
+      allowedOrigins: [],
+      notificationRecipientEmails: [],
+      enablePasskeys: false,
+    });
+    const calendarDeployment = templateResourcesOfType(
+      template,
+      'Custom::CDKBucketDeployment',
+    ).find(
+      (resource) =>
+        resource.Properties?.SystemMetadata?.['content-type'] ===
+        'text/calendar; charset=utf-8',
+    );
+
+    expect(calendarDeployment).toBeDefined();
+    expect(calendarDeployment?.Properties?.DistributionPaths).toContain(
+      '/matt-alison-wedding.ics',
+    );
   });
 
   it('creates nested auth domains after the frontend alias record exists', () => {
