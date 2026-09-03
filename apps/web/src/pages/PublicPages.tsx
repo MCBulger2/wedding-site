@@ -1,4 +1,3 @@
-import { generateIcs } from '@matt-alison-wedding/shared';
 import {
   ArrowRight,
   CalendarDays,
@@ -12,7 +11,7 @@ import {
   KeyRound,
   MapPin,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx, scoped } from '../classNames.js';
 import { ResponsiveImage } from '../components/ResponsiveImage.js';
 import { getNativeMapUrl } from '../nativeMapUrl.js';
@@ -25,10 +24,6 @@ const PHOTO_CONTROLS_FOCUS_DURATION_MS = 500;
 const PHOTO_SCROLL_SETTLE_DELAY_MS = 120;
 
 export function HomePage() {
-  const calendarHref = useMemo(() => {
-    const ics = generateIcs(siteContent.weddingEvent);
-    return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
-  }, []);
   const venueMapHref = getNativeMapUrl({
     googleMapsUrl: siteContent.venueMapUrl,
     appleMapsUrl: siteContent.venueAppleMapsUrl,
@@ -152,8 +147,7 @@ export function HomePage() {
             </a>
             <a
               className="secondary-button"
-              href={calendarHref}
-              download="matt-alison-wedding.ics"
+              href="/matt-alison-wedding.ics"
             >
               <CalendarDays aria-hidden="true" />
               Add to calendar

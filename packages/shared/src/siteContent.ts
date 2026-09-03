@@ -106,8 +106,8 @@ const venue = {
 
 const weddingEvent: CalendarEvent = {
   title: "Matt & Alison's Wedding",
-  start: '2027-01-18T22:00:00.000Z',
-  end: '2027-01-19T04:00:00.000Z',
+  start: '2027-01-17T23:30:00.000Z',
+  end: '2027-01-18T05:30:00.000Z',
   timezone: 'America/Phoenix',
   location: venue.location,
   description: 'Ceremony, dinner, and reception for Matt and Alison.',
